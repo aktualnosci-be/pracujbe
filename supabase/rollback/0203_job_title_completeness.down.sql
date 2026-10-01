@@ -1,5 +1,5 @@
 -- Rollback 0203 (#1221): przywraca definicje sprzed migracji — `update_published_job`
--- i `publish_job` z 0172, `set_job_status` z 0085 (z heurystyką tytułu-zaślepki).
+-- z 0200, `publish_job` z 0172, `set_job_status` z 0202 (z heurystyką tytułu-zaślepki).
 -- Dowód: supabase/tests/job-title-completeness-rollback.sql.
 
 create or replace function public.update_published_job(
@@ -18,10 +18,9 @@ begin
     raise exception 'VALIDATION_FAILED: brak treści oferty' using errcode = '42501';
   end if;
 
+  -- 0200: migawka audytu z jednego źródła (job_edit_audit_snapshot ⊇ job_material_terms).
   select j0.company_id, c.status::text, j0.status::text, j0.slug, j0.default_locale, j0.updated_at,
-         jsonb_build_object('title', j0.title, 'city', j0.city, 'region', j0.region,
-                            'salary_min', j0.salary_min, 'salary_max', j0.salary_max,
-                            'start_date', j0.start_date, 'contract_type', j0.contract_type)
+         public.job_edit_audit_snapshot(j0)
     into v_company, v_cstatus, v_status, v_slug, v_locale, v_updated, v_before
     from public.jobs j0 join public.companies c on c.id = j0.company_id
     where j0.id = p_job_id and j0.deleted_at is null
@@ -44,8 +43,9 @@ begin
 
   v_title := btrim(coalesce(j->>'title', ''));
 
-  -- 0144: znacznik tej rewizji — trigger powiadomień reaguje tylko na zapis z tego RPC.
-  perform set_config('pracujbe.job_terms_notify', p_job_id::text, true);
+  -- 0200: kontekst tej rewizji w tabeli bez grantów dla klienta (zamiast GUC z 0144, który
+  -- klient mógł ustawić sam przez set_config) — trigger powiadomień reaguje tylko na ten zapis.
+  insert into public.job_operation_context (job_id, kind) values (p_job_id, 'job_terms_notify');
   update public.jobs set
     title                    = v_title,
     category                 = (j->>'category')::public.job_category,
@@ -85,9 +85,12 @@ begin
     apply_url                = nullif(btrim(coalesce(j->>'apply_url', '')), ''),
     apply_email              = nullif(btrim(coalesce(j->>'apply_email', '')), ''),
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
+    -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji; przeniesione z main).
+    work_time                = nullif(j->>'work_time', ''),
     updated_at               = now()
   where id = p_job_id;
-  perform set_config('pracujbe.job_terms_notify', '', true);
+  delete from public.job_operation_context
+   where tx = pg_current_xact_id() and job_id = p_job_id and kind = 'job_terms_notify';
 
   -- 0172: oferta opublikowana nie może stracić kanału aplikowania (błąd cofa całą rewizję).
   if not exists (select 1 from public.jobs where id = p_job_id and public.job_has_apply_channel(jobs)) then
@@ -115,8 +118,9 @@ begin
     conditions = excluded.conditions, benefits = excluded.benefits,
     highlights = excluded.highlights, company_description = excluded.company_description;
 
-  -- Relacje replace-all tymi samymi funkcjami co kreator; znacznik dopuszcza ofertę nie-szkic.
-  perform set_config('pracujbe.job_edit', p_job_id::text, true);
+  -- Relacje replace-all tymi samymi funkcjami co kreator; kontekst operacji (0200, zamiast GUC
+  -- z 0077) dopuszcza ofertę nie-szkic tylko na czas tych wywołań.
+  insert into public.job_operation_context (job_id, kind) values (p_job_id, 'job_edit');
   perform public.set_job_requirements(p_job_id, v_locale, 'mandatory',
     array(select jsonb_array_elements_text(coalesce(p_content->'requirements_mandatory', '[]'::jsonb))));
   perform public.set_job_requirements(p_job_id, v_locale, 'optional',
@@ -129,7 +133,8 @@ begin
   perform public.set_job_languages(p_job_id, coalesce(p_content->'languages', '[]'::jsonb));
   perform public.set_job_certificates(p_job_id,
     array(select jsonb_array_elements_text(coalesce(p_content->'certificates', '[]'::jsonb))));
-  perform set_config('pracujbe.job_edit', '', true);
+  delete from public.job_operation_context
+   where tx = pg_current_xact_id() and job_id = p_job_id and kind = 'job_edit';
 
   -- Kompletność jak w publish_job (0073) — po zapisie, więc błąd cofa całą rewizję.
   if v_title = '' or v_title ilike 'draft%' or v_title ilike '%placeholder%'
@@ -155,11 +160,8 @@ begin
     raise exception 'VALIDATION_FAILED: brak wymagań obowiązkowych' using errcode = '42501';
   end if;
 
-  select jsonb_build_object('title', title, 'city', city, 'region', region,
-                            'salary_min', salary_min, 'salary_max', salary_max,
-                            'start_date', start_date, 'contract_type', contract_type),
-         updated_at
-    into v_after, v_updated from public.jobs where id = p_job_id;
+  select public.job_edit_audit_snapshot(j1), j1.updated_at
+    into v_after, v_updated from public.jobs j1 where j1.id = p_job_id;
   perform public.write_audit('job.update_published', 'job', p_job_id, v_before, v_after);
 
   return jsonb_build_object('slug', v_slug, 'updated_at', v_updated);
@@ -338,7 +340,13 @@ begin
           when p_action = 'reopen' and v_past_due then null
           else expires_at
         end,
-        published_at = case when v_target = 'active' and published_at is null then now() else published_at end,
+        -- #1222 (decyzja właściciela 29.09.2026): ponowne otwarcie = nowa publikacja — alerty
+        -- zapisanych wyszukiwań, filtr daty i sort „najnowsze” widzą ofertę jak świeżą.
+        published_at = case
+          when p_action = 'reopen' then now()
+          when v_target = 'active' and published_at is null then now()
+          else published_at
+        end,
         updated_at = now()
     where id = p_job_id and status::text = v_status;
   if not found then
