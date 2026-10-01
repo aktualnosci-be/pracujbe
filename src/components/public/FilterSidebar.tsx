@@ -195,12 +195,15 @@ function CheckRow({
   count,
   checked,
   onChange,
+  target = 'checkbox-label',
 }: {
   id: string;
   label: string;
   count?: number;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  /** Znacznik etykiety (`checkbox-label` = opcja z licznikiem facetu; świadczenia bez licznika). */
+  target?: string;
 }): React.JSX.Element {
   return (
     <div className="flex min-h-12 items-center gap-[9px]">
@@ -212,7 +215,7 @@ function CheckRow({
       />
       <Label
         htmlFor={id}
-        data-filter-target="checkbox-label"
+        data-filter-target={target}
         className="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center break-words text-[13px] font-normal text-muted-foreground"
       >
         {label}
@@ -719,6 +722,7 @@ export function FilterFields({
               key={code}
               id={`${idPrefix}-benefit-${code}`}
               label={tBenefits(code)}
+              target="benefit-label"
               checked={value.benefits.includes(code)}
               onChange={() => patch({ benefits: normalizeBenefitCodes(toggle(value.benefits, code)) })}
             />

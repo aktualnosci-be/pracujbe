@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { AxeBuilder } from './fixtures/axe';
-import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
+import { LOCALES, messages } from './fixtures/messages';
 
 /**
  * Strukturalne świadczenia oferty (#826, migracja 0976 — numer tymczasowy): filtr listy bez
@@ -48,7 +48,6 @@ for (const locale of LOCALES) {
     const benefits = (m as unknown as { jobBenefits: Record<string, string> }).jobBenefits;
     const job = (m as unknown as { job: Record<string, string> }).job;
     await page.goto(`/${locale}/oferty-pracy/${JOB_SLUG}`);
-    await rejectOptionalCookies(page, locale);
     const section = page.getByTestId('job-benefits');
     await expect(page.getByRole('heading', { name: job['benefitsTitle'], exact: true })).toBeVisible();
     for (const code of ['meal_vouchers', 'eco_vouchers', 'hospital_insurance', 'year_end_bonus']) {

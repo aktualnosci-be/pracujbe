@@ -722,7 +722,6 @@ export default async function JobDetailPage({ params }: PageProps) {
                       </ul>
                     </>
                   ) : null}
-                  <p className="mt-3 text-sm text-muted-foreground">{t('benefitsDeclared')}</p>
                 </div>
               </Section>
             ) : null}
