@@ -615,9 +615,7 @@ async function getJobBySlugFromDb(
   if (!job) return null;
   // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
-  const { getPublicJobScreeningQuestions, getPublicJobCosts, getPublicJobBenefits } = await import(
-    '@/lib/db/public-jobs'
-  );
+  const { getPublicJobScreeningQuestions, getPublicJobCosts } = await import('@/lib/db/public-jobs');
   // Decyzja produktowa: portal ogłoszeniowy — stare pytania ukryte, bez zapytania do bazy.
   const screeningQuestions = isRecruitmentEnabled('screening')
     ? parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id))
@@ -632,6 +630,7 @@ async function getJobBySlugFromDb(
   // 0976 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
   let benefits: JobBenefits | undefined;
   try {
+    const { getPublicJobBenefits } = await import('@/lib/db/public-jobs');
     benefits = parseJobBenefitsRow(await getPublicJobBenefits(pool, job.id, locale));
   } catch (error) {
     captureError(error, { area: 'jobs.getJobBenefits' });
