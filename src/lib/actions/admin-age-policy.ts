@@ -7,9 +7,8 @@ import {
   getPortalIdentity,
   isPortalDataConfigured,
   withPortalTransaction,
-  withServiceRole,
 } from '@/lib/db/portal';
-import { queryOne, rpc } from '@/lib/db/sql';
+import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 
@@ -23,11 +22,14 @@ import { captureError } from '@/lib/error-report';
  * ukrytych profili.
  *
  * Kontrola wersji (CAS, #1102): formularz przekazuje `expectedUpdatedAt` — znacznik zmiany progu,
- * który administrator widział (`age_policy.updated_at`, `null` = brak zmiany). Zmiana dokonana
- * w międzyczasie przez innego administratora → `STALE_STATE` zamiast cichego nadpisania jej
- * wcześniejszej decyzji. Sprawdzenie idzie odczytem service-role tuż przed RPC (tabela nie ma
- * grantów dla `authenticated`); bez migracji zostaje wąskie okno wyścigu między odczytem a RPC —
- * atomowy CAS w samym RPC (`p_expected_updated_at`) wymaga migracji i jest otwarty.
+ * który administrator widział (`age_policy.updated_at` jako tekst, `null` = brak wiersza). RPC
+ * (migracja 0946) porównuje go z bieżącym po `FOR UPDATE` w tej samej transakcji co zapis —
+ * zmiana innego administratora albo zatwierdzenie właściciela w międzyczasie → `STALE_STATE`
+ * zamiast cichego nadpisania.
+ *
+ * Status „zatwierdzone przez właściciela” nie pochodzi z formularza (#639): każda zmiana
+ * administratora zapisuje wartość roboczą; zatwierdza wyłącznie właściciel drogą operatorską
+ * (`owner_confirm_candidate_min_age`, service_role — `scripts/db/confirm-age-policy.mjs`).
  *
  * Zapis pod SESJĄ admina (`withPortalTransaction`, `auth.uid()` = admin), bo RPC jest
  * `SECURITY DEFINER` i sam sprawdza `is_admin()` — service-role tu się nie nadaje (brak
@@ -40,6 +42,7 @@ export type AgePolicyActionResult =
   | { ok: false; error: ErrorCode; field?: 'reason'; reason?: 'required' | 'tooLong' };
 
 function mapPgError(message: string): ErrorCode {
+  if (message.includes('STALE_STATE')) return 'STALE_STATE';
   if (message.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
     message.includes('PERMISSION_DENIED') ||
@@ -52,21 +55,21 @@ function mapPgError(message: string): ErrorCode {
   return 'INTERNAL';
 }
 
-/** Znacznik zmiany progu jak w `getAgePolicySettings` (pusty/brak → `null`). */
-function versionOf(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
+/** Znacznik wersji = tekst daty Postgresa (`updated_at::text`); inny kształt nie trafia do bazy. */
+const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)$/;
+
+function isTimestamp(value: string): boolean {
+  return TIMESTAMP_RE.test(value);
 }
 
 export async function setCandidateMinAge(
   minAge: number,
-  confirmed: boolean,
   reason: string,
   expectedUpdatedAt: string | null,
 ): Promise<AgePolicyActionResult> {
   if (
     !isCandidateAgeBand(minAge) ||
-    typeof confirmed !== 'boolean' ||
-    (expectedUpdatedAt !== null && typeof expectedUpdatedAt !== 'string')
+    (expectedUpdatedAt !== null && (typeof expectedUpdatedAt !== 'string' || !isTimestamp(expectedUpdatedAt)))
   ) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
@@ -82,28 +85,19 @@ export async function setCandidateMinAge(
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    // CAS (#1102): tylko dla admina — pozostałe role odrzuci RPC (`is_admin()`), bez odczytu.
-    if (me.role === 'admin') {
-      const current = await withServiceRole((tx) =>
-        queryOne(tx, 'admin.age-policy-version', 'SELECT updated_at FROM public.age_policy WHERE id'),
-      );
-      if (versionOf(current?.['updated_at']) !== versionOf(expectedUpdatedAt)) {
-        return { ok: false, error: 'STALE_STATE' };
-      }
-    }
-
     let hidden: unknown;
     try {
       hidden = await withPortalTransaction(me, (tx) =>
         rpc(tx, 'admin_set_candidate_min_age', {
           p_min_age: minAge,
-          p_confirmed: confirmed,
           p_reason: trimmedReason,
+          p_expected_updated_at: expectedUpdatedAt,
         }),
       );
     } catch (error) {
       if (isDatabaseError(error)) {
         const message = databaseErrorMessage(error);
+        if (message.includes('STALE_STATE')) return { ok: false, error: 'STALE_STATE' };
         if (message.includes('VALIDATION_FAILED')) {
           return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
         }

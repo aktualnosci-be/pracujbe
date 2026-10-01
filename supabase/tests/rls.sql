@@ -10694,15 +10694,15 @@ rollback;
 
 -- AGE10: zmiana progu tylko przez admina, z audytem.
 set role authenticated; set app.current_uid = :'AGE'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''test'')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, ''test'', null)',
   'PERMISSION_DENIED', 'AGE10 pracodawca nie zmienia progu');
 reset role;
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(15, false, ''test'')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(15, ''test'', null)',
   'VALIDATION_FAILED', 'AGE10b próg poniżej 16 odrzucony (młodsi bez konta, #576)');
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(17, false, ''test'')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(17, ''test'', null)',
   'VALIDATION_FAILED', 'AGE10b2 próg spoza 16/18 odrzucony');
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''  '')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, ''  '', null)',
   'VALIDATION_FAILED', 'AGE10c zmiana bez uzasadnienia odrzucona');
 reset role; reset app.current_uid;
 
@@ -10740,8 +10740,9 @@ update public.candidate_profiles set profile_completed = true where profile_id =
 set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.set_candidate_searchable(true) is true, 'AGE12a konto 18+ włącza wyszukiwalność');
 reset role;
+select updated_at::text as agv from public.age_policy \gset
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select pg_temp.assert(public.admin_set_candidate_min_age(18, false, 'Wariant tylko dorośli do testu') = 0,
+select pg_temp.assert(public.admin_set_candidate_min_age(18, 'Wariant tylko dorośli do testu', :'agv') = 0,
   'AGE12 podniesienie progu konta nie ukrywa profili 18+');
 reset role; reset app.current_uid;
 select pg_temp.assert(public.candidate_min_age() = 18
@@ -10772,9 +10773,86 @@ select pg_temp.assert(public.set_candidate_searchable(true) is true,
   'AGE13g kontrola dodatnia: po potwierdzeniu 18+ profil może być wyszukiwalny');
 reset role; reset app.current_uid;
 -- Powrót do decyzji #576 (konto od 16) dla dalszych kroków.
+-- Powrót do decyzji #576 (konto od 16) dla dalszych kroków: zmiana administratora (wartość
+-- robocza, 0946) i zatwierdzenie właściciela drogą operatorską (service_role).
+select updated_at::text as agv from public.age_policy \gset
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select public.admin_set_candidate_min_age(16, true, 'Decyzja właściciela #576');
+select public.admin_set_candidate_min_age(16, 'Decyzja właściciela #576', :'agv');
 reset role; reset app.current_uid;
+
+-- APC1102. Próg wieku: atomowy CAS (#1102, ADM-04) i zatwierdzenie tylko przez właściciela (#639).
+\echo '--- APC1102 CAS progu wieku i zatwierdzenie właściciela ---'
+select pg_temp.assert(
+  (select candidate_min_age = 16 and not confirmed and updated_by = :'AGA' from public.age_policy)
+  and exists (select 1 from public.audit_logs where action = 'age_policy.updated' and actor_id = :'AGA'
+                and (after_data->>'candidate_min_age')::int = 16 and (after_data->>'confirmed')::boolean is false),
+  'APC1 zmiana administratora zapisuje wartość roboczą (confirmed=false), także w dzienniku');
+select updated_at::text as apc_v1 from public.age_policy \gset
+select count(*) as apc_audit0 from public.audit_logs where entity_type = 'age_policy' \gset
+
+-- APC2: administrator nie ma drogi do statusu właściciela — ani parametr, ani funkcja.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, true, ''x'')',
+  'does not exist', 'APC2 stara sygnatura z p_confirmed nie istnieje');
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''x'')', :'apc_v1'),
+  'permission denied', 'APC2b administrator (authenticated) nie zatwierdza progu za właściciela');
+reset role; reset app.current_uid;
+set role anon;
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''x'')', :'apc_v1'),
+  'permission denied', 'APC2c anon nie zatwierdza progu');
+reset role;
+
+-- APC3: CAS — formularz otwarty przed zmianą drugiego administratora nie nadpisuje jej.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(18, ''Stary formularz'', ''2020-01-01T00:00:00Z'')',
+  'STALE_STATE', 'APC3 nieaktualny znacznik → STALE_STATE');
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(18, ''Formularz bez znacznika'', null)',
+  'STALE_STATE', 'APC3b brak znacznika przy istniejącym progu → STALE_STATE');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select candidate_min_age = 16 and updated_at::text = :'apc_v1' from public.age_policy)
+  and (select count(*) from public.audit_logs where entity_type = 'age_policy') = :'apc_audit0'::int,
+  'APC3c odrzucona zmiana nie rusza progu ani dziennika');
+
+-- APC4: właściciel zatwierdza bieżący próg (service_role) z CAS po znaczniku i progu.
+set role service_role;
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(18, %L, ''Akceptacja'')', :'apc_v1'),
+  'STALE_STATE', 'APC4 zatwierdzenie innego progu niż bieżący → STALE_STATE');
+select pg_temp.expect_error('select public.owner_confirm_candidate_min_age(16, ''2020-01-01T00:00:00Z'', ''Akceptacja'')',
+  'STALE_STATE', 'APC4b zatwierdzenie nieaktualnego stanu → STALE_STATE');
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''  '')', :'apc_v1'),
+  'VALIDATION_FAILED', 'APC4c zatwierdzenie bez notatki odrzucone');
+select public.owner_confirm_candidate_min_age(16, :'apc_v1', 'Decyzja właściciela 25.09.2026 (#576)')::text as apc_v2 \gset
+select public.owner_confirm_candidate_min_age(16, :'apc_v2', 'Ponowienie') is not null as apc_repeat \gset
+reset role;
+select pg_temp.assert(
+  (select candidate_min_age = 16 and confirmed and updated_at::text = :'apc_v2' and updated_by = :'AGA'
+     from public.age_policy)
+  and (select count(*) from public.audit_logs where action = 'age_policy.owner_confirmed'
+         and actor_id is null and (after_data->>'confirmed')::boolean
+         and before_data->>'changed_by' = :'AGA') = 1,
+  'APC4d zatwierdzenie właściciela: confirmed=true, osobny wpis dziennika (bez aktora-administratora), ponowienie bez drugiego wpisu');
+
+-- APC5: formularz otwarty przed zatwierdzeniem właściciela jest nieaktualny.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_set_candidate_min_age(16, ''Stary formularz'', %L)', :'apc_v1'),
+  'STALE_STATE', 'APC5 znacznik sprzed zatwierdzenia → STALE_STATE (zatwierdzenie nie znika po cichu)');
+reset role; reset app.current_uid;
+select pg_temp.assert((select confirmed from public.age_policy), 'APC5b próg nadal zatwierdzony');
+
+-- APC6 (kontrola ujemna): definicja z 0126 — administrator sam ustawia „zatwierdzone przez
+-- właściciela” i nadpisuje próg nieaktualnym formularzem.
+begin;
+\ir ../rollback/0946_age_policy_cas_owner_confirmation.down.sql
+update public.age_policy set confirmed = false where id;
+set local app.current_uid = :'AGA'; set local role authenticated; select pg_temp.assert_client_role();
+select public.admin_set_candidate_min_age(16, true, 'Stary formularz bez kontroli');
+reset role;
+select pg_temp.assert((select confirmed from public.age_policy),
+  'APC6 kontrola ujemna: bez 0946 administrator oznacza zmianę jako zatwierdzoną przez właściciela');
+rollback;
+select pg_temp.assert((select confirmed and updated_at::text = :'apc_v2' from public.age_policy),
+  'APC6b po kontroli ujemnej stan wraca do zatwierdzonego progu');
 
 -- AGE14: aplikacja gościa wymaga deklaracji; funkcja core niedostępna i bez deklaracji odrzuca.
 set role service_role;
