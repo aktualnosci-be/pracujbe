@@ -209,9 +209,11 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
   `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
   `allowUpload` = lista istniejących plików; profil jest w trybie 404 (#1142), więc lista jest w
-  `/candidate/ustawienia` jako sekcja `variant="settings"` z kotwicą `#pliki-cv`, także pusta — #1226; pulpit
-  bez sekcji; dowód: unit `classifieds-candidate-cv-files` (kontrole ujemne: RECRUITMENT, `allowUpload`),
-  strażnik `legal`, E2E `classifieds-candidate-account`). Import CV przez AI: `cvImportProvider()` =
+  `/candidate/ustawienia` jako sekcja `variant="settings"` z kotwicą `#pliki-cv`, także pusta — #1226; dowód: unit
+  `classifieds-candidate-cv-files` (kontrole ujemne: RECRUITMENT, `allowUpload`), strażnik `legal`, E2E
+  `classifieds-candidate-account`) oraz w sekcji „Twoje pliki” pulpitu konta `CandidateAccountDashboard`
+  (decyzja właściciela 29.09.2026: tylko gdy są pliki albo odczyt się nie udał; unit
+  `classifieds-candidate-account` z kontrolą ujemną RECRUITMENT = wgrywanie). Import CV przez AI: `cvImportProvider()` =
   null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
   `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
   trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
@@ -1518,6 +1520,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
 
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
+  Odebrany dostęp (#1210, decyzja właściciela 29.09.2026, bez migracji): konto z WYŁĄCZNIE nieaktywnymi
+  członkostwami widzi w layoucie `/employer` `RevokedCompanyAccess` — „Twój dostęp do firmy X został odebrany”
+  (nazwy z `getRevokedCompanyNames`: service_role, tylko `name`, identyfikator z sesji; awaria = komunikat ogólny,
+  bez szczegółów), zaproszenia i własna firma przez `createAdditionalCompany` (`create_additional_company`)
+  zamiast `create_first_company` (PERMISSION_DENIED). Testy: `employer-revoked-access(-layout)`,
+  `revoked-company-names` (kontrole ujemne: brak członkostw = pierwsza firma, aktywne = panel).
   Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła
   wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
   transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
@@ -1912,6 +1920,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
+  Reopen = nowa publikacja (#1222, decyzja właściciela 29.09.2026, migracja `0202` — numer tymczasowy):
+  `set_job_status(…, 'reopen')` ustawia `published_at = now()` (alerty zapisanych wyszukiwań, filtr daty, sort
+  „najnowsze”, `datePosted`); pauza/wznowienie daty nie zmieniają; para (wyszukiwanie, oferta) już wysłana nie
+  wraca. Dowód: `rls.sql` sekcja OD981 (kontrola ujemna: warunek z 0085 zostawia starą datę).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — **wyłączone w trybie ogłoszeniowym (#1144)** — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
   Fokus po anulowaniu potwierdzenia (#800): „Anuluj” w kroku potwierdzenia (`rejected`/`hired`)
   przywraca fokus na status, który uruchomił potwierdzenie (referencje opcji listy), zamiast go
@@ -2461,7 +2473,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `GET /v2.1/email?messageId` przed każdą wysyłką (brak Idempotency-Key u dostawcy), ACK tylko
   z tym identyfikatorem w odpowiedzi, `X-TRACKING-OFF: 1`, nagłówki wypisania bez zmian, kody
   `EMAIL_PROVIDER_*` zamiast komunikatu dostawcy. Webhook `POST /api/email/webhook/emaillabs`
-  (SHA1 sekret|data|Request-Id + opcjonalny Basic auth, inbox `emaillabs:<Request-Id>`,
+  (SHA1 sekret|data|Request-Id; Basic auth wymagany w produkcji — brak `EMAILLABS_WEBHOOK_BASIC_*` = 503, #1234;
+  `X-Webhook-Date` w oknie ±24 h, parser tolerancyjny, nieczytelna = 401; inbox `emaillabs:<Request-Id>`
+  pamiętany ≥ 7 dni > okno,
   hardbounce → blokada, softbounce/spambounce bez blokady, deferred → opóźnienie, ok →
   delivered). `/api/health`: `emailProvider`, `checks.emailProviderReady`/`emaillabsWebhook`.
   Opis i kroki panelu:
@@ -2992,6 +3006,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
   z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
   wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
+  Zaproszenia na adres osoby (#1233, migracja `0202`): oczekujące → `revoked`, adres zerowany we wszystkich
+  (`company_invitations.email` nullable, CHECK `company_invitations_email_when_pending`), e-maile rejestracyjne
+  tych zaproszeń usunięte z kolejki; wiersz = ślad zdarzenia. Dowód: `rls.sql` OD981 (kontrola ujemna).
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
   `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
