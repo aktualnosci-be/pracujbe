@@ -105,6 +105,8 @@ echo ">> rollback 0175 (konto i komunikacja w trybie ogłoszeniowym, w transakcj
 echo ">> rollback 0174 (tryb ogłoszeniowy: wiadomości i CV, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-messaging-cv-rollback.sql"
 
+echo ">> rollback 0952 (integralność kolejki tłumaczeń, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-queue-integrity-rollback.sql"
 echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-protected-terms-rollback.sql"
 

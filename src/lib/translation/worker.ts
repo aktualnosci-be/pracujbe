@@ -42,9 +42,19 @@ export interface TranslationWorkerDeps {
   leaseSeconds?: number;
   /** Tylko kody i identyfikatory techniczne. */
   onEvent?: (event: { jobId: string; outcome: string; code?: string }) => void;
+  /** Zegar (testy). */
+  now?: () => number;
 }
 
 type JobOutcome = 'applied' | 'proposal' | 'superseded' | 'retry' | 'deferred' | 'failed' | 'dropped';
+
+/**
+ * Minimalny zapas dzierżawy przed wywołaniem modelu (#644): limit czasu klienta OpenAI (60 s)
+ * + zapis wyniku. Baza (0952) odrzuca wynik po terminie dzierżawy (`stale_lease`), więc
+ * wywołanie, które nie zdąży przed terminem, byłoby płatne i bezużyteczne — a zadanie i tak
+ * przejmie kolejny worker. Przy krótszym zapasie zadanie wraca do puli bez wywołania modelu.
+ */
+export const MIN_LEASE_REMAINING_MS = 90_000;
 
 /** Opóźnienie odroczenia: przekroczony limit — 1 h; budżet nieczytelny — 5 min. */
 export const BUDGET_DEFER_SECONDS = { budget_exceeded: 3600, budget_unavailable: 300 } as const;
@@ -81,6 +91,13 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
   // wydaje takich zadań — to druga linia obrony (np. baza w trybie RECRUITMENT, env nie).
   if (!isAiFeatureAllowedInPortalMode(translationFeatureFor(job.entity_type))) {
     return fail('recruitment_disabled', false);
+  }
+
+  // #644: za krótka (albo nieczytelna) dzierżawa — bez płatnego wywołania; zadanie wygaśnie
+  // i wróci do puli.
+  const leaseEnd = new Date(job.lease_expires_at as string | Date).getTime();
+  if (!Number.isFinite(leaseEnd) || leaseEnd - (deps.now ?? Date.now)() < MIN_LEASE_REMAINING_MS) {
+    return { outcome: 'dropped', code: 'lease_too_short' };
   }
 
   // #740: nazwy chronione rewizji (nazwa firmy z bazy) trafiają do promptu i do walidatora.
