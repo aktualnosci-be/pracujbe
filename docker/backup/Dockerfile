@@ -2,7 +2,13 @@
 # Usługa cron Railway: Dockerfile path = docker/backup/Dockerfile (RAILWAY_DOCKERFILE_PATH),
 # kontekst = katalog główny repozytorium, bez publicznej domeny. Nie wpływa na build usługi web
 # (Railpack). Opis zmiennych: docs/railway/OPERATIONS.md („Kopia w Cloudflare R2”).
-FROM node:22-bookworm-slim
+#
+# #751: obraz bazowy przypięty do digestu (powtarzalny build, audytowalne pochodzenie).
+# Aktualizacja = PR zmieniający digest (Dependabot, .github/dependabot.yml) — job CI
+# „Backup image (build + scan)” buduje obraz, uruchamia smoke (scripts/db/backup-image-smoke.sh),
+# generuje SBOM i skanuje pakiety (scripts/security/backup-image-scan.mjs). Sam tag bez
+# digestu odrzuca tests/unit/backup-r2-image.test.ts. Runbook: docs/railway/BACKUP_RESTORE.md.
+FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
 
 ARG PG_MAJOR=18
 # Ta sama wersja co w package.json (pilnuje tests/unit/backup-r2-image.test.ts).
@@ -22,7 +28,12 @@ RUN set -eux; \
 WORKDIR /app
 RUN npm init -y >/dev/null \
  && npm install --omit=dev --ignore-scripts --no-audit --no-fund "@aws-sdk/client-s3@${AWS_SDK_S3_VERSION}" \
- && npm cache clean --force
+ && npm cache clean --force \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+      /root/.npm
+# ↑ #751: menedżery pakietów z obrazu bazowego nie są potrzebne w czasie działania (backup.sh
+# używa tylko node, pg_*, age) — usunięte, żeby nie wnosiły zależności do SBOM i skanu.
 
 COPY scripts/db/backup.sh scripts/db/restore-backup.sh scripts/db/
 COPY scripts/db/lib/ scripts/db/lib/

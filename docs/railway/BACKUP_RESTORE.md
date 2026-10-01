@@ -139,6 +139,41 @@ przy retencji 2 w buckecie, najnowsza w R2 = lokalna, odtworzenie z R2 i kontrol
 niepełna konfiguracja, endpoint http). Logika w Vitest: `backup-r2.test.ts`,
 `backup-r2-image.test.ts`, `ops-health-route.test.ts`.
 
+## Obraz usługi kopii — build, smoke, SBOM i skan (#751)
+
+Usługa `backup` w Railway buduje `docker/backup/Dockerfile`. Ten sam plik buduje od zera
+(`--pull --no-cache`) job CI **„Backup image (build + scan)”** na każdym przebiegu — błąd
+repozytorium APT, obrazu bazowego albo zależności wychodzi w CI, a nie dopiero w Railway.
+
+- **Obraz bazowy przypięty do digestu** (`node:22-bookworm-slim@sha256:…`). Sam tag bez
+  digestu odrzuca strażnik (`scripts/check-ci-workflows.mjs`, `backup-r2-image.test.ts`).
+  Aktualizacja = PR Dependabota (`.github/dependabot.yml`, ekosystem `docker`, katalog
+  `/docker/backup`) — diff pokazuje stary i nowy digest, a job CI buduje i skanuje nowy obraz
+  przed scaleniem. Ręcznie: `docker buildx imagetools inspect node:22-bookworm-slim`
+  (pole `Digest` indeksu) i zmiana jednej linii `FROM`.
+- **Smoke** (`scripts/db/backup-image-smoke.sh <obraz>`): użytkownik `node` (uid ≠ 0), node 22,
+  `pg_dump`/`pg_restore`/`psql` 18, `age`, `@aws-sdk/client-s3` w wersji z `package.json`,
+  brak `npm`/`npx`/`yarn` (usunięte z obrazu — niepotrzebne w czasie działania), start bez
+  konfiguracji = kod 2 bez wypisania wartości zmiennych. Kontener bez sieci i bez sekretów.
+- **SBOM i skan:** Trivy (obraz przypięty do wersji i digestu w `TRIVY_IMAGE` joba) zapisuje
+  SBOM CycloneDX i raport JSON z listą pakietów (Debian + Node); oba są artefaktem
+  `backup-image-sbom-<SHA>` (30 dni). Bramka `scripts/security/backup-image-scan.mjs`:
+  - kod 0 — raport obejmuje pakiety Debiana i Node, SBOM zawiera `age`, `postgresql-client-18`
+    i `@aws-sdk/client-s3`, brak podatności blokujących;
+  - kod 1 — podatność **HIGH lub CRITICAL z dostępną poprawką** bez ważnego wyjątku;
+  - kod 2 — raport/SBOM pusty, niepełny lub nieczytelny albo zły plik wyjątków; awaria samego
+    skanera kończy krok skanu kodem 2. Żadna awaria nie wygląda jak „brak podatności”.
+  HIGH/CRITICAL bez poprawki w dystrybucji są liczone w podsumowaniu joba, ale nie blokują.
+- **Wyjątki:** `docker/backup/vulnerability-exceptions.json`, wpis
+  `{ "id": "CVE-…", "package": "<pakiet>", "reason": "…", "expires": "YYYY-MM-DD" }`;
+  termin najwyżej 90 dni od dnia przebiegu, po terminie podatność znów blokuje.
+- **Pochodzenie przed wdrożeniem:** podsumowanie joba na `main` podaje SHA commita, pełną
+  linię `FROM` z digestem i ID zbudowanego obrazu. Przed włączeniem albo zmianą usługi
+  `backup` w Railway zanotuj w `docs/railway/STATUS.md`: SHA wdrożenia, digest obrazu
+  bazowego z `docker/backup/Dockerfile` tego SHA i link do zielonego przebiegu joba.
+  Railway buduje obraz sam, więc ID obrazu z CI i z Railway mogą się różnić (pakiety APT
+  pobierane w chwili builda); wspólne i sprawdzone są: commit, digest bazowy i zestaw kroków.
+
 ## Odtworzenie artefaktu — `scripts/db/restore-backup.sh`
 
 ```text

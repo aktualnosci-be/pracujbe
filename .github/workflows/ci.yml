@@ -164,6 +164,75 @@ jobs:
           node-version-file: .nvmrc
       - run: bash scripts/sca-audit.sh
 
+  backup-image:
+    name: Backup image (build + scan)
+    # #751: obraz usługi kopii bazy (docker/backup/Dockerfile) budowany od zera przy każdym
+    # przebiegu — błąd repozytorium APT, digestu bazowego albo zależności wychodzi w CI, nie
+    # dopiero w Railway. Potem smoke obrazu (narzędzia, użytkownik bez uprawnień, kod 2 bez
+    # konfiguracji), SBOM CycloneDX i skan pakietów systemowych i Node (Trivy przypięty do
+    # digestu). Bramka: HIGH/CRITICAL z dostępną poprawką blokują, chyba że mają terminowy
+    # wyjątek w docker/backup/vulnerability-exceptions.json; awaria skanera = kod 2, nie „czysto”.
+    # Bez sekretów produkcyjnych.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BACKUP_IMAGE: pracujbe-backup:ci-${{ github.sha }}
+      TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Build backup image
+        run: docker build --pull --no-cache -f docker/backup/Dockerfile -t "$BACKUP_IMAGE" .
+      - name: Record image provenance
+        run: |
+          base="$(sed -n 's/^FROM //p' docker/backup/Dockerfile)"
+          image_id="$(docker image inspect --format '{{.Id}}' "$BACKUP_IMAGE")"
+          {
+            echo '### Obraz kopii bazy — pochodzenie (#751)'
+            echo ''
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- obraz bazowy: \`${base}\`"
+            echo "- zbudowany obraz (ID): \`${image_id}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke backup image
+        run: bash scripts/db/backup-image-smoke.sh "$BACKUP_IMAGE"
+      - name: SBOM and vulnerability scan
+        id: trivy
+        run: |
+          mkdir -p backup-image-report
+          trivy() {
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD/backup-image-report:/out" -v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy" \
+              "$TRIVY_IMAGE" image --quiet "$@" "$BACKUP_IMAGE"
+          }
+          # Pobranie bazy podatności bywa chwilowo niedostępne — 3 próby, potem jawny błąd skanera.
+          for attempt in 1 2 3; do
+            if trivy --format cyclonedx --output /out/backup-image.cdx.json \
+              && trivy --scanners vuln --list-all-pkgs --exit-code 0 --format json --output /out/backup-image-scan.json; then
+              exit 0
+            fi
+            echo "Skan: próba ${attempt} nieudana."
+            sleep $((attempt * 15))
+          done
+          echo '::error::Skaner obrazu nie zadziałał — brak dowodu braku podatności.'
+          exit 2
+      - name: Vulnerability gate
+        run: >-
+          node scripts/security/backup-image-scan.mjs
+          --report backup-image-report/backup-image-scan.json
+          --sbom backup-image-report/backup-image.cdx.json
+          --exceptions docker/backup/vulnerability-exceptions.json
+          --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() && steps.trivy.outcome != 'skipped' }}
+        with:
+          name: backup-image-sbom-${{ github.sha }}
+          path: backup-image-report/
+          retention-days: 30
+
   build:
     name: Build (Next.js)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository

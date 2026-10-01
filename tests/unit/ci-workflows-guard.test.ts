@@ -111,6 +111,46 @@ describe('strażnik workflowów CI', () => {
     });
   });
 
+  describe('obraz kopii bazy (#751)', () => {
+    /** Kopia docker/backup/Dockerfile (płaska nazwa w katalogu tymczasowym). */
+    const mutatedDockerfile = (edit: (source: string) => string) => {
+      const dir = mkdtempSync(join(tmpdir(), 'ci-guard-dockerfile-'));
+      dirs.push(dir);
+      const source = readFileSync(join(process.cwd(), 'docker/backup/Dockerfile'), 'utf8');
+      const next = edit(source);
+      expect(next, 'mutacja musi zmienić Dockerfile').not.toBe(source);
+      const file = join(dir, 'Dockerfile');
+      writeFileSync(file, next);
+      return file;
+    };
+
+    it.each([
+      ['usunięty job backup-image', (ci: string) => ci.replace(/^  backup-image:\n[\s\S]*?(?=^  build:\n)/m, ''), 'zmieniono listę lub kolejność jobów CI'],
+      ['build bez --no-cache', (ci: string) => ci.replace('docker build --pull --no-cache', 'docker build --pull'), 'zbuduj docker/backup/Dockerfile od zera'],
+      ['bez smoke obrazu', (ci: string) => ci.replace(/\n      - name: Smoke backup image\n        run: .*\n/, '\n'), 'smoke obrazu'],
+      ['skaner na ruchomym tagu', (ci: string) => ci.replace(/(TRIVY_IMAGE: aquasec\/trivy:[\d.]+)@sha256:[0-9a-f]{64}/, '$1'), 'skaner przypięty do wersji i digestu'],
+      ['bez SBOM', (ci: string) => ci.replace('--format cyclonedx', '--format table'), 'SBOM CycloneDX'],
+      ['bez bramki podatności', (ci: string) => ci.replace('node scripts/security/backup-image-scan.mjs', 'echo skan'), 'bramka podatności'],
+      ['bramka miękka (continue-on-error)', (ci: string) => ci.replace('      - name: Vulnerability gate\n', '      - name: Vulnerability gate\n        continue-on-error: true\n'), 'bez continue-on-error'],
+    ])('kontrola ujemna: %s', (_name, edit, message) => {
+      const { code, output } = runGuard(mutated(edit));
+      expect(code).not.toBe(0);
+      expect(output).toContain(message);
+    });
+
+    it('kontrola ujemna: Dockerfile z samym ruchomym tagiem obrazu bazowego', () => {
+      const file = mutatedDockerfile((source) => source.replace(/^(FROM \S+?)@sha256:[0-9a-f]{64}$/m, '$1'));
+      const { code, output } = runGuard(undefined, undefined, undefined, { CI_GUARD_BACKUP_DOCKERFILE: file });
+      expect(code).not.toBe(0);
+      expect(output).toContain('przypnij obraz bazowy do digestu');
+    });
+
+    it('Dockerfile bez zmian przechodzi (kontrola dodatnia)', () => {
+      const file = mutatedDockerfile((source) => `${source}\n`);
+      expect(runGuard(undefined, undefined, undefined, { CI_GUARD_BACKUP_DOCKERFILE: file }).code).toBe(0);
+    });
+  });
+
   it('kopia bez zmian przechodzi (argument katalogu działa)', () => {
     const dir = mutated((ci) => `${ci}\n`);
     expect(runGuard(dir).code).toBe(0);

@@ -57,6 +57,7 @@ const expected = {
   typecheck: ['Typecheck', ['install']],
   unit: ['Unit tests (Vitest)', ['install']],
   sca: ['SCA (npm audit)', []],
+  'backup-image': ['Backup image (build + scan)', []],
   build: ['Build (Next.js)', ['lint', 'typecheck', 'unit']],
   rls: ['RLS integration (PostgreSQL 16)', []],
   migrations: ['Migration runner (PostgreSQL 16)', ['install']],
@@ -393,6 +394,28 @@ for (const spec of fixtureOnly) {
 for (const spec of fixtureSpecs) {
   assert.ok(fixtureOnly.includes(spec), `fixture config: ${spec} nie jest wyłączony z demo (FIXTURE_ONLY_SPECS) — na danych demo padnie`);
   assert.ok(e2eFiles.has(spec.replace('**/', '')), `fixture config: ${spec} nie istnieje w tests/e2e`);
+}
+
+// Obraz usługi kopii bazy (#751): job buduje docker/backup/Dockerfile od zera, uruchamia smoke,
+// generuje SBOM i skanuje pakiety skanerem przypiętym do digestu, a bramka rozróżnia awarię
+// skanera od wyniku „brak podatności”. Obraz bazowy w Dockerfile przypięty do digestu.
+const backupJob = jobs.get('backup-image');
+const DIGEST = '@sha256:[0-9a-f]{64}';
+assert.match(backupJob, /docker build --pull --no-cache -f docker\/backup\/Dockerfile /, 'backup-image: zbuduj docker/backup/Dockerfile od zera (--pull --no-cache)');
+assert.match(backupJob, /bash scripts\/db\/backup-image-smoke\.sh "\$BACKUP_IMAGE"/, 'backup-image: smoke obrazu (scripts/db/backup-image-smoke.sh)');
+assert.match(backupJob, new RegExp(`^      TRIVY_IMAGE: aquasec/trivy:\\d+\\.\\d+\\.\\d+${DIGEST}\\s*$`, 'm'), 'backup-image: skaner przypięty do wersji i digestu');
+assert.match(backupJob, /--format cyclonedx/, 'backup-image: SBOM CycloneDX');
+assert.match(backupJob, /--list-all-pkgs --exit-code 0 --format json/, 'backup-image: raport z listą pakietów (dowód zakresu skanu)');
+assert.match(backupJob, /exit 2/, 'backup-image: awaria skanera = błąd, nie wynik „czysto”');
+assert.match(backupJob, /node scripts\/security\/backup-image-scan\.mjs/, 'backup-image: bramka podatności (backup-image-scan.mjs)');
+assert.match(backupJob, /--exceptions docker\/backup\/vulnerability-exceptions\.json/, 'backup-image: jawny plik wyjątków');
+assert.match(backupJob, /uses: actions\/upload-artifact@[\s\S]*name: backup-image-sbom-/, 'backup-image: SBOM jako artefakt');
+assert.doesNotMatch(backupJob, /continue-on-error|secrets\./, 'backup-image: bez continue-on-error i bez sekretów');
+const backupDockerfile = await readFile(process.env.CI_GUARD_BACKUP_DOCKERFILE ?? new URL('docker/backup/Dockerfile', root), 'utf8');
+const fromLines = [...backupDockerfile.matchAll(/^FROM\s+(\S+)/gm)].map((match) => match[1]);
+assert.ok(fromLines.length > 0, 'docker/backup/Dockerfile: brak FROM');
+for (const from of fromLines) {
+  assert.match(from, new RegExp(`^[a-z0-9./-]+:[A-Za-z0-9._-]+${DIGEST}$`), `docker/backup/Dockerfile: ${from} — przypnij obraz bazowy do digestu (tag@sha256:…)`);
 }
 
 const cleanup = sources.get('delete-old-runs.yml');

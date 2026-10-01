@@ -468,6 +468,8 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     `postgres:16` (#351, #66); od #1239 **blokujący** (bez `continue-on-error`, po 12/12 zielonych
     przebiegach `main`; zależność jobu zbiorczego `e2e`) i w dwóch krokach: RECRUITMENT (przepływy
     rekrutacyjne) oraz `E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY` (`saved-search-classifieds`, #1148);
+  - `backup-image` („Backup image (build + scan)”, #751, bez zależności) — build obrazu usługi
+    kopii od zera, smoke, SBOM i skan pakietów z bramką (opis w `docs/railway/BACKUP_RESTORE.md`);
   - `e2e` („E2E (Playwright)”, wymagany check o stałej nazwie) — job zbiorczy z `always()`,
     pada, gdy którykolwiek shard/pomiar/część fixture/przepływ real nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
@@ -3270,7 +3272,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`misconfigured`) — to alarm `backup_*`. Obraz usługi cron `docker/backup/Dockerfile` (node 22,
   pg 18, `age`). Dowód: `backup-r2.test` (atrapa S3 `tests/helpers/fake-s3-server.mjs`, klucz
   odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
-  `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
+  `npm run test:backup`.
+  Obraz kopii w CI (#751, bez migracji): job „Backup image (build + scan)” buduje
+  `docker/backup/Dockerfile` od zera (`--pull --no-cache`), smoke `scripts/db/backup-image-smoke.sh`
+  (uid ≠ 0, node 22, pg_* 18, `age`, SDK S3 = `package.json`, bez npm/npx/yarn — usunięte z obrazu,
+  start bez konfiguracji = kod 2 bez wypisania wartości), SBOM CycloneDX + skan Trivy (obraz
+  przypięty do wersji i digestu) jako artefakt; bramka `scripts/security/backup-image-scan.mjs`
+  (`scripts/lib/backup-image-scan-outcome.mjs`): HIGH/CRITICAL z dostępną poprawką = kod 1, chyba
+  że terminowy (≤ 90 dni) wyjątek w `docker/backup/vulnerability-exceptions.json`; raport bez
+  pakietów Debiana/Node, niepełny SBOM albo awaria skanera = kod 2. Obraz bazowy
+  `node:22-bookworm-slim@sha256:…`, digest aktualizuje Dependabot (`.github/dependabot.yml`).
+  Strażnik `check-ci-workflows.mjs` (job, kroki, digest skanera i `FROM`). Dowód: unit
+  `backup-image-scan`, `backup-image-smoke` (atrapa docker), `backup-r2-image`, `ci-workflows-guard`
+  (kontrole ujemne). Runbook: `docs/railway/BACKUP_RESTORE.md` (pochodzenie przed wdrożeniem). **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
   dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
   Rozpoznanie bezpośredniego uruchomienia CLI (#925): `backup-s3.mjs` porównuje
   `import.meta.url` z `pathToFileURL(process.argv[1]).href` (nie z ręcznie zbudowanym
