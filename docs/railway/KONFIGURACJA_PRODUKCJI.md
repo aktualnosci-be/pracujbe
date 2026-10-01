@@ -55,13 +55,13 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `EMAIL_UNSUBSCRIBE_SECRET` | brak linków wypisania → marketing nie wychodzi |
 | `RESEND_WEBHOOK_SECRET` | webhook doręczeń 503 (brak blokad po odbiciach, #44) |
 | `EMAILLABS_WEBHOOK_SECRET` | webhook raportów EmailLabs 503 (brak blokad po odbiciach) |
-| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | opcjonalnie; oba albo żaden — gdy ustawione, webhook wymaga też Basic auth |
+| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | w produkcji wymagane (#1234): bez nich webhook EmailLabs odpowiada 503, `checks.emaillabsWebhook` = false; poza produkcją opcjonalne (oba albo żaden) |
 | `EMAIL_QUEUE_SECRET` | cron `/api/email/process` bez autoryzacji (401) |
 | `MAINTENANCE_SECRET` | cron `/api/maintenance` bez autoryzacji |
 | `AUTH_EMAIL_IMMEDIATE_SEND` | opcjonalnie; puste = e-maile konta wychodzą zaraz po rejestracji/resecie (paczka workera po odpowiedzi), `off` = tylko z harmonogramu |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | w produkcji rejestracja, reset hasła, zgłoszenia treści i aplikacja bez konta są odrzucane (fail-closed); logowanie działa |
 | `TURNSTILE_ALLOWED_HOSTNAMES` | opcjonalnie; domyślnie host `NEXT_PUBLIC_SITE_URL` |
-| `GUEST_APPLY_SECRET` | aplikacja bez konta wyłączona (#98) |
+| `GUEST_APPLY_SECRET` | aplikacja bez konta i linki zaproszeń do zespołu dla adresów bez konta wyłączone (#98, #403); wymagany na prawdziwej bazie także w trybie demo (#1115) |
 | `AWS_ENDPOINT_URL`, `AWS_DEFAULT_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_URL_STYLE` | upload/pobranie CV niedostępne (#26, preset „AWS SDK” bucketu Railway) |
 | `FILE_DOWNLOAD_SECRET` | brak linków pobrania CV |
 | `HEALTH_CHECK_SECRET` | brak szczegółów `/api/health` i czujek `/api/health/ops` (#47) |

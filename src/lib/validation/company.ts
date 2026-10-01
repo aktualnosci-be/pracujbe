@@ -1,6 +1,9 @@
 import { z } from 'zod/v3';
 
+import { routing } from '@/i18n/routing';
+import { COMPANY_DESCRIPTION_MAX } from '@/lib/company-description';
 import { COMPANY_URL_MAX_LENGTH, isPublicHttpsUrl } from '@/lib/company-links';
+import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 
 /**
  * Walidacja danych firmy pracodawcy (Etap 4).
@@ -70,3 +73,24 @@ export const companyLinksUpdateSchema = companyLinksSchema.partial();
 
 export type CompanyLinksInput = z.infer<typeof companyLinksSchema>;
 export type CompanyLinksUpdateInput = z.infer<typeof companyLinksUpdateSchema>;
+
+/**
+ * Opis firmy (#868, 0198) — tekst do publicznego profilu, po zapisie czeka na admina portalu.
+ * Pusty tekst = usunięcie opisu. Limit 1500 znaków po przycięciu (CHECK w bazie); numer
+ * rejestru narodowego/BIS albo numer dokumentu (ten sam detektor co w innych polach) → błąd
+ * przy polu, bez zapisu.
+ */
+export const companyDescriptionSchema = z.object({
+  description: z
+    .string({ required_error: 'company.error.descriptionRequired' })
+    .trim()
+    .max(COMPANY_DESCRIPTION_MAX, 'company.error.descriptionTooLong')
+    .refine((v) => !containsPersonalIdentifier(v), 'company.error.descriptionSensitive'),
+  /**
+   * Język opisu (0201): zgłaszany razem z propozycją i zatwierdzany z nią; pusty = nie wskazano.
+   * Tekst równy zatwierdzonemu = sama zmiana języka zatwierdzonego opisu (bez przeglądu).
+   */
+  descriptionLocale: z.enum(routing.locales).or(z.literal('')).optional(),
+});
+
+export type CompanyDescriptionInput = z.infer<typeof companyDescriptionSchema>;

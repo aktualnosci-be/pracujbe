@@ -38,6 +38,10 @@ export interface FixtureCompany {
   description: string;
   city: string;
   region: string;
+  /** #708: język opisu (fikcyjne opisy są w każdym języku, poza firmą bez ofert — tylko NL). */
+  descriptionLocale?: Locale;
+  /** #686: zweryfikowana strona WWW (fikcyjna domena `example.com`). */
+  website?: string;
 }
 
 /** Profil zweryfikowanej firmy fikcyjnej po slugu; firma niezweryfikowana albo zły slug = `null`. */
@@ -47,7 +51,9 @@ export function fixtureCompanyBySlug(slug: string, locale: Locale): FixtureCompa
       id: 'fixture-company-without-jobs',
       slug,
       name: WITHOUT_JOBS_NAME,
-      description: '',
+      // #708: opis tylko po niderlandzku — profil w innym języku pokazuje informację o języku.
+      description: 'Fictief bedrijf zonder actieve vacatures.',
+      descriptionLocale: 'nl',
       city: 'Gent',
       region: 'Oost-Vlaanderen',
     };
@@ -59,6 +65,9 @@ export function fixtureCompanyBySlug(slug: string, locale: Locale): FixtureCompa
     slug,
     name: company.name,
     description: company.description[locale],
+    descriptionLocale: locale,
+    // #686: strona WWW na profilu (fikcyjna domena, tylko serwer fixture E2E).
+    website: `https://www.example.com/${slug}`,
     ...demoCompanyLocation(company, locale),
   };
 }

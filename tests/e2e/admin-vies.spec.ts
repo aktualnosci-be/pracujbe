@@ -5,6 +5,7 @@ import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * #92 — sekcja VIES w szczególe firmy (tryb DEMO, bez zapytań do VIES).
@@ -15,7 +16,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  * trafia do VIES). Teksty z `src/messages`.
  */
 
-type AdminMessages = Record<string, string>;
+type AdminMessages = AppMessages['admin'];
 
 function admin(locale: string): AdminMessages {
   const all = JSON.parse(

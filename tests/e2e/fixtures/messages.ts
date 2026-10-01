@@ -13,15 +13,11 @@ export const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
 export type TestLocale = (typeof LOCALES)[number];
 
 /**
- * Klucze użyte w helperach są opisane jawnie; pozostałe przestrzenie nazw (np. `settings`,
- * `admin`) speców to zwykłe teksty z `src/messages/*.json` — indeks zamiast luki w typie.
+ * Typ komunikatów = struktura `src/messages/pl.json` (import tylko typu, bez odczytu w runtime).
+ * Pozostałe języki mają te same klucze (strażnik kluczy i18n w testach jednostkowych), więc
+ * literówka w kluczu albo usunięty klucz to błąd typecheck zamiast `undefined` w lokatorze.
  */
-type Messages = {
-  cookies: { bannerTitle: string; acceptAll: string; rejectOptional: string; customize: string };
-  dashboard: { greeting: string; greetingNoName: string };
-  footer: { langLabel: string };
-  jobs: { applyNow: string };
-} & Record<string, Record<string, string>>;
+export type Messages = typeof import('../../../src/messages/pl.json');
 
 const cache = new Map<string, Messages>();
 

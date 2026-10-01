@@ -20,10 +20,12 @@ import {
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import { CandidateSavedSearchJobs } from '@/components/candidate/CandidateSavedSearchJobs';
+import { CvUpload } from '@/components/candidate/CvUpload';
 import { cn } from '@/lib/utils';
 import { getCandidateAccountOverview, getSavedJobs } from '@/lib/data/candidate';
 import { loadSavedSearchJobs } from '@/lib/data/candidate-saved-search-jobs';
 import { loadMySavedSearches } from '@/lib/data/saved-searches';
+import { loadCandidateFiles } from '@/lib/data/candidate-files';
 
 /** Ile pozycji pokazuje pulpit (pełne listy na własnych stronach). */
 const PREVIEW_LIMIT = 3;
@@ -31,7 +33,11 @@ const PREVIEW_LIMIT = 3;
 /**
  * Pulpit konta w trybie ogłoszeniowym (#1142) — decyzja produktowa: portal ogłoszeniowy.
  * Konto służy do zapisanych ofert, zapisanych wyszukiwań i ustawień: bez kompletności profilu,
- * `MatchBar`, podglądów zgłoszeń/propozycji/wiadomości i CV (ich loadery nie są wołane).
+ * `MatchBar` i podglądów zgłoszeń/propozycji/wiadomości (ich loadery nie są wołane).
+ * „Twoje pliki” (#1226, decyzja właściciela 29.09.2026): lista CV wgranych wcześniej (przed
+ * trybem albo w RECRUITMENT) z pobraniem (link HMAC `prepareCvDownload`) i usunięciem —
+ * `CvUpload` BEZ `allowUpload`, więc bez wgrywania. Sekcja tylko, gdy są pliki albo odczyt się
+ * nie udał (konto bez plików nie widzi pustej sekcji).
  * Kalka `candidate()` z prototypu (`panel-styles`/`candidate-styles`), jak pulpit pełny.
  */
 export async function CandidateAccountDashboard({ locale }: { locale: string }) {
@@ -39,10 +45,11 @@ export async function CandidateAccountDashboard({ locale }: { locale: string }) 
     getTranslations({ locale, namespace: 'dashboard' }),
     getTranslations({ locale, namespace: 'savedSearches' }),
   ]);
-  const [overview, saved, searches] = await Promise.all([
+  const [overview, saved, searches, files] = await Promise.all([
     getCandidateAccountOverview(),
     getSavedJobs(locale),
     loadMySavedSearches(),
+    loadCandidateFiles(),
   ]);
 
   // Oferty z zapisanych wyszukiwań: wyszukiwania już odczytane wyżej, drugi raz bazy nie pytamy.
@@ -50,6 +57,7 @@ export async function CandidateAccountDashboard({ locale }: { locale: string }) 
   const savedJobs = saved.status === 'ready' ? saved.jobs : null;
   const savedSearches = searches.status === 'ready' ? searches.searches : null;
   const alertsOn = savedSearches?.filter((s) => s.alertsEnabled).length ?? 0;
+  const showFiles = files.status === 'error' || files.items.length > 0;
 
   return (
     <div className="min-w-0" data-testid="candidate-account-dashboard">
@@ -132,6 +140,19 @@ export async function CandidateAccountDashboard({ locale }: { locale: string }) 
               </ul>
             )}
           </section>
+
+          {showFiles ? (
+            <section className={PANEL} aria-labelledby="account-files" data-testid="account-files">
+              <div className={SECTION_HEAD}>
+                <h2 id="account-files" className={PANEL_H2}>{td('accountFilesTitle')}</h2>
+              </div>
+              {/* Bez `allowUpload`: tylko pobranie i usunięcie istniejących plików (#1138/#1226). */}
+              <CvUpload
+                items={files.status === 'ready' ? files.items : []}
+                loadFailed={files.status === 'error'}
+              />
+            </section>
+          ) : null}
         </div>
 
         <div className={DASH_GRID_SIDE}>
