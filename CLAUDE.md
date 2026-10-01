@@ -1697,6 +1697,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`?direct=1`, `p_direct_only` w liście, liczniku, facetach i kopii filtrów alertów). Dowód:
   `rls.sql` sekcja FT167 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
   przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
+  Kolejka „oczekujące” filtruje bieżącą treść w SQL przed limitem (#1220, bez migracji) —
+  nieaktualne przeglądy (każdy zapis innej treści z sygnałem) nie zajmują stron; integracja
+  `portal-admin-job-content-queue` (PG16, kontrola ujemna: stary odczyt = strona nieaktualnych).
   **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
   na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
   Kanał aplikowania u ogłoszeniodawcy (#1129, migracja `0172`; decyzja
@@ -1743,9 +1746,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   serwerowy, bez JS). Combobox poziomu języka w kroku 7 ma nazwę (`jobWizard.languageLevelAria`).
   Dowód: unit `job-wizard-content-locale`, `job-detail-start`, `job-start`, `delete-job-draft-button`,
   integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
-  inny klucz = nowy szkic). **Otwarte (wymaga migracji):** kontrola kompletności w `publish_job`/
-  `update_published_job` odrzuca tytuły zaczynające się od „draft” lub zawierające „placeholder”
-  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), język
+  inny klucz = nowy szkic). Tytuł bez heurystyki zaślepki (#1221, migracja `0203` — numer
+  tymczasowy): `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucają już
+  tylko pusty tytuł (dawny warunek „draft%/placeholder” z 0031 blokował np. „Draftsman”); dowód
+  `rls.sql` sekcja BZ1221 (kontrole ujemne: definicje sprzed 0203), rollback
+  `0203_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):** język
   proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
   przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
   i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
@@ -2208,6 +2213,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
   ręcznej.
+  Język treści kart (#1223, bez migracji): `get_public_jobs`/profil firmy nie zwracają języka
+  wybranego tłumaczenia, więc `withListContentLocales` (`src/lib/jobs.ts`, jedno zapytanie
+  o tłumaczenia ofert strony pod anon) ustala `contentLocale` regułą
+  `resolveJobListContentLocale` (język strony, gdy oferta go ma; inaczej jednoznaczne
+  tłumaczenie z identycznym tytułem i wyróżnikami; przekład maszynowy = język strony). `JobCard`
+  i pulpit kandydata (zapisane wyszukiwania) ustawiają `lang` tytułu i wyróżników, gdy różni się
+  od języka strony. Awaria = karty bez `lang`. Dowód: unit `job-list-content-locale`, `job-card`,
+  `classifieds-candidate-saved-search-jobs` (kontrole ujemne).
   Nazwy chronione (#740, migracja `0190` — numer tymczasowy): nazwa firmy (`companies.name`,
   wyłącznie z bazy) = `translation_source_revisions.protected_terms` rewizji oferty
   (`sync_job_translation_source` → `record_translation_source(…, p_protected_terms)`,
