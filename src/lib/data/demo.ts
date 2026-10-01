@@ -20,7 +20,7 @@ import type {
   JobApplyChannel,
   JobDetail,
   JobListItem,
-  LocationKey,
+  CoreLocationKey,
   SalaryPeriod,
 } from '@/lib/jobs';
 import { routing, type Locale } from '@/i18n/routing';
@@ -114,7 +114,7 @@ const CITY = {
   charleroi: { pl: 'Charleroi', nl: 'Charleroi', fr: 'Charleroi', en: 'Charleroi' },
   bruges: { pl: 'Brugia', nl: 'Brugge', fr: 'Bruges', en: 'Bruges' },
   kortrijk: { pl: 'Kortrijk', nl: 'Kortrijk', fr: 'Courtrai', en: 'Kortrijk' },
-} satisfies Record<LocationKey, L>;
+} satisfies Record<CoreLocationKey, L>;
 
 /** Prawdziwe belgijskie regiony/prowincje (nazwy lokalizowane). */
 const REGION = {
@@ -141,7 +141,7 @@ const REGION_OF = {
   charleroi: 'hainaut',
   bruges: 'westFlanders',
   kortrijk: 'westFlanders',
-} satisfies Record<LocationKey, RegionKey>;
+} satisfies Record<CoreLocationKey, RegionKey>;
 
 /** Nazwy języków (do listy wymaganych języków oferty). */
 const LANG = {
@@ -374,7 +374,7 @@ export interface DemoCompany {
   /** Nazwa marki (nie tłumaczona). */
   name: string;
   verified: boolean;
-  locationKey: LocationKey;
+  locationKey: CoreLocationKey;
   /** Opis firmy — lokalizowany. */
   description: L;
 }
@@ -535,7 +535,7 @@ interface DemoJobRaw {
   id: string;
   occKey: OccKey;
   companyId: CompanyId;
-  locationKey: LocationKey;
+  locationKey: CoreLocationKey;
   category: CategoryKey;
   contractType: ContractType;
   salaryMin?: number;
@@ -869,7 +869,7 @@ const CATEGORY_KEYS: CategoryKey[] = [
   'cleaning', 'hospitality', 'care', 'logistics', 'seasonal',
 ];
 
-const LOCATION_KEYS: LocationKey[] = [
+const LOCATION_KEYS: CoreLocationKey[] = [
   'brussels', 'antwerp', 'ghent', 'leuven', 'mechelen',
   'hasselt', 'liege', 'charleroi', 'bruges', 'kortrijk',
 ];
@@ -880,7 +880,7 @@ export const demoCategories: { key: CategoryKey; jobCount: number }[] = CATEGORY
 );
 
 /** Lokalizacje z liczbą ofert demonstracyjnych. */
-export const demoLocations: { key: LocationKey; jobCount: number }[] = LOCATION_KEYS.map(
+export const demoLocations: { key: CoreLocationKey; jobCount: number }[] = LOCATION_KEYS.map(
   (key) => ({ key, jobCount: RAW_JOBS.filter((job) => job.locationKey === key).length }),
 );
 

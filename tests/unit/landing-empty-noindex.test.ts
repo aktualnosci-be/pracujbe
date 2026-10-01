@@ -6,9 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * filtra co treść strony (kategoria; miasto po wszystkich swoich nazwach — #189, #1119).
  */
 
-const { getJobs, getJobsCount } = vi.hoisted(() => ({ getJobs: vi.fn(), getJobsCount: vi.fn() }));
+const { getJobs, getJobsCount, getCityCounts } = vi.hoisted(() => ({
+  getJobs: vi.fn(),
+  getJobsCount: vi.fn(),
+  getCityCounts: vi.fn(async () => null),
+}));
 
-vi.mock('@/lib/jobs', () => ({ getJobs, getJobsCount, isShowingDemoJobs: () => false }));
+vi.mock('@/lib/jobs', () => ({ getJobs, getJobsCount, getCityCounts, isShowingDemoJobs: () => false }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
   setRequestLocale: () => undefined,
