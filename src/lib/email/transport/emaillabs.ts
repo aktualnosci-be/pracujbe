@@ -24,7 +24,9 @@ import { MailSendError, type MailMessage, type MailTransport } from './types';
 
 export const EMAILLABS_API_BASE = 'https://api.emaillabs.io';
 const SUBJECT_MAX = 128;
-const REQUEST_TIMEOUT_MS = 10_000;
+/** Limit pojedynczego żądania HTTP do EmailLabs (`run-deadline.ts`: okno wysyłki = GET + POST). */
+export const EMAILLABS_REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = EMAILLABS_REQUEST_TIMEOUT_MS;
 
 export interface EmailLabsConfig {
   appKey: string;

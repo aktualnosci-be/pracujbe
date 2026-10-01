@@ -398,4 +398,14 @@ for (const spec of fixtureSpecs) {
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
+// Sprzątanie przebiegów nie może kasować historii potrzebnej przy analizie regresji (#1105):
+// co najmniej 90 dni i 50 ostatnich przebiegów każdego workflowu (także `main`).
+const cleanupNumber = (key) => {
+  const matches = [...cleanup.matchAll(new RegExp(`^\\s+${key}:\\s*(\\d+)\\s*$`, 'gm'))];
+  assert.equal(matches.length, 1, `delete-old-runs.yml: ${key} musi wystąpić dokładnie raz jako liczba`);
+  return Number(matches[0][1]);
+};
+assert.ok(cleanupNumber('retain_days') >= 90, 'delete-old-runs.yml: retain_days < 90 — znika historia przebiegów main (#1105)');
+assert.ok(cleanupNumber('keep_minimum_runs') >= 50, 'delete-old-runs.yml: keep_minimum_runs < 50 — znika historia przebiegów main (#1105)');
+assert.doesNotMatch(cleanup, /^\s+check_branch_existence:/m, 'delete-old-runs.yml: check_branch_existence w v2.0.6 nie działa (indexOf === 1) — nie polegaj na nim');
 console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E (podział po czasie), części fixture’ów i tryb ogłoszeniowy z jobem zbiorczym, main bez anulowania.');
