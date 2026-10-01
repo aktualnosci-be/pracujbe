@@ -3376,7 +3376,9 @@
       "invitationLimit": "Osiągnięto limit 50 oczekujących zaproszeń. Cofnij nieaktualne zaproszenia.",
       "companyLimit": "Możesz prowadzić maksymalnie 5 firm.",
       "lastOwner": "Firma musi mieć co najmniej jednego aktywnego właściciela.",
-      "localeRequired": "Wybierz język zaproszenia."
+      "localeRequired": "Wybierz język zaproszenia.",
+      "reactivationDenied": "Dostęp tej osoby do firmy został wyłączony w roli, której nie możesz przywrócić. Poproś o to właściciela firmy.",
+      "reactivationNotAllowed": "Nie możesz przyjąć tego zaproszenia: Twój dostęp do firmy został wyłączony i może go przywrócić tylko właściciel firmy."
     },
     "localeLabel": "Język zaproszenia",
     "invitedSent": "Zaproszenie zapisane. Ta osoba dostanie e-mail: z kontem pracodawcy — w języku swojego konta, bez konta — w wybranym języku, z linkiem do rejestracji.",

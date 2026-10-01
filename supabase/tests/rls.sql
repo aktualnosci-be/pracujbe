@@ -24382,4 +24382,117 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- TMR867. Przywrócenie wyłączonego członka przez zaproszenie respektuje hierarchię ról
+-- (0953, #867): admin nie przywróci wyłączonego admina zaproszeniem na niższą rolę ani przy
+-- tworzeniu zaproszenia, ani przy jego przyjęciu; owner może. Kontrola ujemna: po rollbacku
+-- 0953 obejście znowu działa.
+-- ============================================================================
+\echo '--- TMR867 reaktywacja członka przez zaproszenie ---'
+\set R8O  'e9530000-0000-0000-0000-0000000000a1'
+\set R8A1 'e9530000-0000-0000-0000-0000000000a2'
+\set R8A2 'e9530000-0000-0000-0000-0000000000a3'
+\set R8A3 'e9530000-0000-0000-0000-0000000000a4'
+\set R8R  'e9530000-0000-0000-0000-0000000000a5'
+\set R8M  'e9530000-0000-0000-0000-0000000000a6'
+\set R8C  'e9530000-0000-0000-0000-0000000000f1'
+begin;
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'R8O','r8o@test.be','Olaf O','{"role":"employer","first_name":"Olaf","last_name":"Owner","locale":"pl"}'),
+  (:'R8A1','r8a1@test.be','Ada A','{"role":"employer","first_name":"Ada","last_name":"Admin","locale":"pl"}'),
+  (:'R8A2','r8a2@test.be','Bea B','{"role":"employer","first_name":"Bea","last_name":"Admin","locale":"nl"}'),
+  (:'R8A3','r8a3@test.be','Cid C','{"role":"employer","first_name":"Cid","last_name":"Admin","locale":"fr"}'),
+  (:'R8R','r8r@test.be','Rui R','{"role":"employer","first_name":"Rui","last_name":"Recruiter","locale":"en"}'),
+  (:'R8M','r8m@test.be','Mia M','{"role":"employer","first_name":"Mia","last_name":"Member","locale":"en"}');
+update auth.users set email_verified = true where id in (:'R8O',:'R8A1',:'R8A2',:'R8A3',:'R8R',:'R8M');
+insert into public.companies(id,name,status) values (:'R8C','Firma R867','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'R8C',:'R8O','owner',true), (:'R8C',:'R8A1','admin',true),
+  (:'R8C',:'R8A2','admin',false), (:'R8C',:'R8A3','admin',false),
+  (:'R8C',:'R8R','recruiter',false), (:'R8C',:'R8M','member',false);
+create or replace function pg_temp.r8_hash() returns text language sql volatile as $$
+  select encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex') $$;
+create or replace function pg_temp.r8_nonce() returns text language sql volatile as $$
+  select replace(gen_random_uuid()::text, '-', '') $$;
+create or replace function pg_temp.r8_member(p_profile uuid) returns text language sql stable as $$
+  select role::text || ':' || is_active::text from public.company_members
+   where company_id = 'e9530000-0000-0000-0000-0000000000f1' and profile_id = p_profile $$;
+
+-- TMR867-1: admin nie zaprosi wyłączonego admina (nawet na rolę recruiter) — nic się nie zmienia.
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'R8C' || ''', ''r8a2@test.be'', ''recruiter'', ''pl'', pg_temp.r8_hash(), pg_temp.r8_nonce())',
+  'MEMBER_REACTIVATION_DENIED', 'TMR867-1 admin nie zaprasza wyłączonego admina na niższą rolę');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_invitations where company_id = :'R8C' and email = 'r8a2@test.be') = 0
+  and pg_temp.r8_member(:'R8A2') = 'admin:false',
+  'TMR867-1b brak zaproszenia, członkostwo nadal wyłączone');
+
+-- TMR867-2: admin przywraca wyłączonego rekrutera zaproszeniem (jego rola mieści się w hierarchii).
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select invitation_id as r8invr from public.invite_company_member(:'R8C', 'r8r@test.be', 'member', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+set local role authenticated; set local app.current_uid = :'R8R'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'r8invr', true);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8R') = 'member:true',
+  'TMR867-2 admin przywraca wyłączonego rekrutera jako member (pozytyw)');
+
+-- TMR867-3: zaproszenie sprzed 0953 (bez strażnika) — przyjęcie odrzucone, stan bez zmian.
+alter table public.company_invitations disable trigger trg_company_invitations_reactivation_guard;
+insert into public.company_invitations (company_id, email, role, invited_by, locale, signup_token_hash)
+  values (:'R8C', 'r8a2@test.be', 'recruiter', :'R8A1', 'pl', pg_temp.r8_hash())
+  returning id as r8inva2 \gset
+alter table public.company_invitations enable trigger trg_company_invitations_reactivation_guard;
+set local role authenticated; set local app.current_uid = :'R8A2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'r8inva2' || ''', true)',
+  'REACTIVATION_NOT_ALLOWED', 'TMR867-3 przyjęcie zaproszenia admina od admina odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  pg_temp.r8_member(:'R8A2') = 'admin:false'
+  and (select status from public.company_invitations where id = :'r8inva2') = 'pending',
+  'TMR867-3b członkostwo wyłączone, zaproszenie nadal oczekuje');
+
+-- TMR867-4: owner odświeża to zaproszenie i przywraca wyłączonego admina jako recruiter.
+set local role authenticated; set local app.current_uid = :'R8O'; select pg_temp.assert_client_role();
+select invitation_id as r8inva2o, created as r8createdo
+  from public.invite_company_member(:'R8C', 'r8a2@test.be', 'recruiter', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'r8inva2o' = :'r8inva2' and not :'r8createdo'::boolean,
+  'TMR867-4 owner odświeża oczekujące zaproszenie');
+set local role authenticated; set local app.current_uid = :'R8A2'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'r8inva2', true);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8A2') = 'recruiter:true',
+  'TMR867-4b owner przywraca wyłączonego admina (pozytyw)');
+
+-- TMR867-5: zapraszający stracił uprawnienia przed przyjęciem — przyjęcie odrzucone.
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select invitation_id as r8invm from public.invite_company_member(:'R8C', 'r8m@test.be', 'member', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+update public.company_members set is_active = false where company_id = :'R8C' and profile_id = :'R8A1';
+set local role authenticated; set local app.current_uid = :'R8M'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'r8invm' || ''', true)',
+  'REACTIVATION_NOT_ALLOWED', 'TMR867-5 zaproszenie od wyłączonego admina nie przywraca członka');
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8M') = 'member:false', 'TMR867-5b członkostwo nadal wyłączone');
+update public.company_members set is_active = true where company_id = :'R8C' and profile_id = :'R8A1';
+
+-- Kontrola ujemna: bez 0953 admin przywraca wyłączonego admina zaproszeniem na rekrutera.
+\ir ../rollback/0953_team_member_reactivation_hierarchy.down.sql
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select invitation_id as r8inva3 from public.invite_company_member(:'R8C', 'r8a3@test.be', 'recruiter', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+set local role authenticated; set local app.current_uid = :'R8A3'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'r8inva3', true);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8A3') = 'recruiter:true',
+  'TMR867-N kontrola ujemna: bez 0953 admin przywraca wyłączonego admina zaproszeniem');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

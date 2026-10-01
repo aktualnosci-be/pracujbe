@@ -3376,7 +3376,9 @@
       "invitationLimit": "De limiet van 50 openstaande uitnodigingen is bereikt. Trek verouderde uitnodigingen in.",
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
       "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben.",
-      "localeRequired": "Kies de taal van de uitnodiging."
+      "localeRequired": "Kies de taal van de uitnodiging.",
+      "reactivationDenied": "De toegang van deze persoon tot het bedrijf is uitgeschakeld in een rol die je niet kunt herstellen. Vraag dit aan de eigenaar van het bedrijf.",
+      "reactivationNotAllowed": "Je kunt deze uitnodiging niet aanvaarden: je toegang tot het bedrijf is uitgeschakeld en alleen de eigenaar van het bedrijf kan die herstellen."
     },
     "localeLabel": "Taal van de uitnodiging",
     "invitedSent": "Uitnodiging opgeslagen. Deze persoon krijgt een e-mail: met een werkgeversaccount in de taal van dat account, zonder account in de gekozen taal, met een link om te registreren.",

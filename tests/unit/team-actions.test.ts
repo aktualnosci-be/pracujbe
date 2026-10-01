@@ -283,6 +283,31 @@ describe('hierarchia ról w UI = hierarchia w bazie (0086)', () => {
     expect(sql).toMatch(/cm\.role = 'owner' or \(cm\.role = 'admin' and p_role in \('recruiter', 'member'\)\)/);
   });
 
+  it('#867: odmowa przywrócenia wyłączonego członka — własne kody i komunikaty, nie ogólny błąd', async () => {
+    client({ data: null, error: { message: 'MEMBER_REACTIVATION_DENIED' } });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'recruiter', locale: 'pl' }, COMPANY)).toEqual({
+      ok: false,
+      error: 'MEMBER_REACTIVATION_DENIED',
+    });
+    client({ data: null, error: { message: 'REACTIVATION_NOT_ALLOWED' } });
+    expect(await respondToTeamInvitation(INVITE, true)).toEqual({ ok: false, error: 'REACTIVATION_NOT_ALLOWED' });
+    expect(cookieSet).not.toHaveBeenCalled();
+    expect(teamErrorKey('MEMBER_REACTIVATION_DENIED', toUserMessageKey)).toBe('team.error.reactivationDenied');
+    expect(teamErrorKey('REACTIVATION_NOT_ALLOWED', toUserMessageKey)).toBe('team.error.reactivationNotAllowed');
+    // Kontrola ujemna: zwykła odmowa uprawnień nadal mapuje się na PERMISSION_DENIED.
+    expect(mapTeamError('PERMISSION_DENIED')).toBe('PERMISSION_DENIED');
+  });
+
+  it('#867: migracja 0953 sprawdza starą rolę przy zaproszeniu i przy przyjęciu', () => {
+    const sql = readFileSync(
+      resolve(process.cwd(), 'supabase/migrations/0953_team_member_reactivation_hierarchy.sql'),
+      'utf8',
+    );
+    expect(sql).toMatch(/company_role_manageable_by\(v_inv\.company_id, v_inv\.invited_by, v_member\.role\)/);
+    expect(sql).toMatch(/before insert or update on public\.company_invitations/);
+    expect(sql).toMatch(/cm\.role = 'owner' or \(cm\.role = 'admin' and p_role in \('recruiter', 'member'\)\)/);
+  });
+
   it('kody zespołu mają własne komunikaty, pozostałe — wspólne errors.*', () => {
     expect(teamErrorKey('COMPANY_LIMIT_REACHED', toUserMessageKey)).toBe('team.error.companyLimit');
     expect(teamErrorKey('PERMISSION_DENIED', toUserMessageKey)).toBe('errors.permissionDenied');
