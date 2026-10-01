@@ -22027,7 +22027,7 @@ select pg_temp.pj_mk(44, :'WMCOA', 'closed');
 
 update public.jobs set expires_at = now() - interval '1 day' where id = pg_temp.pj_id(6);
 update public.jobs set title = '   ' where id = pg_temp.pj_id(7);
--- Oferty 8 i 9 (dawniej tytuły „draft…”/„…placeholder…”) — reguła tytułu to od #1221 (0995)
+-- Oferty 8 i 9 (dawniej tytuły „draft…”/„…placeholder…”) — reguła tytułu to od #1221 (0203)
 -- tylko pusty tytuł; realne tytuły z tymi słowami sprawdza sekcja BZ1221.
 update public.jobs set city = '  ' where id = pg_temp.pj_id(10);
 update public.jobs set region = '' where id = pg_temp.pj_id(11);
@@ -22215,11 +22215,11 @@ select pg_temp.assert(pg_temp.pj_run(null) = '',
   'PJ1071-N11 po cofnięciu mutacji definicja produkcyjna jest przywrócona (każdy brak nadal ma swój komunikat)');
 
 -- ============================================================================
--- BZ1221. Tytuł oferty bez heurystyki „zaślepki” (#1221, audyt 29.09 BIZ-3, 0995).
+-- BZ1221. Tytuł oferty bez heurystyki „zaślepki” (#1221, audyt 29.09 BIZ-3, 0203).
 --   `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucały tytuł
 --   zaczynający się od „draft” albo zawierający „placeholder” — realne stanowisko
---   „Draftsman (AutoCAD)” nie dało się opublikować. Od 0995 zaślepką jest tylko pusty tytuł.
---   Kontrole ujemne: definicje sprzed 0995 (rollback w transakcji cofanej) odrzucają te same
+--   „Draftsman (AutoCAD)” nie dało się opublikować. Od 0203 zaślepką jest tylko pusty tytuł.
+--   Kontrole ujemne: definicje sprzed 0203 (rollback w transakcji cofanej) odrzucają te same
 --   tytuły w każdej z trzech funkcji; pusty tytuł odrzucany w obu wariantach.
 -- ============================================================================
 \echo '--- BZ1221 tytuł oferty: tylko pusty tytuł to zaślepka ---'
@@ -22234,9 +22234,9 @@ select pg_temp.assert(not exists (
      where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
   'BZ1221-0 żadna z trzech funkcji nie zawiera heurystyki tytułu-zaślepki');
 
--- BZ1221-N1: kontrola ujemna — definicje sprzed 0995 odrzucają oba realne tytuły.
+-- BZ1221-N1: kontrola ujemna — definicje sprzed 0203 odrzucają oba realne tytuły.
 begin;
-\ir ../rollback/0995_job_title_completeness.down.sql
+\ir ../rollback/0203_job_title_completeness.down.sql
 set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(51), 'bz1221-n1'),
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
@@ -22270,7 +22270,7 @@ select set_config('pb.bz_upd_empty', (current_setting('pb.bz_upd')::jsonb
   || jsonb_build_object('job', (current_setting('pb.bz_upd')::jsonb -> 'job') || '{"title": "  "}'::jsonb))::text, false);
 select updated_at as bz_v1 from public.jobs where id = pg_temp.pj_id(51) \gset
 begin;
-\ir ../rollback/0995_job_title_completeness.down.sql
+\ir ../rollback/0203_job_title_completeness.down.sql
 set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
     pg_temp.pj_id(51), current_setting('pb.bz_upd'), :'bz_v1'),
@@ -22295,7 +22295,7 @@ set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_cli
 select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'close') = 'closed', 'BZ1221-3a zamknięcie oferty');
 reset role; reset app.current_uid;
 begin;
-\ir ../rollback/0995_job_title_completeness.down.sql
+\ir ../rollback/0203_job_title_completeness.down.sql
 set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.set_job_status(%L::uuid, %L)', pg_temp.pj_id(51), 'reopen'),
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
@@ -22311,7 +22311,7 @@ select pg_temp.assert(not exists (
     select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
                                'public.update_published_job(uuid, jsonb, timestamptz)']) f
      where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
-  'BZ1221-4 po cofniętych kontrolach ujemnych definicje 0995 są na miejscu');
+  'BZ1221-4 po cofniętych kontrolach ujemnych definicje 0203 są na miejscu');
 
 -- ============================================================================
 -- RD1114. Polityki ODCZYTU bez wcześniejszych testów regresyjnych (#1114, TQ2-05): historia statusów

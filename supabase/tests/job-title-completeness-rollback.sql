@@ -1,7 +1,7 @@
 -- =============================================================================
--- BZ1221-R — rollback migracji 0995 (#1221). Uruchamiany przez scripts/test-rls.sh po rls.sql,
+-- BZ1221-R — rollback migracji 0203 (#1221). Uruchamiany przez scripts/test-rls.sh po rls.sql,
 -- na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany, więc baza po teście
--- ma nadal definicje z 0995.
+-- ma nadal definicje z 0203.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -28,7 +28,7 @@ select pg_temp.assert(pg_temp.bz_heuristic_count() = 0 and pg_temp.bz_privileges
   'BZ1221-R0 przed rollbackiem: trzy funkcje bez heurystyki, EXECUTE tylko authenticated');
 
 begin;
-\ir ../rollback/0995_job_title_completeness.down.sql
+\ir ../rollback/0203_job_title_completeness.down.sql
 select pg_temp.assert(pg_temp.bz_heuristic_count() = 3 and pg_temp.bz_privileges_ok(),
   'BZ1221-R rollback przywraca definicje 0172/0085 (z heurystyką) i uprawnienia');
 -- Pozostała logika poza tytułem bez zmian: kanał aplikowania (0172) i termin ważności (0085).
@@ -43,4 +43,4 @@ select pg_temp.assert(pg_temp.bz_heuristic_count() = 0
   and pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure) like '%JOB_APPLY_CHANNEL_REQUIRED%'
   and pg_get_functiondef('public.update_published_job(uuid, jsonb, timestamptz)'::regprocedure) like '%JOB_EDIT_CONFLICT%'
   and pg_get_functiondef('public.set_job_status(uuid, text)'::regprocedure) like '%JOB_EXPIRED%',
-  'BZ1221-R2 rollback testu cofnięty; 0995 zachowuje pozostałe reguły');
+  'BZ1221-R2 rollback testu cofnięty; 0203 zachowuje pozostałe reguły');

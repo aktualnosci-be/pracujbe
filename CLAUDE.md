@@ -1746,11 +1746,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   serwerowy, bez JS). Combobox poziomu języka w kroku 7 ma nazwę (`jobWizard.languageLevelAria`).
   Dowód: unit `job-wizard-content-locale`, `job-detail-start`, `job-start`, `delete-job-draft-button`,
   integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
-  inny klucz = nowy szkic). Tytuł bez heurystyki zaślepki (#1221, migracja `0995` — numer
+  inny klucz = nowy szkic). Tytuł bez heurystyki zaślepki (#1221, migracja `0203` — numer
   tymczasowy): `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucają już
   tylko pusty tytuł (dawny warunek „draft%/placeholder” z 0031 blokował np. „Draftsman”); dowód
-  `rls.sql` sekcja BZ1221 (kontrole ujemne: definicje sprzed 0995), rollback
-  `0995_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):** język
+  `rls.sql` sekcja BZ1221 (kontrole ujemne: definicje sprzed 0203), rollback
+  `0203_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):** język
   proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
   przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
   i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).

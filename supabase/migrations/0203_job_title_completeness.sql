@@ -1,6 +1,23 @@
--- Rollback 0995 (#1221): przywraca definicje sprzed migracji — `update_published_job`
--- i `publish_job` z 0172, `set_job_status` z 0085 (z heurystyką tytułu-zaślepki).
--- Dowód: supabase/tests/job-title-completeness-rollback.sql.
+-- =============================================================================
+-- 0203 (NUMER TYMCZASOWY — ostateczny nada integrator) — audyt 29.09, BIZ-3 (#1221).
+--
+-- Kompletność tytułu oferty bez heurystyki „zaślepki”. `publish_job`, `update_published_job`
+-- i `set_job_status` (reopen) odrzucały tytuł zaczynający się od „draft” albo zawierający
+-- „placeholder” (od 0031, z czasów szkicu z tytułem-zaślepką) — realne stanowisko
+-- „Draftsman (AutoCAD)” kończyło się ogólnym `VALIDATION_FAILED: oferta niekompletna
+-- (tytuł/miasto/region)`, choć kreator (krok 1) przyjął tytuł. Szkic powstaje dziś z PUSTYM
+-- tytułem (`createJobDraft`; techniczny slug `draft-…` nie jest tytułem), więc zaślepką jest
+-- wyłącznie pusty tytuł — zostaje warunek „tytuł niepusty po przycięciu”, który już
+-- obowiązywał obok heurystyki. Poza warunkiem tytułu ciała funkcji bez zmian:
+--   * `update_published_job` = 0172 (najnowsza definicja),
+--   * `publish_job`          = 0172 (najnowsza definicja),
+--   * `set_job_status`       = 0085 (najnowsza definicja).
+-- Otwarte PR-y #1208 (update_published_job) i #1260 (set_job_status) redefiniują te same
+-- funkcje — scalany później musi przenieść zmianę drugiego (kolejność w opisie PR).
+--
+-- Rollback: supabase/rollback/0203_job_title_completeness.down.sql (dowód:
+-- supabase/tests/job-title-completeness-rollback.sql).
+-- =============================================================================
 
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
@@ -131,8 +148,9 @@ begin
     array(select jsonb_array_elements_text(coalesce(p_content->'certificates', '[]'::jsonb))));
   perform set_config('pracujbe.job_edit', '', true);
 
-  -- Kompletność jak w publish_job (0073) — po zapisie, więc błąd cofa całą rewizję.
-  if v_title = '' or v_title ilike 'draft%' or v_title ilike '%placeholder%'
+  -- Kompletność jak w publish_job — po zapisie, więc błąd cofa całą rewizję. Tytuł: tylko
+  -- niepusty (#1221, bez heurystyki, która odrzucała np. „Draftsman”).
+  if v_title = ''
      or btrim(coalesce(j->>'city', '')) = '' or btrim(coalesce(j->>'region', '')) = '' then
     raise exception 'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)' using errcode = '42501';
   end if;
@@ -200,7 +218,7 @@ begin
     raise exception 'JOB_EXPIRED: termin ważności oferty minął' using errcode = '42501';
   end if;
 
-  if v_title is null or btrim(v_title) = '' or v_title ilike 'draft%' or v_title ilike '%placeholder%'
+  if v_title is null or btrim(v_title) = ''
      or v_city is null or btrim(v_city) = ''
      or v_region is null or btrim(v_region) = '' then
     raise exception 'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)' using errcode = '42501';
@@ -307,7 +325,7 @@ begin
     end if;
 
     if p_action = 'reopen' then
-      if v_title is null or btrim(v_title) = '' or v_title ilike 'draft%' or v_title ilike '%placeholder%'
+      if v_title is null or btrim(v_title) = ''
          or v_city is null or btrim(v_city) = '' or v_region is null or btrim(v_region) = '' then
         raise exception 'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)' using errcode = '42501';
       end if;
