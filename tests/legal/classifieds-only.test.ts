@@ -125,6 +125,7 @@ const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'candidate/wiadomosci', status: 'enforced', issue: 1134 },
   { segment: 'employer/wiadomosci', status: 'enforced', issue: 1134 },
   { segment: 'admin/pytania', status: 'enforced', issue: 1137 },
+  { segment: 'employer/szablony', status: 'enforced', issue: 1211 },
 ];
 
 const LOCALE_APP = join(ROOT, 'src/app/[locale]');
