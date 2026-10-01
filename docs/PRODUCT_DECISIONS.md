@@ -103,6 +103,28 @@ Ponowne włączenie funkcji rekrutacyjnych wymaga nowej, jawnej decyzji właści
 trybu (zmienna środowiskowa i stan w bazie, #1143). Zmiana „przy okazji” innej pracy jest
 błędem.
 
+## 2026-09-29: odebrany dostęp, ponowne otwarcie oferty, pliki kandydata, webhook poczty, zaproszenia
+
+- **Odebrany dostęp do firmy (#1210).** Pracodawca, któremu właściciel odebrał dostęp i który
+  nie ma innej aktywnej firmy, widzi w panelu komunikat „Twój dostęp do firmy X został
+  odebrany” — bez szczegółów (kto, kiedy, dlaczego) — zaproszenia do innych zespołów i formularz
+  własnej firmy (zakładanej jak kolejna firma: właściciel, status „niezweryfikowana”, limit
+  firm). Nie widzi już formularza pierwszej firmy, który w tym stanie zawsze kończył się błędem.
+- **Ponowne otwarcie oferty = nowa publikacja (#1222).** „Otwórz ponownie” (oferta zamknięta
+  albo wygasła) ustawia datę publikacji na chwilę otwarcia: oferta trafia do alertów zapisanych
+  wyszukiwań, filtrów „ostatnie 24 h / 7 dni” i na początek sortu „najnowsze”. Wyszukiwanie,
+  które już dostało tę ofertę w powiadomieniu, nie dostaje jej drugi raz. Pauza i wznowienie
+  daty publikacji nie zmieniają.
+- **„Twoje pliki” w koncie kandydata (#1226).** W portalu ogłoszeń pulpit konta pokazuje CV
+  wgrane wcześniej z pobraniem i usunięciem — bez wgrywania nowych plików. Konto bez plików
+  nie widzi tej sekcji.
+- **Webhook raportów EmailLabs (#1234).** W produkcji wymaga Basic auth (bez loginu i hasła
+  endpoint jest niedostępny, jak bez sekretu), odrzuca żądania z datą spoza okna ±24 h,
+  a identyfikator żądania jest pamiętany dłużej niż to okno.
+- **Zaproszenia przy usunięciu konta pracodawcy (#1233).** Oczekujące zaproszenia na adres
+  usuwanej osoby są cofane, a we wszystkich jej zaproszeniach (także rozstrzygniętych) adres
+  jest usuwany; zostaje ślad zdarzenia (firma, rola, status, daty) bez danych osoby.
+
 ## Limit CV i usunięte rekordy procesu (29.09.2026)
 
 Konto kandydata może mieć najwyżej 10 plików CV i 50 MB łącznie. Aplikacja lub propozycja
