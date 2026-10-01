@@ -287,7 +287,8 @@ describe('AgeAttestationSettings', () => {
     fireEvent.click(f.radio(16));
     fireEvent.click(f.submit);
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(pl.ageAttestation.saveError));
-    expect(screen.getByTestId('age-attestation-state')).toHaveTextContent(pl.ageAttestation.stateMissing);
+    // #1213: tryb ogłoszeniowy (domyślny) — stan bez obietnicy aplikowania i widoczności profilu.
+    expect(screen.getByTestId('age-attestation-state')).toHaveTextContent(pl.ageAttestation.stateMissingListing);
   });
 });
 
