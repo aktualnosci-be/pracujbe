@@ -25948,6 +25948,199 @@ select pg_temp.sp_patch('public.save_job_draft(uuid,jsonb,timestamptz)', '''shif
 set local role authenticated; set local app.current_uid = :'SPE'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"shift_patterns":["day"]}}'::jsonb)$q$, :'SPJD'),
   'nieznane pole shift_patterns', 'SP858-N4 bez klucza kreator nie zapisze grafiku');
+-- OC778. Współbieżność (0226): ostatni aktywny właściciel firmy (#778) i blokada źródła
+--        „Kopiuj jako szkic” (#1098). Dwie RÓWNOLEGŁE sesje (dblink) odbierają rolę albo
+--        dostęp dwóm różnym właścicielom tej samej firmy — przez RPC (dezaktywacja, degradacja,
+--        wariant mieszany) i bezpośrednim UPDATE (strażnik `enforce_owner_invariants`).
+--        Po 0226 druga sesja czeka na blokadę firmy i dostaje kontrolowany błąd; zawsze zostaje
+--        aktywny właściciel. Kopia oferty czeka na zatwierdzenie trwającej edycji źródła.
+--        Kontrole ujemne: te same definicje bez blokady (podmiana zatwierdzona w osobnej
+--        sesji i przywrócona) → firma bez właściciela / kopia nie czeka na edycję.
+--        Fixture'y zatwierdza osobna sesja (jak MQ233/TI611).
+-- ============================================================================
+\echo '--- OC778 ostatni właściciel firmy i źródło kopii oferty: blokady współbieżne ---'
+reset role; reset app.current_uid;
+-- Stan sesji wysłanej asynchronicznie: czeka na blokadę ('blocked') albo skończyła ('done').
+create function pg_temp.oc_state(p_pid int, p_conn text) returns text
+language plpgsql as $$
+begin
+  for i in 1..200 loop
+    if cardinality(pg_blocking_pids(p_pid)) > 0 then return 'blocked'; end if;
+    if dbl.dblink_is_busy(p_conn) = 0 then return 'done'; end if;
+    perform pg_sleep(0.05);
+  end loop;
+  return 'timeout';
+end $$;
+create function pg_temp.oc_active_owners(p_company uuid) returns int
+language sql as $$
+  select count(*)::int from public.company_members
+   where company_id = p_company and role = 'owner' and is_active;
+$$;
+-- Równoległa zmiana dwóch właścicieli: sesja A wykonuje swoje polecenie (bez COMMIT), sesja B
+-- wysyła swoje i — gdy p_expect_block — musi czekać na A. Zwraca 'wynikA|wynikB'.
+create function pg_temp.oc_race(p_uid_a uuid, p_sql_a text, p_uid_b uuid, p_sql_b text,
+                                p_expect_block boolean, p_name text) returns text
+language plpgsql as $$
+declare v_pid_b int; v_a text; v_b text; v_state text;
+begin
+  perform pg_temp.remote_begin('oc_a', p_uid_a);
+  v_pid_b := pg_temp.remote_begin('oc_b', p_uid_b);
+  select t.v into v_a from dbl.dblink('oc_a', p_sql_a) as t(v text);
+  perform dbl.dblink_send_query('oc_b', p_sql_b);
+  v_state := pg_temp.oc_state(v_pid_b, 'oc_b');
+  if p_expect_block and v_state <> 'blocked' then
+    raise exception 'ASSERT FAILED: % — druga sesja nie czekała na pierwszą (%)', p_name, v_state;
+  end if;
+  perform dbl.dblink_exec('oc_a', 'commit');
+  v_b := pg_temp.remote_result('oc_b');
+  if v_b like 'ERROR:%' then perform dbl.dblink_exec('oc_b', 'rollback');
+  else perform dbl.dblink_exec('oc_b', 'commit'); end if;
+  perform dbl.dblink_disconnect('oc_a'); perform dbl.dblink_disconnect('oc_b');
+  return v_a || '|' || v_b;
+end $$;
+
+-- Firmy F1–F5: po dwóch aktywnych właścicielach (konta …a<n>/…b<n>, członkostwa …c<n>/…d<n>).
+select pg_temp.remote_connect('oc_setup');
+select dbl.dblink_exec('oc_setup', $fx$
+  insert into auth.users(id,email,name,raw_user_meta_data)
+    select ('e9470000-0000-0000-0000-0000000000' || s.k || n::text)::uuid,
+           'oc778-' || s.k || n::text || '@test.be', 'OC ' || s.k || n::text,
+           jsonb_build_object('role','employer','first_name','Oc','last_name', s.k || n::text,'locale','pl')
+      from generate_series(1, 6) n cross join (values ('a'), ('b')) s(k);
+  insert into public.companies(id,name,status)
+    select ('e9470000-0000-0000-0000-0000000000f' || n::text)::uuid, 'Firma OC' || n::text, 'verified'
+      from generate_series(1, 6) n;
+  insert into public.company_members(id,company_id,profile_id,role,is_active)
+    select ('e9470000-0000-0000-0000-0000000000' || m.k || n::text)::uuid,
+           ('e9470000-0000-0000-0000-0000000000f' || n::text)::uuid,
+           ('e9470000-0000-0000-0000-0000000000' || m.u || n::text)::uuid, 'owner', true
+      from generate_series(1, 6) n cross join (values ('c','a'), ('d','b')) m(k, u);
+  -- Źródło kopii (#1098): szkic firmy F6 z tłumaczeniem w języku oferty.
+  insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale)
+    values ('e9470000-0000-0000-0000-0000000000e1','e9470000-0000-0000-0000-0000000000f6',
+            'e9470000-0000-0000-0000-0000000000a6','draft-oc1098','Przed edycją','warehouse','permanent',
+            'Gent','Flandria','draft','pl');
+  insert into public.job_translations(job_id, locale, title, description)
+    values ('e9470000-0000-0000-0000-0000000000e1','pl','Przed edycją','opis przed');
+$fx$);
+
+-- OC778-1: wzajemna dezaktywacja (RPC) — B czeka na A, przegrywa kontrolowanym błędem.
+select pg_temp.oc_race(
+  'e9470000-0000-0000-0000-0000000000a1',
+  $q$select 'ok'::text from public.set_company_member_active('e9470000-0000-0000-0000-0000000000d1', false)$q$,
+  'e9470000-0000-0000-0000-0000000000b1',
+  $q$select 'ok'::text from public.set_company_member_active('e9470000-0000-0000-0000-0000000000c1', false)$q$,
+  true, 'OC778-1') as oc1 \gset
+select pg_temp.assert(split_part(:'oc1', '|', 1) = 'ok'
+  and split_part(:'oc1', '|', 2) ~ '^ERROR: .*(NOT_FOUND|VALIDATION_FAILED)',
+  'OC778-1 równoległa dezaktywacja dwóch właścicieli: jedna wygrywa, druga kontrolowany błąd (' || :'oc1' || ')');
+select pg_temp.assert(pg_temp.oc_active_owners('e9470000-0000-0000-0000-0000000000f1') = 1,
+  'OC778-1b po dezaktywacji zostaje aktywny właściciel');
+
+-- OC778-2: wzajemna degradacja (RPC set_company_member_role → member).
+select pg_temp.oc_race(
+  'e9470000-0000-0000-0000-0000000000a2',
+  $q$select 'ok'::text from public.set_company_member_role('e9470000-0000-0000-0000-0000000000d2', 'member')$q$,
+  'e9470000-0000-0000-0000-0000000000b2',
+  $q$select 'ok'::text from public.set_company_member_role('e9470000-0000-0000-0000-0000000000c2', 'member')$q$,
+  true, 'OC778-2') as oc2 \gset
+select pg_temp.assert(split_part(:'oc2', '|', 1) = 'ok'
+  and split_part(:'oc2', '|', 2) ~ '^ERROR: .*(NOT_FOUND|VALIDATION_FAILED)'
+  and pg_temp.oc_active_owners('e9470000-0000-0000-0000-0000000000f2') = 1,
+  'OC778-2 równoległa degradacja: zostaje aktywny właściciel (' || :'oc2' || ')');
+
+-- OC778-3: wariant mieszany — dezaktywacja kontra degradacja do admin.
+select pg_temp.oc_race(
+  'e9470000-0000-0000-0000-0000000000a3',
+  $q$select 'ok'::text from public.set_company_member_active('e9470000-0000-0000-0000-0000000000d3', false)$q$,
+  'e9470000-0000-0000-0000-0000000000b3',
+  $q$select 'ok'::text from public.set_company_member_role('e9470000-0000-0000-0000-0000000000c3', 'admin')$q$,
+  true, 'OC778-3') as oc3 \gset
+select pg_temp.assert(split_part(:'oc3', '|', 1) = 'ok'
+  and split_part(:'oc3', '|', 2) ~ '^ERROR: .*(NOT_FOUND|VALIDATION_FAILED)'
+  and pg_temp.oc_active_owners('e9470000-0000-0000-0000-0000000000f3') = 1,
+  'OC778-3 dezaktywacja + degradacja równolegle: zostaje aktywny właściciel (' || :'oc3' || ')');
+
+-- OC778-4: bezpośredni UPDATE roli klienta (strażnik) — licznik po blokadzie firmy.
+select pg_temp.oc_race(
+  'e9470000-0000-0000-0000-0000000000a4',
+  $q$update public.company_members set is_active = false where id = 'e9470000-0000-0000-0000-0000000000d4' returning 'ok'::text$q$,
+  'e9470000-0000-0000-0000-0000000000b4',
+  $q$update public.company_members set role = 'member' where id = 'e9470000-0000-0000-0000-0000000000c4' returning 'ok'::text$q$,
+  true, 'OC778-4') as oc4 \gset
+select pg_temp.assert(split_part(:'oc4', '|', 1) = 'ok'
+  and split_part(:'oc4', '|', 2) ~ '^ERROR: .*VALIDATION_FAILED'
+  and pg_temp.oc_active_owners('e9470000-0000-0000-0000-0000000000f4') = 1,
+  'OC778-4 bezpośredni UPDATE dwóch właścicieli równolegle: VALIDATION_FAILED, zostaje właściciel (' || :'oc4' || ')');
+
+-- OC1098-1: kopia czeka na trwającą edycję źródła i kopiuje stan PO edycji (bez mieszania).
+select pg_temp.remote_connect('oc_ed');
+select dbl.dblink_exec('oc_ed', 'begin');
+select dbl.dblink_exec('oc_ed', $q$update public.jobs set title = 'Po edycji' where id = 'e9470000-0000-0000-0000-0000000000e1'$q$);
+select dbl.dblink_exec('oc_ed', $q$update public.job_translations set title = 'Po edycji', description = 'opis po' where job_id = 'e9470000-0000-0000-0000-0000000000e1'$q$);
+select pg_temp.remote_begin('oc_cp', 'e9470000-0000-0000-0000-0000000000a6') as oc_cp_pid \gset
+select dbl.dblink_send_query('oc_cp',
+  $q$select public.duplicate_job_as_draft('e9470000-0000-0000-0000-0000000000e1', 'e9470000-0000-0000-0000-0000000000e8')::text$q$);
+select pg_temp.oc_state(:oc_cp_pid, 'oc_cp') as oc_cp_state \gset
+select dbl.dblink_exec('oc_ed', 'commit');
+select pg_temp.remote_result('oc_cp') as oc_cp_new \gset
+select dbl.dblink_exec('oc_cp', 'commit');
+select dbl.dblink_disconnect('oc_ed'); select dbl.dblink_disconnect('oc_cp');
+select pg_temp.assert(:'oc_cp_state' = 'blocked', 'OC1098-1 kopia czeka na zatwierdzenie edycji źródła (' || :'oc_cp_state' || ')');
+select pg_temp.assert(
+  (select j.title = 'Po edycji' and t.description = 'opis po' and j.status = 'draft'
+     from public.jobs j join public.job_translations t on t.job_id = j.id and t.locale = j.default_locale
+    where j.id = :'oc_cp_new'::uuid),
+  'OC1098-1b kopia ma tytuł i opis z jednego stanu (po edycji)');
+
+-- Kontrole ujemne: te same definicje bez blokad (podmiana zatwierdzona, potem przywrócona).
+select pg_get_functiondef('public.set_company_member_active(uuid,boolean)'::regprocedure) as oc_fix_active,
+       pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure) as oc_fix_trg,
+       pg_get_functiondef('public.duplicate_job_as_draft(uuid,uuid)'::regprocedure) as oc_fix_dup \gset
+select dbl.dblink_exec('oc_setup', regexp_replace(:'oc_fix_active',
+  'perform pg_advisory_xact_lock\(hashtextextended\(''company_owners:''[^;]*;', '', 'g'));
+select dbl.dblink_exec('oc_setup', regexp_replace(:'oc_fix_trg',
+  'perform pg_advisory_xact_lock\(hashtextextended\(''company_owners:''[^;]*;', '', 'g'));
+select dbl.dblink_exec('oc_setup', replace(:'oc_fix_dup', 'deleted_at is null for share;', 'deleted_at is null;'));
+select pg_temp.assert(
+  pg_get_functiondef('public.set_company_member_active(uuid,boolean)'::regprocedure) not like '%company_owners:%'
+  and pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure) not like '%company_owners:%'
+  and pg_get_functiondef('public.duplicate_job_as_draft(uuid,uuid)'::regprocedure) !~* 'for share',
+  'OC778-N0 kontrola ujemna: definicje bez blokad podmienione');
+select pg_temp.oc_race(
+  'e9470000-0000-0000-0000-0000000000a5',
+  $q$select 'ok'::text from public.set_company_member_active('e9470000-0000-0000-0000-0000000000d5', false)$q$,
+  'e9470000-0000-0000-0000-0000000000b5',
+  $q$select 'ok'::text from public.set_company_member_active('e9470000-0000-0000-0000-0000000000c5', false)$q$,
+  false, 'OC778-N1') as ocn1 \gset
+select pg_temp.remote_connect('oc_ed');
+select dbl.dblink_exec('oc_ed', 'begin');
+select dbl.dblink_exec('oc_ed', $q$update public.jobs set title = 'Druga edycja' where id = 'e9470000-0000-0000-0000-0000000000e1'$q$);
+select pg_temp.remote_begin('oc_cp', 'e9470000-0000-0000-0000-0000000000a6') as oc_cp_pid \gset
+select dbl.dblink_send_query('oc_cp',
+  $q$select public.duplicate_job_as_draft('e9470000-0000-0000-0000-0000000000e1', 'e9470000-0000-0000-0000-0000000000e9')::text$q$);
+select pg_temp.oc_state(:oc_cp_pid, 'oc_cp') as oc_cpn_state \gset
+select pg_temp.remote_result('oc_cp') as oc_cpn_res \gset
+select dbl.dblink_exec('oc_cp', 'rollback'); select dbl.dblink_exec('oc_ed', 'rollback');
+select dbl.dblink_disconnect('oc_ed'); select dbl.dblink_disconnect('oc_cp');
+-- Przywrócenie definicji z 0226.
+select dbl.dblink_exec('oc_setup', :'oc_fix_active');
+select dbl.dblink_exec('oc_setup', :'oc_fix_trg');
+select dbl.dblink_exec('oc_setup', :'oc_fix_dup');
+select dbl.dblink_disconnect('oc_setup');
+select pg_temp.assert(split_part(:'ocn1', '|', 1) = 'ok' and split_part(:'ocn1', '|', 2) = 'ok'
+  and pg_temp.oc_active_owners('e9470000-0000-0000-0000-0000000000f5') = 0,
+  'OC778-N1 kontrola ujemna: bez blokady firmy obie dezaktywacje przechodzą — firma bez właściciela (OC778-1 wykrywa regresję)');
+select pg_temp.assert(:'oc_cpn_state' = 'done',
+  'OC1098-N kontrola ujemna: bez FOR SHARE kopia nie czeka na trwającą edycję źródła (' || :'oc_cpn_state' || ')');
+select pg_temp.assert(
+  pg_get_functiondef('public.set_company_member_active(uuid,boolean)'::regprocedure) like '%company_owners:%'
+  and pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure) like '%company_owners:%'
+  and pg_get_functiondef('public.duplicate_job_as_draft(uuid,uuid)'::regprocedure) ~* 'for share',
+  'OC778-N2 definicje z 0226 przywrócone po kontroli ujemnej');
+reset role; reset app.current_uid;
+
+-- ============================================================================
 
 -- CX1091. Eksport danych kandydata (#1091, 0218): zgłoszenia treści złożone przez kandydata
 -- (bez zgłoszonej treści, identyfikatora celu i kodu dostępu) i ostrzeżenia retencji wysłane
