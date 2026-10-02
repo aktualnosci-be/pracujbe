@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0991 (numer tymczasowy) — indeksy pod usuwanie konta i kaskady FK (#1245, audyt 29.09
+-- 0206 (numer tymczasowy) — indeksy pod usuwanie konta i kaskady FK (#1245, audyt 29.09
 -- DB-3) oraz nazwy bez znaków sterujących (#1244, audyt 29.09 DB-2).
 --
 -- 1. Indeksy (#1245). `erase_candidate_subject`/`erase_employer_subject` (0105/0161/0166)
@@ -22,7 +22,7 @@
 --    Istniejące wiersze są czyszczone PRZED dodaniem CHECK (sekwencja znaków sterujących →
 --    jedna spacja, przycięcie); migracja działa bez sesji użytkownika, więc
 --    `protect_company_verification` nie cofa weryfikacji firmy.
--- Rollback: supabase/rollback/0991_db_perf_indexes_control_chars.down.sql.
+-- Rollback: supabase/rollback/0206_db_perf_indexes_control_chars.down.sql.
 -- =============================================================================
 
 -- --- 1. Indeksy (#1245) ----------------------------------------------------------

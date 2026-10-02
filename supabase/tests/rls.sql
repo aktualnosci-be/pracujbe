@@ -24769,7 +24769,7 @@ reset role; reset app.current_uid;
 
 
 -- ============================================================================
--- DBP1245 / CC1244 (0991): indeksy pod usuwanie konta i kaskady FK (#1245) oraz nazwy
+-- DBP1245 / CC1244 (0206): indeksy pod usuwanie konta i kaskady FK (#1245) oraz nazwy
 -- zapisanych wyszukiwań i firm bez znaków sterujących (#1244). Sekcja w transakcji cofanej.
 -- ============================================================================
 \echo '--- DBP1245 / CC1244 indeksy usuwania konta i znaki sterujące ---'
@@ -24849,7 +24849,7 @@ select pg_temp.expect_error(
   'companies_name_no_control', 'CC1244-3c CHECK odrzuca znak sterujący przy zmianie nazwy firmy');
 -- Kontrola ujemna: definicja z 0092 i brak CHECK przepuszczają CR/LF.
 savepoint cc_neg;
-\ir ../rollback/0991_db_perf_indexes_control_chars.down.sql
+\ir ../rollback/0206_db_perf_indexes_control_chars.down.sql
 set local role authenticated; set local app.current_uid = :'CCA'; select pg_temp.assert_client_role();
 select saved_search_id as cc_bad from public.save_saved_search(E'Praca\r\nBcc: x@example.com', 'pl',
   '{"keyword":"cc1244 neg"}') \gset

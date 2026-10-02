@@ -74,7 +74,7 @@ const saveSchema = z.object({
     .string()
     .trim()
     .min(1)
-    // #1244: bez znaków sterujących (CR/LF…) — ta sama reguła co zmiana nazwy i baza (0991).
+    // #1244: bez znaków sterujących (CR/LF…) — ta sama reguła co zmiana nazwy i baza (0206).
     .regex(NO_CONTROL_CHARS_REGEX)
     .refine((v) => codePointLength(v) <= 80)
     .refine(hasNoNul),
@@ -88,7 +88,7 @@ const saveSchema = z.object({
 });
 
 const idSchema = z.string().uuid();
-/** Te same reguły co w bazie (0124/0991): 1–80 znaków po przycięciu, bez znaków sterujących. */
+/** Te same reguły co w bazie (0124/0206): 1–80 znaków po przycięciu, bez znaków sterujących. */
 const nameSchema = z
   .string()
   .trim()

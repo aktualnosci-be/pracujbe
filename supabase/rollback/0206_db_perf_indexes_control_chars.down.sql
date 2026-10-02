@@ -1,4 +1,4 @@
--- Rollback 0991 (numer tymczasowy): indeksy FK/usuwania konta (#1245) i reguła znaków
+-- Rollback 0206 (numer tymczasowy): indeksy FK/usuwania konta (#1245) i reguła znaków
 -- sterujących w nazwach (#1244). Oczyszczonych nazw nie przywracamy (dane bez CR/LF są
 -- poprawne także dla starej wersji). save_saved_search wraca do definicji z 0092.
 drop index if exists public.idx_notifications_entity;

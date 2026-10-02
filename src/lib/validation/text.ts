@@ -21,7 +21,7 @@ export function hasNoNul(value: string): boolean {
 
 /**
  * Znaki sterujące C0 (U+0000–U+001F), DEL i C1 (U+007F–U+009F) — CR/LF, tabulator, NEL…
- * (#1244). Lustro reguły bazy z 0991 (`saved_searches_name_no_control`,
+ * (#1244). Lustro reguły bazy z 0206 (`saved_searches_name_no_control`,
  * `companies_name_no_control`, `save_saved_search`/`rename_saved_search`).
  */
 // eslint-disable-next-line no-control-regex

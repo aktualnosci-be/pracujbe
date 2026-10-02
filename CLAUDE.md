@@ -3237,8 +3237,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
   kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
   ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
-- [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0991` — numer
-  tymczasowy, rollback `supabase/rollback/0991_…down.sql`): indeksy pod usuwanie konta i kaskady FK
+- [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0206` — numer
+  tymczasowy, rollback `supabase/rollback/0206_…down.sql`): indeksy pod usuwanie konta i kaskady FK
   (`notifications`/`email_deliveries` po `entity_id`, `saved_search_alerts.profile_id`, kolumny aktora
   `jobs.created_by`, `offers.sender_id`, historie statusów, `conversations.created_by`,
   `contact_messages.sender_id`, `auth.email_outbox.user_id`). Nazwa zapisanego wyszukiwania i firmy bez

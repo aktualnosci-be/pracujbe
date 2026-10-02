@@ -29,7 +29,7 @@ const nameSchema = z
   .min(2, 'company.error.nameTooShort')
   .max(120, 'company.error.nameTooLong')
   // #1244: nazwa trafia do tematu e-maila (zaproszenie do zespołu) — bez CR/LF i innych znaków
-  // sterujących; lustro CHECK `companies_name_no_control` (0991).
+  // sterujących; lustro CHECK `companies_name_no_control` (0206).
   .regex(NO_CONTROL_CHARS_REGEX, 'company.error.nameInvalid');
 
 // Lenient: pozwala na 2-literowy prefiks kraju + cyfry/kropki/spacje/myślniki (BE0123.456.789,

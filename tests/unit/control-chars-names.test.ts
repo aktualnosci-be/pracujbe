@@ -5,7 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * #1244 — nazwa zapisanego wyszukiwania i nazwa firmy bez CR/LF i innych znaków sterujących
- * (reguła jak przy zmianie nazwy wyszukiwania, 0124; lustro CHECK z 0991), a temat e-maila
+ * (reguła jak przy zmianie nazwy wyszukiwania, 0124; lustro CHECK z 0206), a temat e-maila
  * zawsze jednowierszowy (renderEmail + transport).
  */
 
@@ -97,7 +97,7 @@ describe('nazwa firmy', () => {
 });
 
 describe('temat e-maila', () => {
-  it('renderEmail nie wstawia CR/LF z nazwy wyszukiwania (dane sprzed 0991)', async () => {
+  it('renderEmail nie wstawia CR/LF z nazwy wyszukiwania (dane sprzed 0206)', async () => {
     const { data } = buildDeliveryData(
       { template: 'jobMatch', locale: 'pl', payload: { searchName: INJECTION, count: 1, jobs: [] } },
       'https://pracuj.be',
