@@ -91,6 +91,22 @@ describe('renewTeamInvitation (0187)', () => {
     expect(Object.values(args)).not.toContain(token);
   });
 
+  it('#1113: ponowienie tego samego odnowienia (ten sam klucz) = ten sam link; nowe odnowienie = nowy', async () => {
+    const KEY = 'c1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const db = setup([pendingRow()]);
+    await renewTeamInvitation(INVITE, COMPANY, KEY);
+    await renewTeamInvitation(INVITE, COMPANY, KEY);
+    // Kontrola ujemna: nowa operacja (inny klucz) i wywołanie bez klucza dostają nowy token.
+    await renewTeamInvitation(INVITE, COMPANY, 'd1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d');
+    await renewTeamInvitation(INVITE, COMPANY);
+    const nonces = db.calls
+      .filter((c) => c.name === 'invite_company_member')
+      .map((c) => (c.args as Record<string, string>).p_signup_nonce);
+    expect(nonces).toHaveLength(4);
+    expect(nonces[1]).toBe(nonces[0]);
+    expect(new Set(nonces).size).toBe(3);
+  });
+
   it('zaproszenie sprzed 0121 (bez języka) → ostatni stopień fallbacku en', async () => {
     const db = setup([pendingRow({ locale: null })]);
     expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: true });

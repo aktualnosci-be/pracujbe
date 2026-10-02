@@ -37,6 +37,7 @@ import {
   guestOfferSentLabel,
   interpolate,
   jobMatchAlertOffLabel,
+  followedCompanyAlertOffLabel,
   newMessageAttachmentsLabel,
   jobOfferExcerptLabel,
   jobOfferPassportCopy,
@@ -151,6 +152,19 @@ export interface EmailDataMap {
     jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
     actionUrl: string;
     /** Link wyłączenia tylko tego alertu — wyłącznie z opcji workera (renderEmail), nie z payloadu. */
+    alertOffUrl?: string;
+  };
+  /**
+   * Digest nowych ofert OBSERWOWANEJ firmy (#855). Jak `jobMatch`: `jobs` = najnowsze (≤ 5)
+   * z adresami z workera, `count` = wszystkie nowe; zamiast nazwy wyszukiwania — nazwa firmy.
+   */
+  followedCompanyJobs: {
+    recipientName?: string;
+    companyName: string;
+    count: number;
+    jobs?: Array<{ title: string; companyName?: string; city?: string; url: string }>;
+    actionUrl: string;
+    /** Link wyłączenia tylko tej obserwacji — wyłącznie z opcji workera (renderEmail), nie z payloadu. */
     alertOffUrl?: string;
   };
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
@@ -842,6 +856,31 @@ export function JobMatchEmail(props: EmailProps<'jobMatch'>): ReactElement {
   );
 }
 
+export function FollowedCompanyJobsEmail(props: EmailProps<'followedCompanyJobs'>): ReactElement {
+  const alertOffUrl = typeof props.alertOffUrl === 'string' && props.alertOffUrl.length > 0
+    ? props.alertOffUrl
+    : undefined;
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="followedCompanyJobs"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+      detail={
+        <>
+          <JobMatchList jobs={props.jobs} />
+          {alertOffUrl ? (
+            <EmailText muted>
+              <EmailTextLink href={alertOffUrl}>{followedCompanyAlertOffLabel[props.locale]}</EmailTextLink>
+            </EmailText>
+          ) : null}
+        </>
+      }
+    />
+  );
+}
+
 export function JobExpiringEmail(props: EmailProps<'jobExpiring'>): ReactElement {
   return (
     <EmailShell
@@ -1084,6 +1123,7 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   teamInvitation: TeamInvitationEmail,
   teamInvitationSignup: TeamInvitationSignupEmail,
   jobMatch: JobMatchEmail,
+  followedCompanyJobs: FollowedCompanyJobsEmail,
   guestApplicationConfirm: GuestApplicationConfirmEmail,
   guestApplicationSent: GuestApplicationSentEmail,
   inactiveCvWarning: InactiveCvWarningEmail,
