@@ -20,7 +20,7 @@ import type {
   JobApplyChannel,
   JobDetail,
   JobListItem,
-  LocationKey,
+  CoreLocationKey,
   SalaryPeriod,
 } from '@/lib/jobs';
 import { routing, type Locale } from '@/i18n/routing';
@@ -114,7 +114,7 @@ const CITY = {
   charleroi: { pl: 'Charleroi', nl: 'Charleroi', fr: 'Charleroi', en: 'Charleroi' },
   bruges: { pl: 'Brugia', nl: 'Brugge', fr: 'Bruges', en: 'Bruges' },
   kortrijk: { pl: 'Kortrijk', nl: 'Kortrijk', fr: 'Courtrai', en: 'Kortrijk' },
-} satisfies Record<LocationKey, L>;
+} satisfies Record<CoreLocationKey, L>;
 
 /** Prawdziwe belgijskie regiony/prowincje (nazwy lokalizowane). */
 const REGION = {
@@ -141,7 +141,7 @@ const REGION_OF = {
   charleroi: 'hainaut',
   bruges: 'westFlanders',
   kortrijk: 'westFlanders',
-} satisfies Record<LocationKey, RegionKey>;
+} satisfies Record<CoreLocationKey, RegionKey>;
 
 /** Nazwy języków (do listy wymaganych języków oferty). */
 const LANG = {
@@ -291,6 +291,17 @@ const OPT = {
 
 type OptKey = keyof typeof OPT;
 
+/** Umiejętności ofert (#866) — w demo jak nazwy słownika w języku widza. */
+const SKILL = {
+  orderPicking: { pl: 'Kompletowanie zamówień', nl: 'Orderpicking', fr: 'Préparation de commandes', en: 'Order picking' },
+  handScanner: { pl: 'Obsługa skanera ręcznego', nl: 'Werken met een handscanner', fr: 'Utilisation d’un scanner portable', en: 'Handheld scanner operation' },
+  forklift: { pl: 'Obsługa wózka widłowego', nl: 'Heftruck rijden', fr: 'Conduite de chariot élévateur', en: 'Forklift operation' },
+  masonry: { pl: 'Murowanie', nl: 'Metselen', fr: 'Maçonnerie', en: 'Bricklaying' },
+  readPlans: { pl: 'Czytanie rysunku technicznego', nl: 'Bouwplannen lezen', fr: 'Lecture de plans', en: 'Reading construction drawings' },
+} satisfies Record<string, L>;
+
+type SkillKey = keyof typeof SKILL;
+
 /** Warunki zatrudnienia / benefity. */
 const COND = {
   weekly: { pl: 'Wypłata tygodniowa lub miesięczna', nl: 'Wekelijkse of maandelijkse uitbetaling', fr: 'Paiement hebdomadaire ou mensuel', en: 'Weekly or monthly pay' },
@@ -374,7 +385,7 @@ export interface DemoCompany {
   /** Nazwa marki (nie tłumaczona). */
   name: string;
   verified: boolean;
-  locationKey: LocationKey;
+  locationKey: CoreLocationKey;
   /** Opis firmy — lokalizowany. */
   description: L;
 }
@@ -535,7 +546,7 @@ interface DemoJobRaw {
   id: string;
   occKey: OccKey;
   companyId: CompanyId;
-  locationKey: LocationKey;
+  locationKey: CoreLocationKey;
   category: CategoryKey;
   contractType: ContractType;
   salaryMin?: number;
@@ -561,6 +572,9 @@ interface DemoJobRaw {
   contextKeys: CtxKey[];
   /** Języki, w których oferta ma treść; brak = wszystkie (#301). */
   contentLocales?: readonly Locale[];
+  /** #866: umiejętności (obowiązkowe/opcjonalne) i certyfikaty (nazwy neutralne językowo). */
+  skillKeys?: { mandatory: SkillKey[]; optional: SkillKey[] };
+  certificates?: string[];
 }
 
 const RAW_JOBS: DemoJobRaw[] = [
@@ -575,6 +589,7 @@ const RAW_JOBS: DemoJobRaw[] = [
     languageKeys: [], responsibilityKeys: ['loadUnload', 'orderPick', 'stock'], mandatoryKeys: ['physical', 'reliable', 'workPermit'],
     optionalKeys: ['forklift', 'experienceBonus'], conditionKeys: ['weekly', 'accommodation', 'ppe'], highlightKeys: ['immediate', 'accommodation', 'noLang'],
     workingHoursKey: 'fulltime', shiftsKey: 'earlyLate', contextKeys: ['immediate', 'accommodation', 'noLang'],
+    skillKeys: { mandatory: ['orderPicking', 'handScanner'], optional: ['forklift'] }, certificates: ['VCA Basis'],
   },
   {
     id: '1002', occKey: 'bricklayer', companyId: 'c2', locationKey: 'brussels', category: 'construction', contractType: 'permanent',
@@ -582,6 +597,7 @@ const RAW_JOBS: DemoJobRaw[] = [
     languageKeys: ['fr'], responsibilityKeys: ['masonry', 'readPlans', 'site'], mandatoryKeys: ['experience', 'physical', 'vcaSafety'],
     optionalKeys: ['frenchBonus', 'ownCar'], conditionKeys: ['longTerm', 'travel', 'ppe'], highlightKeys: ['permanent', 'immediate', 'travel'],
     workingHoursKey: 'fulltime', shiftsKey: 'day', contextKeys: ['stable', 'team'],
+    skillKeys: { mandatory: ['masonry', 'readPlans'], optional: [] }, certificates: ['VCA Basis'],
   },
   {
     id: '1003', occKey: 'truckDriver', companyId: 'c3', locationKey: 'ghent', category: 'transport', contractType: 'permanent',
@@ -777,6 +793,21 @@ function composeDescription(raw: DemoJobRaw, locale: Locale, companyName: string
   return extra ? `${lead} ${extra}` : lead;
 }
 
+
+/** #866: kwalifikacje oferty demo — umiejętności w języku widza, certyfikaty bez zmian. */
+function demoQualifications(raw: DemoJobRaw, locale: Locale): Pick<JobDetail, 'qualifications'> {
+  const skills = raw.skillKeys ?? { mandatory: [], optional: [] };
+  const certificates = raw.certificates ?? [];
+  if (skills.mandatory.length + skills.optional.length + certificates.length === 0) return {};
+  return {
+    qualifications: {
+      skillsMandatory: skills.mandatory.map((k) => ({ label: SKILL[k][locale], localized: true })),
+      skillsOptional: skills.optional.map((k) => ({ label: SKILL[k][locale], localized: true })),
+      certificates: certificates.map((label) => ({ label, localized: false })),
+    },
+  };
+}
+
 /**
  * Kanał aplikowania ofert demonstracyjnych (#1129): zarezerwowana domena `example.com`
  * i nieprzydzielony numer — żadnych prawdziwych adresów. Warianty rotują po numerze oferty
@@ -835,6 +866,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
     ...(raw.costs ? { costs: raw.costs } : {}),
+    ...demoQualifications(raw, locale),
     applyChannel: demoApplyChannel(raw.id),
     startDate: raw.startDate,
     companyDescription: company.description[content],
@@ -869,7 +901,7 @@ const CATEGORY_KEYS: CategoryKey[] = [
   'cleaning', 'hospitality', 'care', 'logistics', 'seasonal',
 ];
 
-const LOCATION_KEYS: LocationKey[] = [
+const LOCATION_KEYS: CoreLocationKey[] = [
   'brussels', 'antwerp', 'ghent', 'leuven', 'mechelen',
   'hasselt', 'liege', 'charleroi', 'bruges', 'kortrijk',
 ];
@@ -880,7 +912,7 @@ export const demoCategories: { key: CategoryKey; jobCount: number }[] = CATEGORY
 );
 
 /** Lokalizacje z liczbą ofert demonstracyjnych. */
-export const demoLocations: { key: LocationKey; jobCount: number }[] = LOCATION_KEYS.map(
+export const demoLocations: { key: CoreLocationKey; jobCount: number }[] = LOCATION_KEYS.map(
   (key) => ({ key, jobCount: RAW_JOBS.filter((job) => job.locationKey === key).length }),
 );
 

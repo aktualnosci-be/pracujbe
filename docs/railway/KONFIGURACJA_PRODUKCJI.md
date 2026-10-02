@@ -55,7 +55,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `EMAIL_UNSUBSCRIBE_SECRET` | brak linków wypisania → marketing nie wychodzi |
 | `RESEND_WEBHOOK_SECRET` | webhook doręczeń 503 (brak blokad po odbiciach, #44) |
 | `EMAILLABS_WEBHOOK_SECRET` | webhook raportów EmailLabs 503 (brak blokad po odbiciach) |
-| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | opcjonalnie; oba albo żaden — gdy ustawione, webhook wymaga też Basic auth |
+| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | w produkcji wymagane (#1234): bez nich webhook EmailLabs odpowiada 503, `checks.emaillabsWebhook` = false; poza produkcją opcjonalne (oba albo żaden) |
 | `EMAIL_QUEUE_SECRET` | cron `/api/email/process` bez autoryzacji (401) |
 | `MAINTENANCE_SECRET` | cron `/api/maintenance` bez autoryzacji |
 | `AUTH_EMAIL_IMMEDIATE_SEND` | opcjonalnie; puste = e-maile konta wychodzą zaraz po rejestracji/resecie (paczka workera po odpowiedzi), `off` = tylko z harmonogramu |
@@ -75,6 +75,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 
 | Zmienna | Uwagi |
 |---|---|
+| `DATABASE_APP_POOL_MAX` | opcjonalnie: limit połączeń puli `DATABASE_APP_URL` na proces (1–50, domyślnie 10, #1096); repliki × limit + pozostałe pule ≤ `max_connections` |
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
 | `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance`. Terminy zatwierdzone 26.09.2026 (#40); na produkcji ustawione `dry-run` (działa z cronem `/api/maintenance`), `apply` po osobnej decyzji |
 | `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |

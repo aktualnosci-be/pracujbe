@@ -57,6 +57,7 @@ import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { accountRateLimitKey } from '@/lib/auth/account-rate-limit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { captureActionError, isDatabaseError } from '@/lib/db/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
@@ -140,6 +141,45 @@ async function currentLocale(): Promise<Locale> {
   const value = await getLocale();
   const supported: readonly string[] = routing.locales;
   return supported.includes(value) ? (value as Locale) : routing.defaultLocale;
+}
+
+/**
+ * Błędy zgłoszone już bliżej źródła (np. `auth.signIn.resolveRole`) i rzucone dalej — wyższa
+ * warstwa nie zgłasza ich drugi raz.
+ */
+const reportedErrors = new WeakSet<object>();
+
+function reportAuthError(error: unknown, area: string): void {
+  if (typeof error === 'object' && error !== null) {
+    if (reportedErrors.has(error)) return;
+    reportedErrors.add(error);
+  }
+  // SDK opakowuje błąd bazy (`cause`): SQLSTATE z pierwszego błędu bazy w łańcuchu.
+  let source: unknown = error;
+  for (let e: unknown = error, depth = 0; e && depth < 4; depth += 1) {
+    if (isDatabaseError(e)) {
+      source = e;
+      break;
+    }
+    e = (e as { cause?: unknown }).cause;
+  }
+  captureActionError(source, area);
+}
+
+function isAuthUnconfigured(error: unknown): boolean {
+  return isAppError(error) && error.context?.reason === 'portal_auth_unconfigured';
+}
+
+/**
+ * Kod błędu akcji kont (kontynuacja #1068). Oczekiwane wyniki (złe hasło, niepotwierdzony
+ * e-mail, limit, zły link, walidacja, deklaracja wieku) zwracają swój kod bez zgłoszenia.
+ * `INTERNAL` — nieznany błąd SDK, baza, sieć — trafia do kanału błędów z obszarem i SQLSTATE
+ * (bez komunikatu i bez adresu e-mail). Brak konfiguracji kont (tryb demo) to stan oczekiwany.
+ */
+function failureCode(error: unknown, area: string): ErrorCode {
+  if (isAppError(error) && error.code !== 'INTERNAL') return error.code;
+  if (!isAuthUnconfigured(error)) reportAuthError(error, area);
+  return 'INTERNAL';
 }
 
 /** Runtime Better Auth; brak konfiguracji kont → kontrolowany `INTERNAL`. */
@@ -291,12 +331,12 @@ export async function signIn(
     } catch (e) {
       // Bez znanej roli nie zostawiamy półotwartej sesji: unieważnienie i kontrolowany błąd
       // zamiast przekierowania do panelu innej roli.
-      captureError(e, { area: 'auth.signIn.resolveRole' });
+      reportAuthError(e, 'auth.signIn.resolveRole');
       await discardSession(auth, { token: result.token });
       throw e;
     }
   } catch (e) {
-    const code = isAppError(e) ? e.code : 'INTERNAL';
+    const code = failureCode(e, 'auth.signIn');
     // `sendOnSignIn`: poprawne hasło niepotwierdzonego konta zleca nowy link — wysyłka od razu (W1).
     if (code === 'AUTH_EMAIL_NOT_CONFIRMED') {
       // Poprawne hasło = ta przeglądarka należy do właściciela konta: nowy link zaloguje tutaj (#1090).
@@ -421,7 +461,7 @@ export async function registerCandidate(
     await rememberVerifyNext(safeNextPath(next));
     await rememberSignupBrowser(parsed.data.email);
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.registerCandidate') };
   }
 
   // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
@@ -456,7 +496,7 @@ export async function registerEmployer(
     await rememberVerifyNext(null);
     await rememberSignupBrowser(parsed.data.email);
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.registerEmployer') };
   }
 
   // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
@@ -508,7 +548,7 @@ export async function registerInvitedEmployer(
       captureError(e, { area: 'auth.registerInvitedEmployer.consume' });
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.registerInvitedEmployer') };
   }
 
   // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
@@ -548,8 +588,9 @@ export async function requestPasswordReset(
   let auth: AuthRuntime;
   try {
     auth = await portalAuth();
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    // #1068: awaria inicjalizacji runtime auth (pula/baza) widoczna dla operatora.
+    return { ok: false, error: failureCode(error, 'auth.requestPasswordReset.runtime') };
   }
   try {
     await auth.api.requestPasswordReset({
@@ -557,7 +598,8 @@ export async function requestPasswordReset(
       headers: await headers(),
     });
   } catch (error) {
-    captureError(mapAuthError(error), { area: 'auth.requestPasswordReset' });
+    // Wynik zawsze neutralny; do kanału tylko błąd nieoczekiwany (nie limit SDK ani walidacja).
+    failureCode(mapAuthError(error), 'auth.requestPasswordReset');
   }
 
   // Zawsze (także bez konta i przy awarii zlecenia): po odpowiedzi, więc bez sygnału o koncie (W1).
@@ -592,7 +634,7 @@ export async function updatePassword(input: UpdatePasswordInput): Promise<AuthAc
       throw mapAuthError(error);
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.updatePassword') };
   }
 
   return { ok: true };
@@ -682,7 +724,7 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       try {
         role = await readProfileRole(user.id);
       } catch (e) {
-        captureError(e, { area: 'auth.confirmEmail.resolveRole' });
+        reportAuthError(e, 'auth.confirmEmail.resolveRole');
         await discardSession(auth, { userId: user.id });
         throw e;
       }
@@ -711,7 +753,7 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       target = next ? { path: next } : { panel: role };
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.confirmEmail') };
   }
 
   if ('path' in target) return redirectPath(target.path);

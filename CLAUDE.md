@@ -209,9 +209,11 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
   `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
   `allowUpload` = lista istniejących plików; profil jest w trybie 404 (#1142), więc lista jest w
-  `/candidate/ustawienia` jako sekcja `variant="settings"` z kotwicą `#pliki-cv`, także pusta — #1226; pulpit
-  bez sekcji; dowód: unit `classifieds-candidate-cv-files` (kontrole ujemne: RECRUITMENT, `allowUpload`),
-  strażnik `legal`, E2E `classifieds-candidate-account`). Import CV przez AI: `cvImportProvider()` =
+  `/candidate/ustawienia` jako sekcja `variant="settings"` z kotwicą `#pliki-cv`, także pusta — #1226; dowód: unit
+  `classifieds-candidate-cv-files` (kontrole ujemne: RECRUITMENT, `allowUpload`), strażnik `legal`, E2E
+  `classifieds-candidate-account`) oraz w sekcji „Twoje pliki” pulpitu konta `CandidateAccountDashboard`
+  (decyzja właściciela 29.09.2026: tylko gdy są pliki albo odczyt się nie udał; unit
+  `classifieds-candidate-account` z kontrolą ujemną RECRUITMENT = wgrywanie). Import CV przez AI: `cvImportProvider()` =
   null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
   `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
   trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
@@ -239,6 +241,21 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   ponowieniem (nie pusta lista; wyszukiwania czytane raz, przekazane do `loadSavedSearchJobs`); powitanie pracodawcy bez „rekrutacji”
   (`employerGreetingSubListing*`). Tryb `RECRUITMENT`: stare sekcje. Dowód: unit `classifieds-employer-stats`, `classifieds-candidate-saved-search-jobs`, `classifieds-candidate-account`, `legal`
   `classifieds-panels` (kontrole ujemne), E2E `classifieds-dashboards` (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px).
+- **Resztki trybu ogłoszeniowego (#1211/#1212/#1213/#1225, migracja `0204` — numer tymczasowy):** szablony
+  odpowiedzi (narzędzie wiadomości) — `/employer/szablony` = 404 (`notFoundUnlessRecruitment('messaging')`, wpis
+  w `GUARDED_ROUTES`), pozycja nawigacji tylko przy `recruitmentEnabled`, akcje `saveMessageTemplate`/
+  `deleteMessageTemplate` → `RECRUITMENT_DISABLED` jako pierwszy krok; baza: `save_/delete_company_message_template`
+  = nakładki ze strażnikiem trybu (treść 0170 w `*_impl` bez EXECUTE dla klientów), BEFORE INSERT
+  `trg_aa_recruitment_mode` na `company_message_templates`/`_variants` (każda rola, wyjątek seedu jak 0171; UPDATE/
+  DELETE bez strażnika — kaskady działają). Dowód: `rls.sql` sekcja CLTPL (kontrole ujemne: bez triggera, bez
+  nakładki), rollback `0204_…down.sql` (`classifieds-message-templates-rollback.sql`, także w
+  `portal-legal-mode-rollback.sql`). E-maile spoza `RECRUITMENT_EMAIL_TEMPLATES`: treść bazowa `copy.ts` = portal
+  ogłoszeń, dawne brzmienie w `EmailCopy.recruitment` (wybór w `resolveCopy` przy `isRecruitmentEnabled()`) —
+  `jobPublished`, `companyVerified`, `inactiveAccountWarning`. Ekrany konta: `AgeAttestationSettings`,
+  `CompanyBlocksSettings`, `AccountDataSettings`, `JobCompanyBlockControl`, `TeamMembers`, `JobWizard` (podtytuł
+  edycji) z propsem `recruitmentEnabled` (domyślnie `false` → klucze `*Listing`), `roleDescKey(role, recruitment)`,
+  `RecruiterOnlyNote` sam czyta tryb. Strażnik `classifieds-copy.test.ts` (e-maile spoza procesu i klucze `*Listing`,
+  kontrole ujemne: dawne brzmienia = czerwony). **Do akceptacji właściciela:** nowe brzmienia.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -470,6 +487,10 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     pada, gdy którykolwiek shard/pomiar/część fixture/przepływ real nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
     `failOnFlakyTests` obowiązuje w każdym shardzie.
+- `.github/workflows/backup-image.yml` („Backup image (build + scan)”, #751) — OSOBNY workflow
+  (decyzja właściciela 2026-10-02: skan obrazu kopii nie blokuje wdrożenia web): build
+  `docker/backup/Dockerfile` od zera, smoke, SBOM i skan z bramką; przy zmianie obrazu/skryptów
+  (`paths`), ręcznie i co tydzień (opis `docs/railway/BACKUP_RESTORE.md`).
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
 - `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint` (test z kontrolami
   ujemnymi: `tests/unit/ci-workflows-guard.test.ts`). Pilnuje też (#1241/#1246/#1247/#1250):
@@ -492,6 +513,12 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
   przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
 - Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
 - Powrót na self-hosted tylko na wyraźną prośbę właściciela (`docs/SELF_HOSTED_RUNNERS.md` — archiwalnie).
+- PR z forków dostają pełne CI (#671): `pull_request` (nigdy `pull_request_target`/`workflow_run`),
+  token `contents: read`, żadnych sekretów, uprawnień jobu ani `environment` w `ci.yml`, bez warunków
+  `head.repo` pomijających forki (strażnik `check-ci-workflows.mjs`, kontrole ujemne). Krok wymagający
+  sekretów = osobny workflow uruchamiany po akceptacji. Pierwszy przebieg PR nowego współtwórcy
+  zatwierdza opiekun (Settings → Actions → „Require approval for fork pull requests”). Self-hosted
+  runner dla publicznego repo z forkami jest niedopuszczalny (strażnik odrzuca `self-hosted`).
 
 ---
 
@@ -916,7 +943,32 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `DemoJobsNotice`, karty etykietę „przykładowa”, bez odznaki „Zweryfikowana firma”; szczegół demo
   = noindex, bez JobPosting i „Wyślij wiadomość”, ApplyModal z komunikatem zamiast formularza.
   Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
+  Umiejętności i certyfikaty na szczególe (decyzja właściciela 01.10.2026, #866, bez migracji):
+  sekcja „Umiejętności i certyfikaty” (`job.qualifications.*`, układ `.info-pairs` jak „Koszty
+  i dodatki”, `data-testid="job-qualifications"`) — wymagane / mile widziane umiejętności i
+  certyfikaty jako lista. Odczyt pomocniczy `getPublicJobQualifications` (`src/lib/db/public-jobs.ts`)
+  = `job_skills`/`job_certificates` pod rolą anon (RLS `*_select`: tylko oferta publiczna), nazwa
+  umiejętności ze słownika `skill_labels` w języku strony przy `skill_id`, inaczej wpis pracodawcy
+  z `lang` języka treści; awaria = strona bez sekcji. Parser i JSON-LD `src/lib/job-qualifications.ts`:
+  JobPosting `skills` (Text) i `qualifications` (`EducationalOccupationalCredential`). Dowód: unit
+  `job-qualifications`, `jobs-postgres`; integracja `public-job-qualifications` (PG16, kontrola
+  ujemna: szkic i firma niezweryfikowana = pusto); E2E `job-qualifications` (4 języki, axe 320/1280,
+  kontrola ujemna oferty bez kwalifikacji), `job-posting-fixture` (pola JSON-LD).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
+  Katalog miast i próg podaży (#920, bez migracji): hub, strona miasta (metadane, „Inne miasta”)
+  i sitemap biorą miasta z jednego modułu `src/lib/locations/city-landings.ts` (rdzeń 10 miast +
+  13 kolejnych: Namur, Mons, Aalst, Ostenda, Genk, Sint-Niklaas, Roeselare, La Louvière, Tournai,
+  Turnhout, Vilvoorde, Zaventem, Wavre — klucz = slug słownika `locations`, nazwy PL/NL/FR/EN
+  w `locations.*` i własny opis `landing.city_<klucz>`). Jedna reguła `cityLandingQualifies`:
+  landing jest indeksowany, w hubie i w sitemapie od `CITY_LANDING_MIN_ACTIVE_JOBS` = 3 aktualnych
+  ofert (dawniej ≥ 1, #299); poniżej progu działa jako filtr z `noindex, follow`. Liczba ofert nie
+  zależy od języka (filtr po wszystkich nazwach → `location_filter_ids` gminy z częściami), więc
+  wersje językowe i hreflang kwalifikują się razem. Bez liczników (demo/build/awaria) hub pokazuje
+  rdzeń; brak kwalifikujących się = komunikat `landing.byCityEmpty`. Dowód: unit `city-landings`
+  (katalog = `locations.*`, opisy różne po usunięciu nazwy, nazwa ze słownika 0112 wśród aliasów,
+  próg z kontrolami ujemnymi, hub i „Inne miasta”), `sitemap-seo` (2 oferty = poza sitemapą).
+  **Otwarte (właściciel):** wartość progu, „trwałość” podaży (dziś bieżąca liczba, bez historii),
+  pomiar wejść i decyzja o kolejnych miejscowościach.
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
   Okno cutoveru (#1115, bez migracji): `isSearchIndexingEnabled()` (`src/lib/seo/indexing.ts`) =
   `isProductionDeployment()` ORAZ brak `SITE_ACCESS_PASSWORD` — przy bramce hasła robots.txt =
@@ -1065,6 +1117,29 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   klucza `companyProfile.metaDescription` z samą nazwą dla każdej firmy; pusty/białe znaki opisu
   = fallback na ten klucz. Dotyczy też `og:description`/`twitter.description`. Dowód: unit
   `company-profile-seo` (kontrola ujemna: ogólny klucz nie trafia do metadanych przy niepustym opisie).
+  Logo, strona WWW i język opisu (#686/#708, migracja `0201` — numer tymczasowy): profil pokazuje
+  zatwierdzoną (0156) stronę WWW jako nazwany link zewnętrzny (host + ścieżka, nowa karta zapowiedziana
+  czytnikowi, `rel="noopener noreferrer nofollow"`) i logo — ale obraz tylko z hosta witryny
+  (`profileLogoSrc`: CSP `img-src`/`remotePatterns`, bez żądania do serwera firmy przed zgodą,
+  Invariant #7), inaczej inicjały. `companies.description_locale` (FK `supported_locales`) = język
+  ZATWIERDZONEGO opisu. Język wybiera się razem z tekstem w `CompanyDescriptionForm` (`/employer/firma`,
+  decyzja właściciela 30.09.2026): `submit_company_description(id, tekst, język)` zapisuje go w
+  `description_locale_pending` przy propozycji (ponowienie tej samej propozycji z innym językiem
+  poprawia tylko język, czas zgłoszenia bez zmian), `admin_decide_company_description` przy akceptacji
+  przenosi go do `description_locale` (osobnym zapisem po tekście), odrzucenie go nie zmienia
+  (propozycja z językiem zostaje do wglądu); tekst = zatwierdzony + inny język = sama zmiana języka od
+  razu (`locale_applied`, przez `set_company_description_locale`, audyt `company.description_locale_changed`).
+  Admin widzi język opisu i propozycji w `/admin/firmy/[id]`. Strażnik 0198 obejmuje obie kolumny
+  języka (bez bezpośredniego zapisu klienta); trigger zeruje język przy każdej zmianie treści bez
+  jednoczesnego wskazania języka, CHECK — brak języka bez opisu i brak języka propozycji bez propozycji.
+  `get_public_company` zwraca `description_locale`; opis ma `lang`, a gdy jest w innym
+  języku niż strona albo język nieznany — dopisek `companyProfile.descriptionLanguage*`; metadane
+  wersji w innym języku niż opis biorą ogólny `metaDescription` (nieznany = opis, #647). hreflang bez
+  zmian (interfejs i karty ofert są w języku strony). Dowód: `rls.sql` sekcja CDL975 (kontrole ujemne:
+  bez triggera, bez strażnika, CHECK, member/obca firma, akceptacja jednym zapisem gubi język),
+  rollback `0201_…down.sql` (też przed 0198 w `company-description-rollback.sql`), unit
+  `company-profile-view`, `company-description-{form,update}`, E2E `company-profile`. **Otwarte:**
+  tłumaczenia opisu z zatwierdzaniem (plan #31).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
@@ -1495,6 +1570,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
 
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
+  Odebrany dostęp (#1210, decyzja właściciela 29.09.2026, bez migracji): konto z WYŁĄCZNIE nieaktywnymi
+  członkostwami widzi w layoucie `/employer` `RevokedCompanyAccess` — „Twój dostęp do firmy X został odebrany”
+  (nazwy z `getRevokedCompanyNames`: service_role, tylko `name`, identyfikator z sesji; awaria = komunikat ogólny,
+  bez szczegółów), zaproszenia i własna firma przez `createAdditionalCompany` (`create_additional_company`)
+  zamiast `create_first_company` (PERMISSION_DENIED). Testy: `employer-revoked-access(-layout)`,
+  `revoked-company-names` (kontrole ujemne: brak członkostw = pierwsza firma, aktywne = panel).
   Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła
   wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
   transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
@@ -1666,6 +1747,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`?direct=1`, `p_direct_only` w liście, liczniku, facetach i kopii filtrów alertów). Dowód:
   `rls.sql` sekcja FT167 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
   przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
+  Kolejka „oczekujące” filtruje bieżącą treść w SQL przed limitem (#1220, bez migracji) —
+  nieaktualne przeglądy (każdy zapis innej treści z sygnałem) nie zajmują stron; integracja
+  `portal-admin-job-content-queue` (PG16, kontrola ujemna: stary odczyt = strona nieaktualnych).
   **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
   na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
   Kanał aplikowania u ogłoszeniodawcy (#1129, migracja `0172`; decyzja
@@ -1712,9 +1796,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   serwerowy, bez JS). Combobox poziomu języka w kroku 7 ma nazwę (`jobWizard.languageLevelAria`).
   Dowód: unit `job-wizard-content-locale`, `job-detail-start`, `job-start`, `delete-job-draft-button`,
   integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
-  inny klucz = nowy szkic). **Otwarte (wymaga migracji):** kontrola kompletności w `publish_job`/
-  `update_published_job` odrzuca tytuły zaczynające się od „draft” lub zawierające „placeholder”
-  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), język
+  inny klucz = nowy szkic). Tytuł bez heurystyki zaślepki (#1221, migracja `0203` — numer
+  tymczasowy): `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucają już
+  tylko pusty tytuł (dawny warunek „draft%/placeholder” z 0031 blokował np. „Draftsman”); dowód
+  `rls.sql` sekcja BZ1221 (kontrole ujemne: definicje sprzed 0203), rollback
+  `0203_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):** język
   proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
   przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
   i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
@@ -1889,6 +1975,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
+  Reopen = nowa publikacja (#1222, decyzja właściciela 29.09.2026, migracja `0202` — numer tymczasowy):
+  `set_job_status(…, 'reopen')` ustawia `published_at = now()` (alerty zapisanych wyszukiwań, filtr daty, sort
+  „najnowsze”, `datePosted`); pauza/wznowienie daty nie zmieniają; para (wyszukiwanie, oferta) już wysłana nie
+  wraca. Dowód: `rls.sql` sekcja OD981 (kontrola ujemna: warunek z 0085 zostawia starą datę).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — **wyłączone w trybie ogłoszeniowym (#1144)** — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
   Fokus po anulowaniu potwierdzenia (#800): „Anuluj” w kroku potwierdzenia (`rejected`/`hired`)
   przywraca fokus na status, który uruchomił potwierdzenie (referencje opcji listy), zamiast go
@@ -2173,6 +2263,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
   ręcznej.
+  Język treści kart (#1223, bez migracji): `get_public_jobs`/profil firmy nie zwracają języka
+  wybranego tłumaczenia, więc `withListContentLocales` (`src/lib/jobs.ts`, jedno zapytanie
+  o tłumaczenia ofert strony pod anon) ustala `contentLocale` regułą
+  `resolveJobListContentLocale` (język strony, gdy oferta go ma; inaczej jednoznaczne
+  tłumaczenie z identycznym tytułem i wyróżnikami; przekład maszynowy = język strony). `JobCard`
+  i pulpit kandydata (zapisane wyszukiwania) ustawiają `lang` tytułu i wyróżników, gdy różni się
+  od języka strony. Awaria = karty bez `lang`. Dowód: unit `job-list-content-locale`, `job-card`,
+  `classifieds-candidate-saved-search-jobs` (kontrole ujemne).
   Nazwy chronione (#740, migracja `0190` — numer tymczasowy): nazwa firmy (`companies.name`,
   wyłącznie z bazy) = `translation_source_revisions.protected_terms` rewizji oferty
   (`sync_job_translation_source` → `record_translation_source(…, p_protected_terms)`,
@@ -2425,7 +2523,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `GET /v2.1/email?messageId` przed każdą wysyłką (brak Idempotency-Key u dostawcy), ACK tylko
   z tym identyfikatorem w odpowiedzi, `X-TRACKING-OFF: 1`, nagłówki wypisania bez zmian, kody
   `EMAIL_PROVIDER_*` zamiast komunikatu dostawcy. Webhook `POST /api/email/webhook/emaillabs`
-  (SHA1 sekret|data|Request-Id + opcjonalny Basic auth, inbox `emaillabs:<Request-Id>`,
+  (SHA1 sekret|data|Request-Id; Basic auth wymagany w produkcji — brak `EMAILLABS_WEBHOOK_BASIC_*` = 503, #1234;
+  `X-Webhook-Date` w oknie ±24 h, parser tolerancyjny, nieczytelna = 401; inbox `emaillabs:<Request-Id>`
+  pamiętany ≥ 7 dni > okno,
   hardbounce → blokada, softbounce/spambounce bez blokady, deferred → opóźnienie, ok →
   delivered). `/api/health`: `emailProvider`, `checks.emailProviderReady`/`emaillabsWebhook`.
   Opis i kroki panelu:
@@ -2449,6 +2549,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `auth-email-worker`, `emaillabs-transport`. Pule `pg` z `query_timeout` 35 s i TCP keepalive
   (#1229, `db-pool-query-timeout`); retencja R2 liczy tylko kompletne kopie, niekompletne > 24 h
   sprzątane osobno (#1228, `backup-r2`).
+  Kontrakt czasu (#731, bez migracji): `/api/email/process` daje obu kolejkom jeden budżet
+  `EMAIL_RUN_BUDGET_MS` = 90 s (< limit callera 120 s < dzierżawa 300 s) i sygnał żądania
+  (`src/lib/email/run-deadline.ts`); wysyłka startuje tylko z oknem ≥ 25 s do końca budżetu
+  i dzierżawy, jej termin nie wykracza poza budżet; rekordy bez próby wracają do kolejki bez
+  zużycia próby (`deadlineDeferred`, w auth też `leaseLost`), nie liczą się jako `failed`,
+  wynik `ok: false` (503). Test `email-run-deadline` (wolny GET/POST EmailLabs, 20 listów,
+  przerwanie, nakładające się przebiegi; kontrole ujemne bez budżetu). Opis `docs/CLOUDFLARE_CRON.md`.
   Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
   (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
   semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;
@@ -2577,6 +2684,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
   `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
   `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
+  Spójność treści (#1093/#1117/#1118): tytuł oferty w `jobOffer`/`statusChanged`/
+  `applicationViewed`/`guestStatusChanged` worker czyta w języku odbiorcy
+  (`readRecipientJobTitles` w `outbox.ts`: tłumaczenie locale wiersza → język oferty → en →
+  `jobs.title`, jak digest 0138; błąd = tytuł z payloadu); potwierdzenie kontaktu dla konta
+  w języku konta (migracja `0205` — numer tymczasowy, `rls.sql` CT1093 z kontrolą ujemną,
+  rollback `contact-recipient-locale-rollback.sql`); `EmailCopy.single` (digest z jedną ofertą),
+  `EmailCopy.reporter` + `appealSubjectLabels` (odwołanie zgłaszającego = numer SPRAWY i CTA
+  strony sprawy, autora = numer decyzji i dane firmy); stopka gościa bez „masz konto”; firma
+  w PL bez form „(a)”; propozycja = termin panelu (propozycja/voorstel/proposition/proposal);
+  gość z `offer_sent` = `guestOfferSentLabel`; newsletter linkuje ustawienia panelu wg
+  `profiles.role`; `admin.agePolicySuccessHidden` z ICU plural. Test `email-copy-consistency`.
   Gołe domeny bez schematu (#716): redakcja URL-i w cytacie obejmuje też domeny bez `http(s)://`,
   `www.` ani ścieżki (np. „firma.be”, poddomena, z portem) — ograniczone do wiarygodnej listy
   TLD, żeby nie niszczyć zwykłych skrótów/inicjałów („sp. z o.o.”, „np.”, „itd.”). Dowód:
@@ -2623,6 +2741,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w kategorii `analytics` (`src/components/cookies/Analytics.tsx`), CSP: `static.cloudflareinsights.com`
   (script-src) + `cloudflareinsights.com` (connect-src) — tylko gdy token jest ustawiony; bez
   tokenu (stan startowy, token doda właściciel) beacon się nie ładuje, a CSP nie ma tych hostów.
+  Wycofanie zgody przy działającym beaconie (#642, bez migracji): dostawca nie ma API do
+  zatrzymania wykonanego skryptu, a `next/script` go nie usuwa — `withdrawLoadedBeacon`
+  (`src/lib/analytics/withdraw.ts`) od razu odcina ruch do `*.cloudflareinsights.com`
+  w bieżącym dokumencie (CSP `connect-src 'self'` w `<meta>` — działa też na referencje do
+  `sendBeacon` trzymane przez skrypt — i zapasowo nakładka na `sendBeacon`), czeka
+  najwyżej 3 s na zapis zgody w logu serwerowym (`pendingConsentPersistence`) i przeładowuje
+  stronę; po przeładowaniu `AnalyticsWithdrawnNotice` pokazuje jednorazowy komunikat
+  (`cookies.analyticsWithdrawnNotice`, znacznik w `sessionStorage`, komponent w osobnym chunku `React.lazy` — budżet JS listy ofert #395). Dowód: unit
+  `analytics-withdraw` (kontrole ujemne), E2E `cookie-consent-categories` (atrapa beaconu
+  z własną referencją do `sendBeacon` i wysyłką przy `pagehide`: zero pomiarów po wycofaniu,
+  także po nawigacji klienckiej). **Otwarte:** wycofanie w innej karcie (zdarzenie zmiany
+  zgody działa w obrębie jednej karty).
   Kategoria `marketing` usunięta (decyzja właściciela 25.09 — brak trackerów marketingowych):
   kategorie = necessary/preferences/analytics (`src/lib/consent-cookie.ts`, `CONSENT_CATEGORIES`),
   domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)
@@ -2956,6 +3086,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
   z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
   wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
+  Zaproszenia na adres osoby (#1233, migracja `0202`): oczekujące → `revoked`, adres zerowany we wszystkich
+  (`company_invitations.email` nullable, CHECK `company_invitations_email_when_pending`), e-maile rejestracyjne
+  tych zaproszeń usunięte z kolejki; wiersz = ślad zdarzenia. Dowód: `rls.sql` OD981 (kontrola ujemna).
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
   `account-data`. Odwołania i zgłoszenia w eksporcie (#1232, migracja `0992` — numer
@@ -3072,7 +3205,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
   `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). Zależności:
   martwych pakietów już nie ma (`stripe`, `prettier-plugin-tailwindcss`, `@radix-ui/react-slot`
-  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji),
+  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji — strażnik
+  `dependencies-used.test` z listą wyjątków bez importu sprawdzanych w pliku konfiguracji i kontrolami ujemnymi),
   `npm audit --package-lock-only` = 0. `next lint` zastąpione `eslint` CLI (ESLint 8), lint
   obejmuje pliki konfiguracyjne. **Otwarte:** ESLint 9 (flat config, nowe `node_modules` —
   osobny krok z pełną instalacją).
@@ -3128,6 +3262,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
   kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
   ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
+- [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0206` — numer
+  tymczasowy, rollback `supabase/rollback/0206_…down.sql`): indeksy pod usuwanie konta i kaskady FK
+  (`notifications`/`email_deliveries` po `entity_id`, `saved_search_alerts.profile_id`, kolumny aktora
+  `jobs.created_by`, `offers.sender_id`, historie statusów, `conversations.created_by`,
+  `contact_messages.sender_id`, `auth.email_outbox.user_id`). Nazwa zapisanego wyszukiwania i firmy bez
+  znaków sterujących (C0, DEL, C1): `save_saved_search` = reguła `rename_saved_search`, CHECK
+  `saved_searches_name_no_control`/`companies_name_no_control` (istniejące wiersze oczyszczone), Zod
+  `NO_CONTROL_CHARS_REGEX` (`src/lib/validation/text.ts`, komunikat `company.error.nameInvalid`), temat
+  e-maila jednowierszowy (`toSingleLineHeader` w `renderEmail` i w obu transportach). Szczegół oferty
+  i profil firmy czytają bazę raz na żądanie (`cache()` wspólne dla `generateMetadata` i strony); pula
+  domenowa domyślnie 10 połączeń, `DATABASE_APP_POOL_MAX` (1–50). Dowód: `rls.sql` sekcja DBP1245/CC1244
+  (plany z indeksem; kontrole ujemne: bez indeksu, definicja z 0092 i bez CHECK), test
+  `db-perf-control-chars-rollback.sql`, unit `control-chars-names`, `runtime-pool-config`. **Otwarte:**
+  #1215 (plan generyczny publicznych RPC listy — po #1259, który redefiniuje te funkcje), polityka RLS
+  `matches` (#1096 pkt 3; matching wyłączony w trybie ogłoszeniowym), pozostałe kolumny aktora.
 - [x] Middleware i SEO-meta (audyt 2026-09-28, bez migracji): matcher `src/middleware.ts` (#1035) nie pomija już
   ścieżek z kropką w segmencie (`/pl/oferty-pracy/a.b` szło do tras dynamicznych z pominięciem bramki hasła
   i 503 „niegotowe”) — wyłączone są tylko `api|auth|_next|_vercel|images|.well-known` (granica segmentu),
@@ -3231,7 +3380,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`misconfigured`) — to alarm `backup_*`. Obraz usługi cron `docker/backup/Dockerfile` (node 22,
   pg 18, `age`). Dowód: `backup-r2.test` (atrapa S3 `tests/helpers/fake-s3-server.mjs`, klucz
   odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
-  `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
+  `npm run test:backup`.
+  Obraz kopii w CI (#751, bez migracji): osobny workflow `backup-image.yml` (poza `ci.yml`, nie
+  blokuje wdrożenia web; przy zmianie `docker/backup/**`/skryptów, ręcznie, co tydzień) buduje
+  `docker/backup/Dockerfile` od zera (`--pull --no-cache`), smoke `scripts/db/backup-image-smoke.sh`
+  (uid ≠ 0, node 22, pg_* 18, `age`, SDK S3 = `package.json`, bez npm/npx/yarn — usunięte z obrazu,
+  start bez konfiguracji = kod 2 bez wypisania wartości), SBOM CycloneDX + skan Trivy (obraz
+  przypięty do wersji i digestu) jako artefakt; bramka `scripts/security/backup-image-scan.mjs`
+  (`scripts/lib/backup-image-scan-outcome.mjs`): HIGH/CRITICAL z dostępną poprawką = kod 1, chyba
+  że terminowy (≤ 90 dni) wyjątek w `docker/backup/vulnerability-exceptions.json`; raport bez
+  pakietów Debiana/Node, niepełny SBOM albo awaria skanera = kod 2. Obraz bazowy
+  `node:22-bookworm-slim@sha256:…`, digest aktualizuje Dependabot (`.github/dependabot.yml`).
+  Strażnik `check-ci-workflows.mjs` (job, kroki, digest skanera i `FROM`). Dowód: unit
+  `backup-image-scan`, `backup-image-smoke` (atrapa docker), `backup-r2-image`, `ci-workflows-guard`
+  (kontrole ujemne). Runbook: `docs/railway/BACKUP_RESTORE.md` (pochodzenie przed wdrożeniem). **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
   dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
   Rozpoznanie bezpośredniego uruchomienia CLI (#925): `backup-s3.mjs` porównuje
   `import.meta.url` z `pathToFileURL(process.argv[1]).href` (nie z ręcznie zbudowanym
@@ -3397,7 +3559,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   strony otwartej z panelu; jednorazowe linki `no-referrer`, #1218, unit `middleware-referrer-policy`,
   E2E `one-time-link-tracking`); cookie aktywnej
   firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
-  firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
+  firmy unieważniają publiczny ISR (#1109); `/api/health`
   pokazuje szczegóły tylko z tokenem albo w `next dev` (`NODE_ENV=development` poza trybem produkcyjnym —
   nie po `request.url`, który za proxy Railway wskazuje localhost, #1219), zbiorczy budżet błędów
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
@@ -3405,11 +3567,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i SQLSTATE bez komunikatu bazy (#1105).
   Dokończenie (bez migracji): `reportUnmappedDbError` także w `jobs.ts` (`failureCode(error, obszar)`
   zgłasza też wyjątki spoza bazy), panelu admina (`admin.ts`, kampanie, próg wieku, rejestr naruszeń,
-  zaufanie ofert), blokadach firm, języku e-maili i powiadomieniach (#1068, akcje rekrutacyjne poza
-  zakresem); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
+  zaufanie ofert), blokadach firm, języku e-maili i powiadomieniach (#1068). Domknięcie #1068:
+  także akcje rekrutacyjne (aplikacje, wiadomości, propozycje, gość, szablony, CV, widoczność,
+  zgłoszenia wiadomości — samo zgłaszanie, bez włączania funkcji), kontakt, zgłoszenia treści,
+  odwołania, wiek, konto i jego eksport z SQLSTATE przez `captureActionError` (`src/lib/db/errors.ts`:
+  błąd bazy = obszar + SQLSTATE, inny wyjątek = sam obszar); dawne ciche `catch` (loadery
+  „Pokaż więcej”, zapisane oferty na liście, log zgód, wersja oferty, pliki CV/załączników, runtime
+  auth przy resecie) zgłaszają błąd. Strażnik w `report-unmapped-db-error.test` (każdy `catch`
+  w `src/lib/actions` kończący się błędem musi zgłaszać, mapowanie bazy bez `reportUnmappedDbError`
+  = czerwony; kontrole ujemne; wyjątek `auth.ts` — mapowanie Better Auth, otwarte); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
   + szeroki próg na IP (`checkAccountRateLimit`, `src/lib/rate-limit-account.ts`, wiadro `<akcja>-ip`
   = 10 × limit), zły format identyfikatora w `setCompanyStatus`/`resolveReport`/
-  `markNotificationsRead` = `VALIDATION_FAILED` (#1109); panel `/admin/operacje` ocenia wiersz doby
+  `markNotificationsRead` = `VALIDATION_FAILED` (#1109; dokończenie: upload CV i załączników liczy limit na konto po sesji przez `checkAccountRateLimit` — anonimowe wywołanie nie zużywa budżetu, a identyfikator rozmowy/zgłoszenia/propozycji w złym formacie w `sendMessage`/`markConversationRead`/`openConversation` = `VALIDATION_FAILED` przed sesją i bazą, tryb demo bez zmian; unit `candidate-cv-route-actions`, `message-attachments-actions`, `messages-actions`); panel `/admin/operacje` ocenia wiersz doby
   i miesiąca budżetu AI według poziomu danego okresu — wspólny `ai_budget_exhausted` nie podnosi
   drugiego okresu do alarmu ani nie kasuje jego ostrzeżenia (#789). Dowód: unit
   `report-unmapped-db-error`, `server-actions-1109`, `admin-ops-dashboard` (kontrole ujemne).

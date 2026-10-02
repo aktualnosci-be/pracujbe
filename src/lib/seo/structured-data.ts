@@ -6,6 +6,7 @@
  */
 
 import type { ContractType, JobDetail } from '@/lib/jobs';
+import { jobQualificationsJsonLd } from '@/lib/job-qualifications';
 import { normalizeSalary } from '@/lib/salary';
 
 /** Ścieżka obrazu udostępniania marki (1200×630, `public/og.png`). */
@@ -268,6 +269,8 @@ export function buildJobPostingJsonLd(
     ...(baseSalary ? { baseSalary } : {}),
     ...(job.startDate ? { jobStartDate: job.startDate } : {}),
     ...(options.jobBenefits?.trim() ? { jobBenefits: options.jobBenefits.trim() } : {}),
+    // #866: umiejętności (`skills`) i certyfikaty (`qualifications`) — te same co sekcja strony.
+    ...jobQualificationsJsonLd(job.qualifications),
     url,
     directApply: options.directApply ?? true,
   };

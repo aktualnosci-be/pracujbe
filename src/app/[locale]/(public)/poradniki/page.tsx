@@ -8,6 +8,9 @@ import { env } from '@/lib/env';
 import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { getAllGuides } from '@/lib/guides/guides';
 import { GuideCard } from '@/components/public/GuideCard';
+import { ArrowRight } from 'lucide-react';
+
+import { NAVIGATOR_PATH } from './jak-zaczac-prace/_metadata';
 
 /**
  * Lista poradników `/poradniki` (SSG, INDEKSOWALNA).
@@ -105,6 +108,25 @@ export default async function GuidesListPage({ params }: PageProps) {
         </h1>
         <p className="mt-2 break-words text-muted-foreground hyphens-auto">{t('pageSubtitle')}</p>
       </header>
+
+      {/* Nawigator „Jak zacząć pracę w Belgii?” (#907) — wejście do drzewa wyboru region → potrzeba. */}
+      <section className="mt-8" aria-labelledby="start-navigator-card">
+        <div className="relative max-w-3xl rounded-lg border border-border bg-soft p-5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+          <h2 id="start-navigator-card" className="break-words text-lg font-semibold text-foreground hyphens-auto">
+            <Link
+              href={NAVIGATOR_PATH}
+              className="after:absolute after:inset-0 after:content-[''] focus-visible:underline focus-visible:outline-none"
+            >
+              {t('navigatorCardTitle')}
+            </Link>
+          </h2>
+          <p className="mt-2 break-words text-sm text-muted-foreground hyphens-auto">{t('navigatorCardDesc')}</p>
+          <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent">
+            {t('navigatorCardCta')}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </span>
+        </div>
+      </section>
 
       {/* Lista poradników */}
       <section className="mt-8" aria-label={t('pageTitle')}>

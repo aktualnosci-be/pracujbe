@@ -3,6 +3,7 @@ import { z } from 'zod/v3';
 import { routing } from '@/i18n/routing';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 import { isSimpleDisplayName } from '@/lib/validation/display-name';
+import { NO_NUL_REGEX } from '@/lib/validation/text';
 
 /**
  * Walidacja formularza kontaktu (#61) — ten sam schemat w formularzu (React Hook Form)
@@ -62,6 +63,8 @@ export const contactSchema = z.object({
     .min(1, 'contact.error.messageRequired')
     .min(CONTACT_LIMITS.messageMin, 'contact.error.messageTooShort')
     .max(CONTACT_LIMITS.messageMax, 'contact.error.messageTooLong')
+    // NUL baza odrzuca błędem technicznym — komunikat przy polu (#1108).
+    .regex(NO_NUL_REGEX, 'contact.error.textInvalid')
     .refine((v) => !containsPersonalIdentifier(v), 'contact.error.sensitiveId'),
   senderName: z
     .string()

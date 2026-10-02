@@ -1,5 +1,6 @@
 import { parseMailbox } from '../mailbox';
 import { MailSendError, type MailMessage, type MailTransport } from './types';
+import { toSingleLineHeader } from '@/lib/validation/text';
 
 /**
  * Transport EmailLabs (REST API v2.1, https://apidocs.emaillabs.io).
@@ -24,7 +25,9 @@ import { MailSendError, type MailMessage, type MailTransport } from './types';
 
 export const EMAILLABS_API_BASE = 'https://api.emaillabs.io';
 const SUBJECT_MAX = 128;
-const REQUEST_TIMEOUT_MS = 10_000;
+/** Limit pojedynczego żądania HTTP do EmailLabs (`run-deadline.ts`: okno wysyłki = GET + POST). */
+export const EMAILLABS_REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = EMAILLABS_REQUEST_TIMEOUT_MS;
 
 export interface EmailLabsConfig {
   appKey: string;
@@ -44,7 +47,9 @@ export function emailLabsMessageId(idempotencyKey: string, fromEmail: string): s
   return `${idempotencyKey}@${domain}`;
 }
 
-function truncateSubject(subject: string): string {
+function truncateSubject(raw: string): string {
+  // #1244: temat bez CR/LF i znaków sterujących także dla tematów spoza `renderEmail` (kampanie).
+  const subject = toSingleLineHeader(raw);
   const chars = [...subject];
   return chars.length <= SUBJECT_MAX ? subject : `${chars.slice(0, SUBJECT_MAX - 1).join('')}…`;
 }

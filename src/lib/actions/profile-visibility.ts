@@ -2,7 +2,7 @@
 
 import { z } from 'zod/v3';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { attempt, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -66,7 +66,9 @@ export async function setProfileVisibilityAction(searchable: unknown): Promise<S
       return { ok: true, searchable: data === true, changedAt: null };
     });
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'profile-visibility.setAction', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'profile-visibility.setAction' });
     return { ok: false, error: 'INTERNAL' };
   }

@@ -19,6 +19,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobs: adapters.list,
   getPublicJobsPage: adapters.list,
   getPublicJobsMachineTitles: adapters.titles,
+  getPublicJobListTranslations: vi.fn(async () => []),
 }));
 const captureError = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/error-report', () => ({ captureError }));

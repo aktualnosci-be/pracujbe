@@ -302,6 +302,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.links_changed': 'auditActionCompanyLinksChanged',
   'company.links_submitted': 'auditActionCompanyLinksSubmitted',
   'company.links_reviewed': 'auditActionCompanyLinksReviewed',
+  'company.description_locale_changed': 'auditActionCompanyDescriptionLocale',
   'company.description_submitted': 'auditActionCompanyDescriptionSubmitted',
   'company.description_removed': 'auditActionCompanyDescriptionRemoved',
   'company.description_reviewed': 'auditActionCompanyDescriptionReviewed',

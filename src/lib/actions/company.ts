@@ -67,8 +67,10 @@ export type UpdateCompanyLinksResult =
   | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
   | { ok: false; error: ErrorCode };
 /** Wynik zgłoszenia opisu firmy (0198): czeka na admina / weszło od razu / bez zmian. */
+/** Wynik zgłoszenia opisu: jak linki (0156) + `locale_applied` — sama zmiana języka (0201). */
+export type CompanyDescriptionOutcome = CompanyLinksOutcome | 'locale_applied';
 export type UpdateCompanyDescriptionResult =
-  | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
+  | { ok: true; demo?: boolean; outcome: CompanyDescriptionOutcome }
   | { ok: false; error: ErrorCode; field?: 'description'; reason?: 'sensitive' | 'tooLong' };
 export type AddCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
@@ -480,7 +482,10 @@ export async function updateCompanyLinks(
  * (pod sesją, SECURITY DEFINER) sprawdza rolę drugi raz, egzekwuje limit długości i decyduje:
  *   - `pending`   — nowy tekst czeka na decyzję admina; opis publiczny bez zmian,
  *   - `applied`   — usunięcie opisu (niczego nowego nie publikuje) wchodzi od razu,
- *   - `unchanged` — tekst = zatwierdzony opis (wycofuje ewentualną propozycję).
+ *   - `unchanged` — tekst i język = zatwierdzone (wycofuje ewentualną propozycję),
+ *   - `locale_applied` — tekst = zatwierdzony, inny język: sama zmiana języka opisu (0201).
+ * Język opisu (0201) jedzie razem z propozycją i przechodzi do opisu przy akceptacji admina;
+ * odrzucenie go nie zmienia.
  * Numer rejestru narodowego/dokumentu w tekście → błąd przy polu przed bazą (jak w innych
  * polach). Bezpośredni zapis kolumn blokuje w bazie strażnik `guard_company_description`.
  */
@@ -503,6 +508,7 @@ export async function updateCompanyDescription(
     };
   }
   const description = parsed.data.description;
+  const descriptionLocale = parsed.data.descriptionLocale ? parsed.data.descriptionLocale : null;
 
   // Demo (bez bazy) używa nierzeczywistego identyfikatora — UUID sprawdzamy dopiero dalej.
   if (!isPortalDataConfigured()) return { ok: true, demo: true, outcome: 'unchanged' };
@@ -531,19 +537,25 @@ export async function updateCompanyDescription(
       const result = await rpc(tx, 'submit_company_description', {
         p_company_id: companyId,
         p_description: description,
+        p_description_locale: descriptionLocale,
       });
       return { error: null, result };
     });
     if (outcome.error !== null) return { ok: false, error: outcome.error };
 
     const result = outcome.result;
-    if (result !== 'pending' && result !== 'applied' && result !== 'unchanged') {
+    if (result !== 'pending' && result !== 'applied' && result !== 'unchanged' && result !== 'locale_applied') {
       captureError(new Error('submit_company_description: unexpected result'), {
         area: 'company.updateCompanyDescription',
       });
       return { ok: false, error: 'INTERNAL' };
     }
     revalidatePath('/employer', 'layout');
+    if (result === 'applied' || result === 'locale_applied') {
+      // Profil publiczny (ISR, #298): usunięty opis albo nowy język opisu widoczny od razu.
+      revalidatePath('/[locale]/pracodawcy/[slug]', 'page');
+      revalidatePath('/[locale]/pracodawcy/[slug]/strona/[page]', 'page');
+    }
     return { ok: true, outcome: result };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.updateCompanyDescription') };
