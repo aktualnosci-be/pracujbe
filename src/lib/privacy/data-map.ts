@@ -1145,6 +1145,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
   'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
+  'public.location_names': DICTIONARY('nazwy miejscowości w języku serwisu PL/NL/FR/EN (0212)'),
   'public.joint_committees': DICTIONARY('komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169'),
   'public.language_aliases': DICTIONARY('nazwy języków PL/NL/FR/EN (0168)'),
   'public.occupations': DICTIONARY('zawody'),

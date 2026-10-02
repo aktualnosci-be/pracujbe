@@ -80,6 +80,9 @@ echo ">> rollback 0204 (tryb ogłoszeniowy: szablony odpowiedzi, w transakcji co
 echo ">> rollback 0192 (czujki poczty i requeue, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-ops-config-rollback.sql"
 
+echo ">> rollback 0212 (miasto z kodem pocztowym, nazwy miejscowości; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/location-postal-names-rollback.sql"
+
 echo ">> rollback 0183 (części gmin w filtrach, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/city-sections-filters-rollback.sql"
 
