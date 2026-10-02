@@ -3486,7 +3486,9 @@
       "invitationLimit": "You have reached the limit of 50 pending invitations. Revoke outdated invitations.",
       "companyLimit": "You can manage up to 5 companies.",
       "lastOwner": "The company must have at least one active owner.",
-      "localeRequired": "Choose the invitation language."
+      "localeRequired": "Choose the invitation language.",
+      "reactivationDenied": "This person’s access to the company was turned off in a role you cannot restore. Ask the company owner to do it.",
+      "reactivationNotAllowed": "You cannot accept this invitation: your access to the company was turned off and only the company owner can restore it."
     },
     "localeLabel": "Invitation language",
     "invitedSent": "Invitation saved. This person will get an email: with an employer account, in that account’s language; without an account, in the chosen language, with a sign-up link.",

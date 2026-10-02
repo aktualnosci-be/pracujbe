@@ -3486,7 +3486,9 @@
       "invitationLimit": "La limite de 50 invitations en attente est atteinte. Annulez les invitations obsolètes.",
       "companyLimit": "Vous pouvez gérer au maximum 5 entreprises.",
       "lastOwner": "L’entreprise doit avoir au moins un propriétaire actif.",
-      "localeRequired": "Choisissez la langue de l’invitation."
+      "localeRequired": "Choisissez la langue de l’invitation.",
+      "reactivationDenied": "L’accès de cette personne à l’entreprise a été désactivé avec un rôle que vous ne pouvez pas rétablir. Demandez-le au propriétaire de l’entreprise.",
+      "reactivationNotAllowed": "Vous ne pouvez pas accepter cette invitation : votre accès à l’entreprise a été désactivé et seul le propriétaire de l’entreprise peut le rétablir."
     },
     "localeLabel": "Langue de l’invitation",
     "invitedSent": "Invitation enregistrée. Cette personne recevra un e-mail : avec un compte employeur, dans la langue de ce compte ; sans compte, dans la langue choisie, avec un lien d’inscription.",

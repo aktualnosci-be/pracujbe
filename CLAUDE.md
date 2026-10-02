@@ -2209,6 +2209,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
   nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
   TM403-13c przez `INVITATION_LIMIT_REACHED`).
+  Przywrócenie wyłączonego członka przez zaproszenie (#867, migracja `0217` — numer tymczasowy):
+  zaproszenie na adres osoby z NIEAKTYWNYM członkostwem wymaga, by zapraszający zarządzał jej
+  dotychczasową rolą i rolą z zaproszenia (reguła `set_company_member_active`) — strażnik BEFORE
+  INSERT/UPDATE na `company_invitations` (`MEMBER_REACTIVATION_DENIED` → `team.error.reactivationDenied`,
+  bez redefinicji `invite_company_member`) i ponownie `respond_to_company_invitation` przy
+  przyjęciu (`REACTIVATION_NOT_ALLOWED` → `team.error.reactivationNotAllowed`; obejmuje zaproszenia
+  sprzed migracji i zapraszającego, który stracił uprawnienia). Admin nie przywróci wyłączonego
+  admina zaproszeniem na rekrutera; owner może. Dowód: `rls.sql` sekcja TMR867 (kontrola ujemna:
+  rollback `0217_…down.sql` = obejście działa), `team-reactivation-rollback.sql`, unit `team-actions`.
   Token a limit e-maili (#793, migracja `0210`): odświeżenie zaproszenia dla adresu bez konta
   wymienia `signup_token_hash` dopiero po udanym zakolejkowaniu e-maila z nowym tokenem — odmowa
   limitu 3/dobę zostawia token z ostatnio wysłanego e-maila (link działa); wynik RPC bez zmian,
