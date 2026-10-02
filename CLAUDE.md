@@ -1795,6 +1795,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   integracja `portal-employer-actions`, unit `job-wizard-draft-version`. **Otwarte:** wersja
   szkicu po imporcie (pierwszy zapis bez kontroli), szkic wczytany i niezmieniony wysyła zapis
   przy pierwszym „Dalej” (brak migawki z bazy).
+  Wznowienie od zapisanego kroku (#834, migracja `0216` — numer tymczasowy): `jobs.draft_step`
+  (smallint 1–9, CHECK `jobs_draft_step_range`, null = start od kroku 1 — stare szkice, import,
+  kopia szkicu) = najdalszy krok kreatora z udanym zapisem. `updateJobDraft` dokłada do treści
+  `draft_step = krok`, a `save_job_draft` (definicja z 0194 + ten klucz) podnosi go `greatest`
+  w tej samej transakcji co treść (powrót do wcześniejszego kroku nie cofa postępu; wartość spoza
+  1–9 = `VALIDATION_FAILED` bez zapisu; zapis bez klucza nie zmienia postępu). `getJobDraft` →
+  `resumeStep` (tylko szkic), strona edycji → `JobWizard initialStep` (`resumeWizardStep`; tryb
+  edycji opublikowanej oferty zawsze od kroku 1). Samo wznowienie i „Wstecz” niczego nie
+  zapisują. Dowód: `rls.sql` sekcja DS834 (kontrola ujemna: funkcja z 0194 pomija klucz),
+  rollback `supabase/rollback/0216_…down.sql` + `job-draft-step-rollback.sql`, unit
+  `job-wizard-resume-step` (kontrole ujemne), `save-job-draft-step`.
   Podgląd wynagrodzenia w kroku 9 (#1224, bez migracji): `normalizeSalary`/`formatSalaryRange`
   z etykietami `jobs.passport.*` (jak karta i szczegół) zamiast surowych pól formularza — „do 3000 €
   brutto / mies.”, waluta i separatory wg locale. Test `job-wizard-salary-preview` (kontrola ujemna).

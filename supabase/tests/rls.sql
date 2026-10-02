@@ -21126,6 +21126,83 @@ select pg_temp.assert(
   'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
 
 -- ============================================================================
+-- DS834. Postęp kreatora szkicu (0216, #834): save_job_draft z kluczem `draft_step` zapisuje
+--        najdalszy krok z udanym zapisem w tej samej transakcji co treść kroku; zapis spoza
+--        kreatora (bez klucza) postępu nie zmienia, wartość spoza 1–9 odrzuca cały krok.
+-- ============================================================================
+select pg_temp.assert((select draft_step is null from public.jobs where id = :'JOBDC'),
+  'DS834-0 szkic bez zapisu z kreatora nie ma postępu (start od kroku 1)');
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Krok 3"}, "draft_step": 3}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 3 and title = 'Krok 3' from public.jobs where id = :'JOBDC'),
+  'DS834-1 zapis kroku 3 utrwala treść i postęp 3');
+
+-- DS834-2: powrót do wcześniejszego kroku (zapis kroku 2) nie cofa postępu; dalszy krok go podnosi.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"contract_type": "temporary"}, "draft_step": 2}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 3 and contract_type::text = 'temporary' from public.jobs where id = :'JOBDC'),
+  'DS834-2 zapis wcześniejszego kroku zapisuje treść, postęp zostaje 3');
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"skills_optional": ["Wózek widłowy"], "draft_step": 7}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC'),
+  'DS834-2b krok tylko z relacjami też podnosi postęp (7)');
+
+-- DS834-3: zapis bez klucza (import AI, inne ścieżki) nie zmienia postępu.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Import"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 and title = 'Import' from public.jobs where id = :'JOBDC'),
+  'DS834-3 zapis bez draft_step nie zmienia postępu');
+
+-- DS834-4 (kontrole ujemne): krok spoza 1–9, tekst, ułamek, null = VALIDATION_FAILED bez zmiany treści.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": 0}'), 'VALIDATION_FAILED', 'DS834-4a krok 0 odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": 10}'), 'VALIDATION_FAILED', 'DS834-4b krok 10 odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": "9"}'), 'VALIDATION_FAILED', 'DS834-4c krok jako tekst odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": 8.5}'), 'VALIDATION_FAILED', 'DS834-4d krok ułamkowy odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": null}'), 'VALIDATION_FAILED', 'DS834-4e krok null odrzucony');
+-- Błąd treści kroku cofa też postęp (jedna transakcja).
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"category": "nie-ma-takiej"}, "draft_step": 9}'), 'job_category', 'DS834-4f błąd treści kroku');
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 and title = 'Import' from public.jobs where id = :'JOBDC'),
+  'DS834-4g odrzucone zapisy nie zmieniły ani treści, ani postępu');
+
+-- DS834-5: CHECK w bazie niezależny od RPC; nie-członek nie podniesie postępu cudzego szkicu.
+select pg_temp.expect_error(format('update public.jobs set draft_step = 10 where id = %L', :'JOBDC'),
+  'jobs_draft_step_range', 'DS834-5 CHECK odrzuca krok spoza 1–9');
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"draft_step": 9}'), 'PERMISSION_DENIED', 'DS834-5b nie-członek firmy nie zmieni postępu');
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC'),
+  'DS834-5c postęp bez zmian po odrzuconych próbach');
+
+-- DS834-N (kontrola ujemna): definicja z 0194 (rollback funkcji, kolumna zostaje) pomija klucz
+-- `draft_step` — postęp nie byłby zapisywany, więc DS834-1 wykrywa brak migracji.
+begin;
+\ir ../rollback/0216_job_draft_resume_step.down.sql
+alter table public.jobs add column draft_step smallint;
+set local role authenticated; set local app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Stara funkcja"}, "draft_step": 9}'::jsonb);
+reset role;
+select pg_temp.assert((select draft_step is null and title = 'Stara funkcja' from public.jobs where id = :'JOBDC'),
+  'DS834-N kontrola ujemna: save_job_draft z 0194 nie zapisuje postępu kreatora');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC')
+  and pg_get_functiondef('public.save_job_draft(uuid, jsonb, timestamptz)'::regprocedure) like '%draft_step%',
+  'DS834-N2 po cofnięciu transakcji baza wraca do stanu po 0216');
+
+-- ============================================================================
 -- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
 --         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
 -- ============================================================================
