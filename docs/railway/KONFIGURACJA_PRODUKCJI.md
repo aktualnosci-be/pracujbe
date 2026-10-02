@@ -75,6 +75,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 
 | Zmienna | Uwagi |
 |---|---|
+| `DATABASE_APP_POOL_MAX` | opcjonalnie: limit połączeń puli `DATABASE_APP_URL` na proces (1–50, domyślnie 10, #1096); repliki × limit + pozostałe pule ≤ `max_connections` |
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
 | `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance`. Terminy zatwierdzone 26.09.2026 (#40); na produkcji ustawione `dry-run` (działa z cronem `/api/maintenance`), `apply` po osobnej decyzji |
 | `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |

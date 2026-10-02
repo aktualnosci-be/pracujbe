@@ -3241,6 +3241,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
   kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
   ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
+- [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0206` — numer
+  tymczasowy, rollback `supabase/rollback/0206_…down.sql`): indeksy pod usuwanie konta i kaskady FK
+  (`notifications`/`email_deliveries` po `entity_id`, `saved_search_alerts.profile_id`, kolumny aktora
+  `jobs.created_by`, `offers.sender_id`, historie statusów, `conversations.created_by`,
+  `contact_messages.sender_id`, `auth.email_outbox.user_id`). Nazwa zapisanego wyszukiwania i firmy bez
+  znaków sterujących (C0, DEL, C1): `save_saved_search` = reguła `rename_saved_search`, CHECK
+  `saved_searches_name_no_control`/`companies_name_no_control` (istniejące wiersze oczyszczone), Zod
+  `NO_CONTROL_CHARS_REGEX` (`src/lib/validation/text.ts`, komunikat `company.error.nameInvalid`), temat
+  e-maila jednowierszowy (`toSingleLineHeader` w `renderEmail` i w obu transportach). Szczegół oferty
+  i profil firmy czytają bazę raz na żądanie (`cache()` wspólne dla `generateMetadata` i strony); pula
+  domenowa domyślnie 10 połączeń, `DATABASE_APP_POOL_MAX` (1–50). Dowód: `rls.sql` sekcja DBP1245/CC1244
+  (plany z indeksem; kontrole ujemne: bez indeksu, definicja z 0092 i bez CHECK), test
+  `db-perf-control-chars-rollback.sql`, unit `control-chars-names`, `runtime-pool-config`. **Otwarte:**
+  #1215 (plan generyczny publicznych RPC listy — po #1259, który redefiniuje te funkcje), polityka RLS
+  `matches` (#1096 pkt 3; matching wyłączony w trybie ogłoszeniowym), pozostałe kolumny aktora.
 - [x] Middleware i SEO-meta (audyt 2026-09-28, bez migracji): matcher `src/middleware.ts` (#1035) nie pomija już
   ścieżek z kropką w segmencie (`/pl/oferty-pracy/a.b` szło do tras dynamicznych z pominięciem bramki hasła
   i 503 „niegotowe”) — wyłączone są tylko `api|auth|_next|_vercel|images|.well-known` (granica segmentu),

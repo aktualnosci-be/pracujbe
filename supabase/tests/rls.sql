@@ -24767,4 +24767,100 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+
+-- ============================================================================
+-- DBP1245 / CC1244 (0206): indeksy pod usuwanie konta i kaskady FK (#1245) oraz nazwy
+-- zapisanych wyszukiwań i firm bez znaków sterujących (#1244). Sekcja w transakcji cofanej.
+-- ============================================================================
+\echo '--- DBP1245 / CC1244 indeksy usuwania konta i znaki sterujące ---'
+begin;
+create function pg_temp.plan_uses_index(p_sql text, p_index text) returns boolean
+language plpgsql as $$
+declare v_plan text;
+begin
+  execute 'explain (format json, costs off) ' || p_sql into v_plan;
+  return v_plan like '%"Index Name": "' || p_index || '"%';
+end $$;
+set local enable_seqscan = off;
+
+select pg_temp.assert((select count(*) from pg_indexes where indexname in (
+    'idx_notifications_entity', 'idx_email_deliveries_entity', 'idx_saved_search_alerts_profile',
+    'idx_jobs_created_by', 'idx_offers_sender', 'idx_application_status_history_changed_by',
+    'idx_offer_status_history_changed_by', 'idx_conversations_created_by',
+    'idx_contact_messages_sender', 'email_outbox_user_idx')) = 10,
+  'DBP1245-1 komplet indeksów FK/usuwania konta');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$delete from public.notifications where entity_id = any(array['00000000-0000-0000-0000-000000000001'::uuid])$q$,
+    'idx_notifications_entity'),
+  'DBP1245-2 usunięcie powiadomień po entity_id używa indeksu');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$delete from public.email_deliveries where entity_id = any(array['00000000-0000-0000-0000-000000000001'::uuid])$q$,
+    'idx_email_deliveries_entity'),
+  'DBP1245-2b usunięcie e-maili po entity_id używa indeksu');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$delete from public.saved_search_alerts where profile_id = '00000000-0000-0000-0000-000000000001'$q$,
+    'idx_saved_search_alerts_profile'),
+  'DBP1245-2c kaskada profilu na saved_search_alerts używa indeksu');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$update public.jobs set created_by = null where created_by = '00000000-0000-0000-0000-000000000001'$q$,
+    'idx_jobs_created_by'),
+  'DBP1245-2d SET NULL twórcy oferty używa indeksu');
+-- Kontrola ujemna: bez indeksu to samo usunięcie skanuje tabelę.
+savepoint dbp_neg;
+drop index public.idx_notifications_entity;
+select pg_temp.assert(not pg_temp.plan_uses_index(
+    $q$delete from public.notifications where entity_id = any(array['00000000-0000-0000-0000-000000000001'::uuid])$q$,
+    'idx_notifications_entity'),
+  'DBP1245-N kontrola ujemna: bez indeksu plan nie korzysta z indeksu');
+rollback to savepoint dbp_neg;
+reset enable_seqscan;
+
+\set CCA 'e9910000-0000-0000-0000-0000000000a1'
+\set CCC 'e9910000-0000-0000-0000-0000000000c1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CCA','cca@test.be','Cora A','{"role":"candidate","first_name":"Cora","last_name":"A","locale":"pl"}');
+select test_fixture.attest_candidates();
+
+set local role authenticated; set local app.current_uid = :'CCA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  $q$select * from public.save_saved_search(E'Praca\r\nBcc: x@example.com', 'pl', '{"keyword":"cc1244 a"}', '?keyword=cc1244+a')$q$,
+  'VALIDATION_FAILED', 'CC1244-1 nazwa z CR/LF odrzucona przy zapisie (jak przy zmianie nazwy)');
+select pg_temp.expect_error(
+  $q$select * from public.save_saved_search(E'Praca\tnoc', 'pl', '{"keyword":"cc1244 b"}')$q$,
+  'VALIDATION_FAILED', 'CC1244-1b tabulator odrzucony');
+select pg_temp.expect_error(
+  $q$select * from public.save_saved_search(E'Praca\u0085noc', 'pl', '{"keyword":"cc1244 c"}')$q$,
+  'VALIDATION_FAILED', 'CC1244-1c znak C1 (NEL) odrzucony');
+select saved_search_id as cc_ss from public.save_saved_search('Łódź — żółć, nocka', 'pl',
+  '{"keyword":"cc1244 d"}', '?keyword=cc1244+d') \gset
+select pg_temp.assert((select name from public.saved_searches where id = :'cc_ss') = 'Łódź — żółć, nocka',
+  'CC1244-2 zwykła nazwa z polskimi znakami zapisana');
+reset role; reset app.current_uid;
+-- CHECK niezależny od ścieżki (superuser/service_role, bezpośredni DML).
+select pg_temp.expect_error(
+  $q$update public.saved_searches set name = E'A\nB' where id = '$q$ || :'cc_ss' || $q$'$q$,
+  'saved_searches_name_no_control', 'CC1244-3 CHECK odrzuca CR/LF w nazwie wyszukiwania każdą ścieżką');
+select pg_temp.expect_error(
+  $q$insert into public.companies(id, name, status) values ('$q$ || :'CCC' || $q$', E'Firma\r\nBcc', 'unverified')$q$,
+  'companies_name_no_control', 'CC1244-3b CHECK odrzuca CR/LF w nazwie firmy');
+insert into public.companies(id, name, status) values (:'CCC', 'Firma CC Zwykła', 'unverified');
+select pg_temp.expect_error(
+  $q$update public.companies set name = E'Firma\u0007' where id = '$q$ || :'CCC' || $q$'$q$,
+  'companies_name_no_control', 'CC1244-3c CHECK odrzuca znak sterujący przy zmianie nazwy firmy');
+-- Kontrola ujemna: definicja z 0092 i brak CHECK przepuszczają CR/LF.
+savepoint cc_neg;
+\ir ../rollback/0206_db_perf_indexes_control_chars.down.sql
+set local role authenticated; set local app.current_uid = :'CCA'; select pg_temp.assert_client_role();
+select saved_search_id as cc_bad from public.save_saved_search(E'Praca\r\nBcc: x@example.com', 'pl',
+  '{"keyword":"cc1244 neg"}') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select name from public.saved_searches where id = :'cc_bad') like E'%\n%',
+  'CC1244-N kontrola ujemna: stara save_saved_search zapisuje nazwę z CR/LF');
+update public.companies set name = E'Firma\r\nBcc' where id = :'CCC';
+select pg_temp.assert((select name from public.companies where id = :'CCC') like E'%\r%',
+  'CC1244-N2 kontrola ujemna: bez CHECK nazwa firmy przyjmuje CR/LF');
+rollback to savepoint cc_neg;
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -58,6 +58,7 @@
       "nameRequired": "Podaj nazwę firmy.",
       "nameTooShort": "Nazwa firmy jest za krótka.",
       "nameTooLong": "Nazwa firmy jest za długa.",
+      "nameInvalid": "Nazwa firmy nie może zawierać znaków sterujących (np. przejścia do nowej linii).",
       "vatInvalid": "Niepoprawny numer VAT/KBO.",
       "vatTooLong": "Numer VAT/KBO jest za długi.",
       "urlInvalid": "Podaj pełny adres zaczynający się od https://.",

@@ -58,6 +58,7 @@
       "nameRequired": "Voer de bedrijfsnaam in.",
       "nameTooShort": "De bedrijfsnaam is te kort.",
       "nameTooLong": "De bedrijfsnaam is te lang.",
+      "nameInvalid": "De bedrijfsnaam mag geen stuurtekens bevatten (zoals een regeleinde).",
       "vatInvalid": "Ongeldig btw-/KBO-nummer.",
       "vatTooLong": "Het btw-/KBO-nummer is te lang.",
       "urlInvalid": "Voer een volledig adres in dat begint met https://.",
