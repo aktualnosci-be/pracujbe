@@ -2896,6 +2896,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   tej samej strony. Widok „wszystkie” nie usuwa wierszy (dane zostają, tylko przeczytane).
   Dowód: unit `notifications-list` (rerender z nowym `initialPage`; kontrola ujemna: identyczny
   obiekt props po raz drugi nic nie zmienia).
+  Wiadomości serwisowe a opt-out in-app (#1120, migracja `0221` — numer tymczasowy): filtr
+  preferencji (0035) ukrywał też decyzje administratora bez żadnego e-maila (strona WWW/logo,
+  opis firmy, treść oferty — `system` + `data.kind` `company_links`/`company_description`/
+  `job_content_review`), więc wyłączenie „Powiadomień w aplikacji” gubiło je w każdym kanale.
+  `notification_inapp_required` (lustro `src/lib/notifications/service-messages.ts`) przepuszcza
+  je mimo `in_app_enabled = false`; reszta bez zmian. Pracodawca widzi w ustawieniach opis
+  `settings.employerInAppEnabledDescription` (czego wyłączenie nie ukrywa). Strażnik
+  `notification-inapp-service` (najnowsze definicje SQL: każde powiadomienie `system` z `kind`
+  w funkcji bez `enqueue_email` = wiadomość serwisowa albo uzasadniony wyjątek rekrutacyjny;
+  kontrola ujemna na definicjach sprzed 0221). Dowód: `rls.sql` sekcja NT1120 (kontrola ujemna
+  po rollbacku), rollback `0221_…down.sql` (`notification-inapp-service-rollback.sql`).
 
 - [x] Web Push alertów zapisanych wyszukiwań (#724, migracja `0219` — numer tymczasowy; za flagą
   `WEB_PUSH_ENABLED` + klucze VAPID `WEB_PUSH_VAPID_*` ze zmiennych środowiska, domyślnie wyłączone;
