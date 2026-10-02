@@ -26,6 +26,11 @@ export interface SaveSearchButtonProps {
   name: string;
   /** Ścieżka listy (bez prefiksu języka) do powrotu po zalogowaniu. */
   loginNext: string;
+  /**
+   * Filtry przekraczają limity zapisu w bazie (`savedSearchExceedsLimits`, #1108) — zamiast
+   * przycisku, który skończyłby się ogólnym błędem, od razu prośba o zawężenie filtrów.
+   */
+  exceedsLimits?: boolean;
   className?: string;
 }
 
@@ -37,6 +42,7 @@ export function SaveSearchButton({
   query,
   name,
   loginNext,
+  exceedsLimits = false,
   className,
 }: SaveSearchButtonProps): React.JSX.Element {
   const t = useTranslations('savedSearches');
@@ -89,6 +95,14 @@ export function SaveSearchButton({
           {outcome.error === 'NETWORK' ? t('errorNetwork') : tRoot(toUserMessageKey(outcome.error))}
         </p>
       );
+  }
+
+  if (exceedsLimits) {
+    return (
+      <div className={cn('flex flex-col gap-2 rounded-xl border border-border bg-soft p-3 sm:p-4', className)}>
+        <p className="text-sm text-muted-foreground">{t('tooManyFilters')}</p>
+      </div>
+    );
   }
 
   return (

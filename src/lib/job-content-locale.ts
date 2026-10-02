@@ -40,6 +40,42 @@ export function resolveJobContentLocales(
   return { contentLocale, availableLocales };
 }
 
+/** Tłumaczenie oferty w kształcie potrzebnym karcie listy (tytuł + wyróżniki). */
+export interface JobListTranslationSample {
+  locale: string;
+  title: string | null;
+  highlights: readonly string[] | null;
+}
+
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+/**
+ * Język tytułu i wyróżników karty listy (#1223). `get_public_jobs` (i pochodne: profil firmy)
+ * bierze tłumaczenie w kolejności: język strony → język domyślny oferty → en, ale nie zwraca
+ * jego języka. Ustalamy go bez zmiany RPC:
+ *   - oferta ma tłumaczenie z tytułem w języku strony → karta jest w języku strony (RPC bierze
+ *     je pierwsze);
+ *   - inaczej język tłumaczenia, którego tytuł i wyróżniki są identyczne z kartą — tylko gdy
+ *     jest jednoznaczny (identyczna treść w kilku językach = język nieznany, bez `lang`).
+ * Brak dopasowania (np. tytuł z kolumny `jobs.title`) = język nieznany.
+ */
+export function resolveJobListContentLocale(
+  requested: Locale,
+  job: { title: string; highlights: readonly string[] },
+  translations: readonly JobListTranslationSample[],
+): Locale | undefined {
+  const rows = translations.filter((row) => asLocale(row.locale) !== undefined);
+  if (rows.some((row) => row.locale === requested && row.title !== null)) return requested;
+  const matching = new Set(
+    rows
+      .filter((row) => row.title === job.title && sameList(row.highlights ?? [], job.highlights))
+      .map((row) => row.locale as Locale),
+  );
+  return matching.size === 1 ? [...matching][0] : undefined;
+}
+
 /**
  * x-default dla hreflang: język domyślny serwisu, jeśli oferta go ma, inaczej pierwszy dostępny
  * wg kolejności `routing.locales` (nie kolejności wierszy z bazy) — ta sama reguła co w sitemapie

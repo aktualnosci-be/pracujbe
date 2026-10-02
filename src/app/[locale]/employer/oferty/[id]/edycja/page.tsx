@@ -93,6 +93,7 @@ export default async function EditJobPage({
         contentLocale={draft.contentLocale}
         assistEnabled={isJobAssistEnabled()}
         screeningEnabled={isRecruitmentEnabled('screening')}
+        recruitmentEnabled={isRecruitmentEnabled()}
       />
     );
   }
