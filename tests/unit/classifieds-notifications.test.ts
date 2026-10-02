@@ -69,7 +69,7 @@ describe('kolejka e-mail: szablony rekrutacyjne (SQL ↔ TS)', () => {
   });
 
   it('szablony ogłoszeniowe poza listą (alert, status firmy, konto, zespół, moderacja)', () => {
-    for (const t of ['jobMatch', 'companyVerified', 'companyRejected', 'jobPublished', 'accountConfirmation',
+    for (const t of ['jobMatch', 'followedCompanyJobs', 'companyVerified', 'companyRejected', 'jobPublished', 'accountConfirmation',
       'passwordReset', 'teamInvitation', 'reportReceived', 'newsletter']) {
       expect(isRecruitmentEmailTemplate(t), t).toBe(false);
     }

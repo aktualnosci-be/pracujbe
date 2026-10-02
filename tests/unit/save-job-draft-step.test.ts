@@ -102,7 +102,11 @@ describe('updateJobDraft — jeden zapis transakcyjny na krok (#192)', () => {
     expect(call!.as).toBe(USER);
     expect(call!.args.p_job_id).toBe(JOB);
     // Treść trafia do funkcji jako jsonb (JSON, nie literał tablicy PG).
-    expect(JSON.parse(String(call!.args.p_content))).toEqual(buildDraftStepContent(step, STEPS[step]));
+    // #834: plus numer kroku — RPC podnosi `jobs.draft_step` w tej samej transakcji.
+    expect(JSON.parse(String(call!.args.p_content))).toEqual({
+      ...buildDraftStepContent(step, STEPS[step]),
+      draft_step: step,
+    });
     // Jedyne zapytanie poza RPC to odczyt stanu szkicu — żadnych bezpośrednich zapisów tabel.
     expect(fakeDb.calls.filter((c) => c.kind === 'exec')).toHaveLength(0);
     expect(fakeDb.calls.map((c) => c.name)).toEqual(['jobs.draft-state', 'save_job_draft']);
@@ -157,6 +161,13 @@ describe('updateJobDraft — jeden zapis transakcyjny na krok (#192)', () => {
         expect(allowed.translation.has(key), `krok ${step}: translation.${key}`).toBe(true);
       }
     }
+  });
+
+  it('#834: najnowsza migracja save_job_draft obsługuje klucz draft_step (postęp kreatora)', () => {
+    const sql = readFileSync(join(process.cwd(), 'supabase/migrations', latestSaveJobDraftMigration()), 'utf8');
+    const body = sql.slice(sql.indexOf('function public.save_job_draft('));
+    expect(body).toContain("p_content ? 'draft_step'");
+    expect(body).toMatch(/set draft_step = greatest\(coalesce\(draft_step, 0\), v_step\)/);
   });
 
   it('błąd RPC (np. relacji) → kod użytkowy, bez tekstu bazy', async () => {
