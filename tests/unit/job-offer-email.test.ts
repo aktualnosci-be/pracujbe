@@ -18,8 +18,8 @@ const cases: ReadonlyArray<{
     jobLabel: 'Stanowisko',
     companyLabel: 'Firma',
     salaryLabel: 'Wynagrodzenie',
-    cta: 'Zobacz ofertę',
-    subject: 'Oferta pracy od Acme Logistics',
+    cta: 'Zobacz propozycję',
+    subject: 'Propozycja od firmy Acme Logistics',
   },
   {
     locale: 'nl',
@@ -27,8 +27,8 @@ const cases: ReadonlyArray<{
     jobLabel: 'Functie',
     companyLabel: 'Bedrijf',
     salaryLabel: 'Loon',
-    cta: 'Aanbod bekijken',
-    subject: 'Jobaanbod van Acme Logistics',
+    cta: 'Bekijk het voorstel',
+    subject: 'Voorstel van Acme Logistics',
   },
   {
     locale: 'fr',
@@ -36,8 +36,8 @@ const cases: ReadonlyArray<{
     jobLabel: 'Poste',
     companyLabel: 'Entreprise',
     salaryLabel: 'Rémunération',
-    cta: 'Voir l’offre',
-    subject: 'Offre d’emploi de Acme Logistics',
+    cta: 'Voir la proposition',
+    subject: 'Proposition de Acme Logistics',
   },
   {
     locale: 'en',
@@ -45,8 +45,8 @@ const cases: ReadonlyArray<{
     jobLabel: 'Position',
     companyLabel: 'Company',
     salaryLabel: 'Salary',
-    cta: 'View offer',
-    subject: 'Job offer from Acme Logistics',
+    cta: 'View proposal',
+    subject: 'Job proposal from Acme Logistics',
   },
 ];
 

@@ -2345,8 +2345,7 @@ export async function listScreeningReviews(
             job['deleted_at'] == null &&
             present.has(`${jobId}:${asString(row['content_fingerprint'])}`),
         };
-      })
-      .filter((row) => filter !== 'pending' || row.current);
+      });
 
     return { status: 'ok', rows, nextCursor };
   } catch (error) {
@@ -2431,7 +2430,8 @@ const DEMO_JOB_CONTENT_REVIEWS: AdminJobContentReviewRow[] = [
 /**
  * Kolejka przeglądu treści ofert (0167): filtr oczekujące (domyślnie) / rozstrzygnięte /
  * wszystkie, kursor (`created_at`, `id`). „Oczekujące” pokazuje tylko migawki równe bieżącej
- * treści oferty — zapis innej treści zostawia stary wiersz jako historię. Bez env → DEMO.
+ * treści oferty (warunek w SQL przed limitem, #1220) — zapis innej treści zostawia stary wiersz
+ * jako historię. Bez env → DEMO.
  */
 export async function listJobContentReviews(
   query: AdminScreeningReviewsQuery = {},
@@ -2450,6 +2450,10 @@ export async function listJobContentReviews(
     const params = new SqlParams();
     const where = whereOf([
       filter === 'pending' && "r.status = 'pending'",
+      // #1220: „oczekujące” = tylko przegląd BIEŻĄCEJ treści, w SQL przed LIMIT — nieaktualne
+      // migawki (każdy zapis innej treści z sygnałem) nie zajmują miejsc na stronie.
+      filter === 'pending' &&
+        'j.deleted_at IS NULL AND md5(public.job_trust_content(r.job_id)::text) = r.content_fingerprint',
       filter === 'decided' && "r.status IN ('approved', 'rejected')",
       cursorCondition(params, query.cursor, 'r'),
     ]);
@@ -2519,8 +2523,7 @@ export async function listJobContentReviews(
           reason: asNullableString(row['decision_reason']),
           current: row['is_current'] === true,
         };
-      })
-      .filter((row) => filter !== 'pending' || row.current);
+      });
 
     return { status: 'ok', rows, nextCursor };
   } catch (error) {

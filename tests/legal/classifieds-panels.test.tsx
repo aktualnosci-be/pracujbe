@@ -118,6 +118,8 @@ describe('tryb ogłoszeniowy (domyślny)', () => {
     const { EmployerShell } = await import('@/components/employer/EmployerShell');
     render(<EmployerShell>{null}</EmployerShell>);
     expect(navHrefs()).not.toContain('/employer/aplikacje');
+    // #1211: szablony odpowiedzi należą do wyłączonych wiadomości.
+    expect(navHrefs()).not.toContain('/employer/szablony');
     expect(navHrefs()).toContain('/employer/oferty');
   });
 
@@ -162,7 +164,7 @@ describe('kontrola ujemna: tryb RECRUITMENT', () => {
       </>,
     );
     expect(navHrefs()).toEqual(
-      expect.arrayContaining(['/candidate/aplikacje', '/candidate/propozycje', '/employer/aplikacje']),
+      expect.arrayContaining(['/candidate/aplikacje', '/candidate/propozycje', '/employer/aplikacje', '/employer/szablony']),
     );
   });
 
