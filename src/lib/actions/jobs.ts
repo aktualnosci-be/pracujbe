@@ -36,6 +36,7 @@ import {
 } from '@/lib/screening/review';
 import { routing } from '@/i18n/routing';
 import { asciiSlugBase } from '@/lib/slug';
+import { workModePatch } from '@/lib/job-work-mode';
 import { normalizeShiftPatterns } from '@/lib/job-shift-patterns';
 import {
   step1Schema,
@@ -588,7 +589,8 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       city: s3.city,
       region: s3.region,
       address: nullIfEmpty(s3.address),
-      remote: s3.remote,
+      // #792 (0228): tryb pracy + kraje kandydata (`remote` z trybu).
+      ...workModePatch(s3),
       salary_min: s4.salaryMin ?? null,
       salary_max: s4.salaryMax ?? null,
       currency: s4.currency,

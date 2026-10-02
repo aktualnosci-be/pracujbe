@@ -1104,6 +1104,26 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   bez konta), więc `buildJobPostingJsonLd` emituje `directApply: true` zamiast stałego `false`.
   Dowód: `tests/unit/structured-data.test.ts` (kontrola ujemna). **Otwarte:** gdy pojawi się
   oferta bez tego przepływu (np. link zewnętrzny), wartość trzeba wyliczać z danych oferty.
+  Tryb pracy i TELECOMMUTE (#792, migracja `0228` — numer tymczasowy): krok 3 kreatora wybiera
+  tryb pracy (`onsite`/`hybrid`/`remote` = 100% zdalnie; lista z „nie podano” tylko dla oferty
+  sprzed wyboru) zamiast pola „Praca zdalna”, przy pracy w pełni zdalnej — kraje kandydata
+  (UE, EOG, CH, GB; co najmniej jeden, błąd przy liście). Kolumny `jobs.work_mode` (null = tryb
+  nieznany, starych ofert nie klasyfikujemy) i `jobs.remote_applicant_countries` z CHECK
+  (lista = lustro `src/lib/job-work-mode.ts`, test 1:1); `jobs.remote` zostaje (filtr promienia,
+  matching) i przy ustawionym trybie liczy go trigger: `remote = (work_mode = 'remote')` — praca
+  hybrydowa nie omija promienia. Zapis: `save_job_draft` (stan 0194), `update_published_job`
+  i migawka audytu (stan 0200), kopia szkicu (trigger na `job_duplications`); odczyt
+  `get_public_job` (stan 0194). JobPosting: `jobLocationType: TELECOMMUTE` +
+  `applicantLocationRequirements` (`Country`) tylko przy `work_mode = 'remote'` z krajem, bez
+  fizycznego `jobLocation` (`telecommuteFields`, #1191); stacjonarna, hybrydowa i tryb nieznany =
+  zwykłe `jobLocation`. Import AI: „praca zdalna” z ogłoszenia = tryb nieznany do sprawdzenia
+  (bez TELECOMMUTE), bez wzmianki = na miejscu. Dowód: `rls.sql` sekcja WD792 (kontrole ujemne:
+  bez triggera hybryda omija promień, bez CHECK zdalna bez kraju, `save_job_draft` z 0194),
+  rollback `supabase/rollback/0228_…down.sql` (`job-work-mode-rollback.sql`), unit
+  `job-work-mode`, `job-wizard-work-mode`, `jobs-postgres` (wiersz RPC → JSON-LD), `ai-import-map`,
+  E2E real `job-wizard` (zdalna bez kraju = błąd, JSON-LD gościa z TELECOMMUTE). **Otwarte:**
+  tryb pracy na szczególe oferty i jako filtr listy (wymaga zmiany `get_public_jobs*`, PR #1275),
+  powiadomienie kandydatów o zmianie trybu (`job_material_terms`, tylko tryb RECRUITMENT).
   BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
   `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
   (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).

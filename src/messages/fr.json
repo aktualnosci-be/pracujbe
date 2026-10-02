@@ -507,7 +507,8 @@
       "accommodationCostPeriodRequired": "Indiquez si le coût est hebdomadaire ou mensuel.",
       "accommodationCostRequired": "Indiquez le coût du logement.",
       "accommodationCostMandatory": "Pour un logement fourni, indiquez le coût — saisissez 0 s'il est gratuit.",
-      "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire."
+      "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire.",
+      "remoteCountriesRequired": "Choisissez au moins un pays pour le télétravail complet."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -1740,7 +1741,6 @@
     "regionPlaceholder": "ex. Flandre",
     "addressLabel": "Adresse",
     "addressPlaceholder": "Rue et numéro (facultatif)",
-    "remote": "Télétravail",
     "salaryMinLabel": "Rémunération à partir de",
     "salaryMaxLabel": "Rémunération jusqu'à",
     "currencyLabel": "Devise",
@@ -1890,7 +1890,16 @@
     "workTimeNone": "Non indiqué",
     "workTimeFull": "Temps plein",
     "workTimePart": "Temps partiel",
-    "workTimeBoth": "Temps plein ou partiel"
+    "workTimeBoth": "Temps plein ou partiel",
+    "workModeLabel": "Mode de travail",
+    "workModeHint": "« Télétravail complet » signifie que le travail se fait toujours à distance. S’il faut parfois venir sur place, choisissez « Hybride ».",
+    "workMode": {
+      "onsite": "Sur place",
+      "hybrid": "Hybride (en partie sur place)",
+      "remote": "Télétravail complet (100 %)"
+    },
+    "remoteCountriesLegend": "Depuis quels pays les candidats peuvent-ils travailler ?",
+    "remoteCountriesHint": "Choisissez au moins un pays. Le candidat doit habiter dans l’un d’eux."
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -4289,6 +4298,40 @@
     "remindDue": "Il est temps de relancer",
     "openSource": "Ouvrir l'annonce",
     "listLabel": "Entrées du journal de candidatures"
+  },
+  "countryNames": {
+    "BE": "Belgique",
+    "NL": "Pays-Bas",
+    "LU": "Luxembourg",
+    "FR": "France",
+    "DE": "Allemagne",
+    "PL": "Pologne",
+    "AT": "Autriche",
+    "BG": "Bulgarie",
+    "HR": "Croatie",
+    "CY": "Chypre",
+    "CZ": "Tchéquie",
+    "DK": "Danemark",
+    "EE": "Estonie",
+    "FI": "Finlande",
+    "GR": "Grèce",
+    "HU": "Hongrie",
+    "IE": "Irlande",
+    "IT": "Italie",
+    "LV": "Lettonie",
+    "LT": "Lituanie",
+    "MT": "Malte",
+    "PT": "Portugal",
+    "RO": "Roumanie",
+    "SK": "Slovaquie",
+    "SI": "Slovénie",
+    "ES": "Espagne",
+    "SE": "Suède",
+    "IS": "Islande",
+    "LI": "Liechtenstein",
+    "NO": "Norvège",
+    "CH": "Suisse",
+    "GB": "Royaume-Uni"
   },
   "push": {
     "savedSearchTitle": "Nouvelles offres de votre recherche enregistrée",

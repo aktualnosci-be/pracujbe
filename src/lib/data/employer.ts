@@ -609,6 +609,10 @@ export interface JobDraftValues {
   region: string;
   address: string;
   remote: boolean;
+  /** #792 (0228): `jobs.work_mode`; pusty = tryb nieznany (oferta sprzed wyboru). */
+  workMode: string;
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej. */
+  remoteApplicantCountries: string[];
   salaryMin: string;
   salaryMax: string;
   currency: string;
@@ -767,6 +771,8 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       region: 'Flandria',
       address: '',
       remote: false,
+      workMode: 'onsite',
+      remoteApplicantCountries: [],
       salaryMin: '16',
       salaryMax: '18',
       currency: 'EUR',
@@ -818,7 +824,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     const loaded = await withPortalTransaction(me, async (tx) => {
       const job = await queryOne(tx, 'employer.job-draft',
         `SELECT id, company_id, status, title, category, occupation, contract_type, working_hours,
-                shifts, work_time, shift_patterns, start_immediately, start_date, city, region, address, remote, salary_min,
+                shifts, work_time, shift_patterns, start_immediately, start_date, city, region, address, remote,
+                work_mode, remote_applicant_countries, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
                 expires_at, updated_at, draft_step,
@@ -902,6 +909,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         region: asString(job['region']),
         address: asString(job['address']),
         remote: job['remote'] === true,
+        workMode: asString(job['work_mode']),
+        remoteApplicantCountries: asStringArray(job['remote_applicant_countries']),
         salaryMin: numToText(job['salary_min']),
         salaryMax: numToText(job['salary_max']),
         currency: asString(job['currency'], 'EUR'),

@@ -38,7 +38,7 @@ function firstMessage(result: { success: boolean; error?: { issues: { message: s
 describe('kreator oferty: znak NUL i data rozpoczęcia', () => {
   it('NUL w tytule, mieście, opisie i pozycji listy → komunikat przy polu, nie błąd bazy', () => {
     expect(firstMessage(step1Schema.shape.title.safeParse(NUL))).toBe('job.error.textInvalid');
-    expect(firstMessage(step3Schema.shape.city.safeParse('Gent\u0000'))).toBe('job.error.textInvalid');
+    expect(firstMessage(step3Schema.innerType().shape.city.safeParse('Gent\u0000'))).toBe('job.error.textInvalid');
     expect(firstMessage(step5Schema.shape.description.safeParse(`${'Opis stanowiska '.repeat(3)}\u0000`))).toBe(
       'job.error.textInvalid',
     );

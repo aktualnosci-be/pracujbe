@@ -507,7 +507,8 @@
       "accommodationCostPeriodRequired": "Choose whether the cost is weekly or monthly.",
       "accommodationCostRequired": "Enter the accommodation cost.",
       "accommodationCostMandatory": "With accommodation provided, enter the cost — enter 0 if it is free.",
-      "accommodationDeductedRequired": "Choose whether the accommodation cost is deducted from wages."
+      "accommodationDeductedRequired": "Choose whether the accommodation cost is deducted from wages.",
+      "remoteCountriesRequired": "Choose at least one country for fully remote work."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -1740,7 +1741,6 @@
     "regionPlaceholder": "e.g. Flanders",
     "addressLabel": "Address",
     "addressPlaceholder": "Street and number (optional)",
-    "remote": "Remote work",
     "salaryMinLabel": "Pay from",
     "salaryMaxLabel": "Pay up to",
     "currencyLabel": "Currency",
@@ -1890,7 +1890,16 @@
     "workTimeNone": "Not stated",
     "workTimeFull": "Full-time",
     "workTimePart": "Part-time",
-    "workTimeBoth": "Full-time or part-time"
+    "workTimeBoth": "Full-time or part-time",
+    "workModeLabel": "Work arrangement",
+    "workModeHint": "“Fully remote” means the work is always done remotely. If people sometimes need to come on site, choose “Hybrid”.",
+    "workMode": {
+      "onsite": "On site",
+      "hybrid": "Hybrid (partly on site)",
+      "remote": "Fully remote (100%)"
+    },
+    "remoteCountriesLegend": "From which countries can candidates work?",
+    "remoteCountriesHint": "Choose at least one country. The candidate must live in one of them."
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -4289,6 +4298,40 @@
     "remindDue": "Time to follow up",
     "openSource": "Open listing",
     "listLabel": "Application journal entries"
+  },
+  "countryNames": {
+    "BE": "Belgium",
+    "NL": "Netherlands",
+    "LU": "Luxembourg",
+    "FR": "France",
+    "DE": "Germany",
+    "PL": "Poland",
+    "AT": "Austria",
+    "BG": "Bulgaria",
+    "HR": "Croatia",
+    "CY": "Cyprus",
+    "CZ": "Czechia",
+    "DK": "Denmark",
+    "EE": "Estonia",
+    "FI": "Finland",
+    "GR": "Greece",
+    "HU": "Hungary",
+    "IE": "Ireland",
+    "IT": "Italy",
+    "LV": "Latvia",
+    "LT": "Lithuania",
+    "MT": "Malta",
+    "PT": "Portugal",
+    "RO": "Romania",
+    "SK": "Slovakia",
+    "SI": "Slovenia",
+    "ES": "Spain",
+    "SE": "Sweden",
+    "IS": "Iceland",
+    "LI": "Liechtenstein",
+    "NO": "Norway",
+    "CH": "Switzerland",
+    "GB": "United Kingdom"
   },
   "push": {
     "savedSearchTitle": "New jobs from your saved search",
