@@ -18,6 +18,7 @@ vi.mock('next/script', () => ({
 }));
 vi.mock('@/lib/consent', () => ({
   getConsent: () => ({ v: '2.0', categories: { necessary: true, preferences: true, analytics: granted }, ts: '', id: 'x' }),
+  pendingConsentPersistence: () => Promise.resolve(),
 }));
 vi.mock('@/lib/consent-store', () => ({ subscribeConsent: () => () => undefined }));
 

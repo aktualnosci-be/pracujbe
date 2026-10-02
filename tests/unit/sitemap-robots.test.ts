@@ -92,7 +92,7 @@ beforeEach(() => {
   state.production = true;
   jobs.getCategoryCounts.mockResolvedValue({ construction: 3, warehouse: 1 });
   jobs.getCityCounts.mockImplementation(async (_l: string, keys: string[]) =>
-    Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 2 : 0])),
+    Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 3 : 0])),
   );
   jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
   jobs.getJobsCount.mockResolvedValue(2);

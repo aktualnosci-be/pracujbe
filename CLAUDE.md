@@ -973,6 +973,20 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `job-explain` (4 języki, klawiatura, axe 1280/320 px). **Otwarte:** ewaluacja na reprezentatywnych
   ofertach z prawdziwym modelem przed włączeniem (właściciel), data w objaśnieniu tylko w zapisie ze źródła (ISO).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
+  Katalog miast i próg podaży (#920, bez migracji): hub, strona miasta (metadane, „Inne miasta”)
+  i sitemap biorą miasta z jednego modułu `src/lib/locations/city-landings.ts` (rdzeń 10 miast +
+  13 kolejnych: Namur, Mons, Aalst, Ostenda, Genk, Sint-Niklaas, Roeselare, La Louvière, Tournai,
+  Turnhout, Vilvoorde, Zaventem, Wavre — klucz = slug słownika `locations`, nazwy PL/NL/FR/EN
+  w `locations.*` i własny opis `landing.city_<klucz>`). Jedna reguła `cityLandingQualifies`:
+  landing jest indeksowany, w hubie i w sitemapie od `CITY_LANDING_MIN_ACTIVE_JOBS` = 3 aktualnych
+  ofert (dawniej ≥ 1, #299); poniżej progu działa jako filtr z `noindex, follow`. Liczba ofert nie
+  zależy od języka (filtr po wszystkich nazwach → `location_filter_ids` gminy z częściami), więc
+  wersje językowe i hreflang kwalifikują się razem. Bez liczników (demo/build/awaria) hub pokazuje
+  rdzeń; brak kwalifikujących się = komunikat `landing.byCityEmpty`. Dowód: unit `city-landings`
+  (katalog = `locations.*`, opisy różne po usunięciu nazwy, nazwa ze słownika 0112 wśród aliasów,
+  próg z kontrolami ujemnymi, hub i „Inne miasta”), `sitemap-seo` (2 oferty = poza sitemapą).
+  **Otwarte (właściciel):** wartość progu, „trwałość” podaży (dziś bieżąca liczba, bez historii),
+  pomiar wejść i decyzja o kolejnych miejscowościach.
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
   Okno cutoveru (#1115, bez migracji): `isSearchIndexingEnabled()` (`src/lib/seo/indexing.ts`) =
   `isProductionDeployment()` ORAZ brak `SITE_ACCESS_PASSWORD` — przy bramce hasła robots.txt =
@@ -2688,6 +2702,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
   `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
   `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
+  Spójność treści (#1093/#1117/#1118): tytuł oferty w `jobOffer`/`statusChanged`/
+  `applicationViewed`/`guestStatusChanged` worker czyta w języku odbiorcy
+  (`readRecipientJobTitles` w `outbox.ts`: tłumaczenie locale wiersza → język oferty → en →
+  `jobs.title`, jak digest 0138; błąd = tytuł z payloadu); potwierdzenie kontaktu dla konta
+  w języku konta (migracja `0205` — numer tymczasowy, `rls.sql` CT1093 z kontrolą ujemną,
+  rollback `contact-recipient-locale-rollback.sql`); `EmailCopy.single` (digest z jedną ofertą),
+  `EmailCopy.reporter` + `appealSubjectLabels` (odwołanie zgłaszającego = numer SPRAWY i CTA
+  strony sprawy, autora = numer decyzji i dane firmy); stopka gościa bez „masz konto”; firma
+  w PL bez form „(a)”; propozycja = termin panelu (propozycja/voorstel/proposition/proposal);
+  gość z `offer_sent` = `guestOfferSentLabel`; newsletter linkuje ustawienia panelu wg
+  `profiles.role`; `admin.agePolicySuccessHidden` z ICU plural. Test `email-copy-consistency`.
   Gołe domeny bez schematu (#716): redakcja URL-i w cytacie obejmuje też domeny bez `http(s)://`,
   `www.` ani ścieżki (np. „firma.be”, poddomena, z portem) — ograniczone do wiarygodnej listy
   TLD, żeby nie niszczyć zwykłych skrótów/inicjałów („sp. z o.o.”, „np.”, „itd.”). Dowód:
@@ -2734,6 +2759,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w kategorii `analytics` (`src/components/cookies/Analytics.tsx`), CSP: `static.cloudflareinsights.com`
   (script-src) + `cloudflareinsights.com` (connect-src) — tylko gdy token jest ustawiony; bez
   tokenu (stan startowy, token doda właściciel) beacon się nie ładuje, a CSP nie ma tych hostów.
+  Wycofanie zgody przy działającym beaconie (#642, bez migracji): dostawca nie ma API do
+  zatrzymania wykonanego skryptu, a `next/script` go nie usuwa — `withdrawLoadedBeacon`
+  (`src/lib/analytics/withdraw.ts`) od razu odcina ruch do `*.cloudflareinsights.com`
+  w bieżącym dokumencie (CSP `connect-src 'self'` w `<meta>` — działa też na referencje do
+  `sendBeacon` trzymane przez skrypt — i zapasowo nakładka na `sendBeacon`), czeka
+  najwyżej 3 s na zapis zgody w logu serwerowym (`pendingConsentPersistence`) i przeładowuje
+  stronę; po przeładowaniu `AnalyticsWithdrawnNotice` pokazuje jednorazowy komunikat
+  (`cookies.analyticsWithdrawnNotice`, znacznik w `sessionStorage`, komponent w osobnym chunku `React.lazy` — budżet JS listy ofert #395). Dowód: unit
+  `analytics-withdraw` (kontrole ujemne), E2E `cookie-consent-categories` (atrapa beaconu
+  z własną referencją do `sendBeacon` i wysyłką przy `pagehide`: zero pomiarów po wycofaniu,
+  także po nawigacji klienckiej). **Otwarte:** wycofanie w innej karcie (zdarzenie zmiany
+  zgody działa w obrębie jednej karty).
   Kategoria `marketing` usunięta (decyzja właściciela 25.09 — brak trackerów marketingowych):
   kategorie = necessary/preferences/analytics (`src/lib/consent-cookie.ts`, `CONSENT_CATEGORIES`),
   domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)
