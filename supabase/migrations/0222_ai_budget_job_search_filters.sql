@@ -1,4 +1,4 @@
--- 0980 (numer tymczasowy — nadaje integrator): budżet AI dla wyszukiwania opisem (#711).
+-- 0222 (numer tymczasowy — nadaje integrator): budżet AI dla wyszukiwania opisem (#711).
 --
 -- Nowa funkcja AI `job_search_filters` (src/lib/ai-search/, inwentarz src/lib/ai/inventory.ts)
 -- przechodzi przez globalny budżet kosztów (#36, `withAiBudget`). Lista funkcji w CHECK-u rejestru
@@ -6,7 +6,7 @@
 -- Definicja `ai_budget_reserve` = 0220 (0176 + `job_offer_explain`) + nowy identyfikator; nic poza listą się nie zmienia.
 -- Lista zawiera też `job_offer_explain` (#773, migracja 0220 — wcześniejsza migracja tej samej listy),
 -- żeby ta migracja, stosowana po niej, nie usunęła tamtej funkcji z budżetu.
--- Rollback: supabase/rollback/0980_ai_budget_job_search_filters.down.sql.
+-- Rollback: supabase/rollback/0222_ai_budget_job_search_filters.down.sql.
 
 alter table public.ai_usage_ledger drop constraint if exists ai_usage_ledger_feature;
 alter table public.ai_usage_ledger add constraint ai_usage_ledger_feature

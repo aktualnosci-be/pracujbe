@@ -1,4 +1,4 @@
--- Rollback 0980 (#711): lista funkcji budżetu AI sprzed 0980 — stan 0220 = 0176 + `job_offer_explain` (#773,
+-- Rollback 0222 (#711): lista funkcji budżetu AI sprzed 0222 — stan 0220 = 0176 + `job_offer_explain` (#773,
 -- wcześniejsza migracja tej listy), bez `job_search_filters`.
 -- Wiersze rejestru tej funkcji (same liczby, bez treści) są usuwane — inaczej CHECK z 0176 nie
 -- dałby się przywrócić. Dowód: supabase/tests/ai-search-filters-rollback.sql.

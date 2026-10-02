@@ -1,7 +1,7 @@
 -- =============================================================================
--- AIS711-R — rollback migracji 0980 (#711). Uruchamiany przez scripts/test-rls.sh po rls.sql,
+-- AIS711-R — rollback migracji 0222 (#711). Uruchamiany przez scripts/test-rls.sh po rls.sql,
 -- na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany, więc baza po teście
--- ma nadal definicje z 0980.
+-- ma nadal definicje z 0222.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -28,7 +28,7 @@ begin;
 -- Wiersz rejestru nowej funkcji — rollback musi go usunąć, inaczej CHECK z 0176 nie wróci.
 insert into public.ai_usage_ledger (feature, model, reserved_micro_usd, usage_day)
 values ('job_search_filters', 'gpt-6-luna', 10, public.ai_budget_day());
-\ir ../rollback/0980_ai_budget_job_search_filters.down.sql
+\ir ../rollback/0222_ai_budget_job_search_filters.down.sql
 select pg_temp.assert(not pg_temp.ais_has_feature() and pg_temp.ais_privileges_ok(),
   'AIS711-R1 rollback przywraca listę funkcji z 0176 i uprawnienia');
 select pg_temp.assert(
@@ -41,4 +41,4 @@ select pg_temp.assert(
 rollback;
 
 select pg_temp.assert(pg_temp.ais_has_feature() and pg_temp.ais_privileges_ok(),
-  'AIS711-R3 rollback testu cofnięty; 0980 obowiązuje');
+  'AIS711-R3 rollback testu cofnięty; 0222 obowiązuje');
