@@ -25077,6 +25077,9 @@ reset role;
 select pg_temp.assert(
   (select next_run_at from public.saved_searches where id = :'sx2') = now() + interval '1 day',
   'SD1112-N kontrola ujemna: bez 0211 termin przesuwa się o spóźnienie przebiegu');
+rollback;
+
+-- ============================================================================
 -- P2C994 (0210, numer tymczasowy): współbieżność paczek kampanii (#906), synchronizacji
 --        tłumaczeń oferty przy zawieszeniu firmy (#802) i tokenu zaproszenia przy limicie
 --        e-maili (#793). Sesje równoległe przez dblink; fixture'y zatwierdzane osobną sesją.
