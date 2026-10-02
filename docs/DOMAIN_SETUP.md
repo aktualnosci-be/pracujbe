@@ -34,10 +34,14 @@ Uwagi:
 - Domyślny wybór repozytorium to **DNS-only + `x-real-ip`** (bez zmian w Railway). Przejście na
   proxying to osobna, świadoma zmiana obu ustawień w tym samym oknie; decyzję zapisuje
   właściciel w [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md) (W16).
-- Przy `cf-connecting-ip` ruch musi wchodzić wyłącznie przez Cloudflare. Jeśli usługa jest
-  osiągalna także pod domeną wygenerowaną przez Railway, klient może wysłać własny
-  `CF-Connecting-IP` z pominięciem Cloudflare — w tym trybie usuń zbędną domenę Railway
-  albo nie używaj jej publicznie.
+- Przy `cf-connecting-ip` aplikacja przyjmuje `CF-Connecting-IP` tylko od połączeń z brzegu
+  Cloudflare (#1090): adres peera z `X-Real-IP` (ustawia go brzeg Railway) musi należeć do
+  zakresów Cloudflare. Listę serwer pobiera sam z <https://www.cloudflare.com/ips-v4> i
+  `/ips-v6` (odświeżanie w tle raz na dobę, `src/lib/http/cloudflare-ranges.ts`); przy błędzie
+  pobrania zostaje ostatnia dobra lista, a bez niej zapas w kodzie (`CLOUDFLARE_IP_RANGES`).
+  Usługa potrzebuje więc wyjścia HTTPS do `www.cloudflare.com`. Żądanie z pominięciem
+  Cloudflare (np. na domenę wygenerowaną przez Railway) jest liczone pod swoim prawdziwym
+  adresem, a nie pod wpisanym nagłówkiem. Zbędną domenę Railway i tak warto usunąć.
 - Zmiana `TRUSTED_PROXY_HEADER` wymaga restartu usługi (zmienna czytana po stronie serwera).
 
 Weryfikacja po zmianie trybu lub nagłówka (przed zdjęciem bramki hasła):
