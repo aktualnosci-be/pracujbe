@@ -47,7 +47,16 @@ vi.mock('@/components/dashboard/DashboardShell', () => ({
 }));
 // Sekcje pulpitu pełnego — znaczniki (test sprawdza, czy w ogóle są renderowane).
 vi.mock('@/components/candidate/ProfileCompleteness', () => ({ ProfileCompleteness: () => <span data-testid="completeness" /> }));
-vi.mock('@/components/candidate/CvUpload', () => ({ CvUpload: () => <span data-testid="cv-upload" /> }));
+vi.mock('@/components/candidate/CvUpload', () => ({
+  CvUpload: (p: { items: unknown[]; allowUpload?: boolean; loadFailed?: boolean }) => (
+    <span
+      data-testid="cv-upload"
+      data-allow-upload={String(Boolean(p.allowUpload))}
+      data-load-failed={String(Boolean(p.loadFailed))}
+      data-count={p.items.length}
+    />
+  ),
+}));
 vi.mock('@/components/candidate/CandidateMessagesPreview', () => ({
   CandidateMessagesPreview: () => <span data-testid="messages-preview" />,
 }));
@@ -124,7 +133,7 @@ describe('nawigacja kandydata: jedno źródło listy', () => {
 describe('pulpit kandydata w trybie ogłoszeniowym', () => {
   withClassifiedsMode();
 
-  it('bez kompletności, CV i podglądu wiadomości; loadery profilu/CV/wiadomości niewołane', async () => {
+  it('bez kompletności i podglądu wiadomości; loadery profilu/wiadomości niewołane', async () => {
     const { default: Page } = await import('@/app/[locale]/candidate/page');
     const { CandidateAccountDashboard } = await import('@/components/candidate/CandidateAccountDashboard');
     const element = await Page({ params: Promise.resolve({ locale: 'pl' }) });
@@ -141,12 +150,39 @@ describe('pulpit kandydata w trybie ogłoszeniowym', () => {
     expect(candidateData.getCandidateProfileSummary).not.toHaveBeenCalled();
     expect(candidateData.getCandidateOverview).not.toHaveBeenCalled();
     expect(candidateData.getLatestMessages).not.toHaveBeenCalled();
-    expect(candidateFiles.loadCandidateFiles).not.toHaveBeenCalled();
+    // #1226: pliki czytane, ale konto bez plików nie widzi pustej sekcji „Twoje pliki”.
+    expect(candidateFiles.loadCandidateFiles).toHaveBeenCalled();
+    expect(screen.queryByTestId('account-files')).toBeNull();
     expect(candidateData.getCandidateAccountOverview).toHaveBeenCalled();
     // Oferty z zapisanych wyszukiwań: w miejscu polecanych, na już odczytanej liście wyszukiwań.
     expect(screen.getByTestId('saved-search-jobs')).toBeTruthy();
     expect(savedSearchJobs.loadSavedSearchJobs).toHaveBeenCalledTimes(1);
     expect(vi.mocked(savedSearchJobs.loadSavedSearchJobs).mock.calls[0]![0]).toMatchObject({ status: 'ready' });
+  });
+});
+
+describe('„Twoje pliki” na pulpicie konta (#1226)', () => {
+  withClassifiedsMode();
+
+  it('istniejące CV: lista z pobraniem/usunięciem, BEZ wgrywania (allowUpload = false)', async () => {
+    vi.mocked(candidateFiles.loadCandidateFiles).mockResolvedValueOnce({
+      status: 'ready',
+      items: [{ id: 'f1', fileName: 'cv.pdf', downloadable: true }],
+    });
+    const { CandidateAccountDashboard } = await import('@/components/candidate/CandidateAccountDashboard');
+    render(await CandidateAccountDashboard({ locale: 'pl' }));
+    expect(screen.getByTestId('account-files')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'accountFilesTitle' })).toBeTruthy();
+    const cv = screen.getByTestId('cv-upload');
+    expect(cv.dataset.allowUpload).toBe('false');
+    expect(cv.dataset.count).toBe('1');
+  });
+
+  it('błąd odczytu plików → sekcja z błędem i ponowieniem (nie znika po cichu)', async () => {
+    vi.mocked(candidateFiles.loadCandidateFiles).mockResolvedValueOnce({ status: 'error' });
+    const { CandidateAccountDashboard } = await import('@/components/candidate/CandidateAccountDashboard');
+    render(await CandidateAccountDashboard({ locale: 'pl' }));
+    expect(screen.getByTestId('cv-upload').dataset.loadFailed).toBe('true');
   });
 });
 
@@ -159,6 +195,8 @@ describe('kontrola ujemna: pulpit w trybie RECRUITMENT', () => {
     expect(screen.getByTestId('completeness')).toBeTruthy();
     expect(candidateData.getCandidateProfileSummary).toHaveBeenCalled();
     expect(candidateFiles.loadCandidateFiles).toHaveBeenCalled();
+    // #1226 kontrola ujemna: pełny pulpit ma wgrywanie CV.
+    expect(screen.getByTestId('cv-upload').dataset.allowUpload).toBe('true');
     // Oferty z zapisanych wyszukiwań to tylko pulpit konta trybu ogłoszeniowego.
     expect(savedSearchJobs.loadSavedSearchJobs).not.toHaveBeenCalled();
     expect(screen.queryByTestId('saved-search-jobs')).toBeNull();

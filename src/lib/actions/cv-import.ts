@@ -1,6 +1,6 @@
 'use server';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -217,7 +217,9 @@ export async function applyCvProposals(input: unknown): Promise<ApplyCvProposals
       },
     };
   } catch (e) {
-    if (isDatabaseError(e)) return { ok: false, error: mapPgError(databaseErrorMessage(e)) };
+    if (isDatabaseError(e)) {
+      return { ok: false, error: reportUnmappedDbError(e, 'cv-import.apply', mapPgError(databaseErrorMessage(e))) };
+    }
     captureError(e, { area: 'cv-import', step: 'apply' });
     return { ok: false, error: 'INTERNAL' };
   }

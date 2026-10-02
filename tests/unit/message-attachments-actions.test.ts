@@ -81,11 +81,29 @@ describe('uploadMessageAttachment', () => {
     expect(storeMessageAttachment).not.toHaveBeenCalled();
   });
 
-  it('limit, brak sesji, brak bucketu (demo / produkcja fail-closed)', async () => {
+  it('#1109: limit na konto PO sesji (+ próg IP); bez sesji limit nie jest zużywany', async () => {
     vi.mocked(checkRateLimit).mockResolvedValueOnce(false);
     expect(await uploadMessageAttachment(form())).toEqual({ ok: false, error: 'RATE_LIMITED' });
+    expect(vi.mocked(checkRateLimit).mock.calls).toEqual([
+      ['message-attachment', { identifier: SELF, perIp: false, max: 30, windowSeconds: 3600 }],
+    ]);
+    expect(storeMessageAttachment).not.toHaveBeenCalled();
+
+    vi.mocked(checkRateLimit).mockClear();
     vi.mocked(getPortalIdentity).mockResolvedValueOnce(null);
     expect(await uploadMessageAttachment(form())).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+
+    vi.mocked(storeMessageAttachment).mockResolvedValue({ ok: true, id: ATT });
+    expect(await uploadMessageAttachment(form())).toEqual({ ok: true, id: ATT });
+    expect(vi.mocked(checkRateLimit).mock.calls.map(([action]) => action)).toEqual([
+      'message-attachment',
+      'message-attachment-ip',
+    ]);
+  });
+
+  it('brak bucketu (demo / produkcja fail-closed)', async () => {
+    vi.mocked(storeMessageAttachment).mockClear();
     vi.mocked(getAttachmentServiceDeps).mockResolvedValue(null);
     expect(await uploadMessageAttachment(form())).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
     vi.mocked(isProductionMode).mockReturnValue(true);
