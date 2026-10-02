@@ -131,4 +131,55 @@ describe('NewJobWizard', () => {
     expect(screen.getByLabelText('jobWizard.titleLabel')).toHaveValue('');
     expect(screen.queryByText('jobImport.successTitle')).toBeNull();
   });
+
+  it('#1048: język treści szkicu = język wykryty w źródle, nie język panelu', async () => {
+    importJobListing.mockResolvedValue({
+      ok: true,
+      jobId: '11111111-1111-4111-8111-111111111111',
+      values: { title: 'Orderpicker magazijn', category: 'warehouse', occupation: 'Orderpicker' },
+      review: [],
+      suspicious: false,
+      sourceLanguage: 'nl',
+      contentLocale: 'nl',
+      contentLocaleDetected: true,
+      savedSteps: [1],
+    });
+    updateJobDraft.mockResolvedValue({ ok: true });
+    render(<NewJobWizard importEnabled companyId={COMPANY_A} />);
+    // Przed importem: język panelu.
+    expect(document.getElementById('job-content-locale-trigger')).toHaveTextContent('job.contentLanguageNames.pl');
+    openPanel();
+    fireEvent.change(screen.getByLabelText('jobImport.urlLabel'), { target: { value: 'https://jobs.example/1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'jobImport.importUrl' }));
+    await waitFor(() => expect(screen.getByLabelText('jobWizard.titleLabel')).toHaveValue('Orderpicker magazijn'));
+
+    expect(document.getElementById('job-content-locale-trigger')).toHaveTextContent('job.contentLanguageNames.nl');
+    expect(screen.getByRole('status')).toHaveTextContent('jobImport.detectedLanguage');
+
+    // „Dalej” zapisuje krok 1 szkicu z językiem wykrytym (nie przenosi treści do języka panelu).
+    fireEvent.click(screen.getByRole('button', { name: 'jobWizard.next' }));
+    await waitFor(() => expect(updateJobDraft).toHaveBeenCalled());
+    expect(updateJobDraft.mock.calls[0]![2]).toMatchObject({ contentLocale: 'nl' });
+  });
+
+  it('kontrola ujemna #1048: język spoza serwisu — zostaje język panelu, bez informacji o wykryciu', async () => {
+    importJobListing.mockResolvedValue({
+      ok: true,
+      jobId: null,
+      values: { title: 'Kommissionierer', category: 'warehouse', occupation: 'Kommissionierer' },
+      review: [],
+      suspicious: false,
+      sourceLanguage: 'de',
+      contentLocale: 'pl',
+      contentLocaleDetected: false,
+      savedSteps: [],
+    });
+    render(<NewJobWizard importEnabled companyId={COMPANY_A} />);
+    openPanel();
+    fireEvent.change(screen.getByLabelText('jobImport.urlLabel'), { target: { value: 'https://jobs.example/1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'jobImport.importUrl' }));
+    await waitFor(() => expect(screen.getByLabelText('jobWizard.titleLabel')).toHaveValue('Kommissionierer'));
+    expect(document.getElementById('job-content-locale-trigger')).toHaveTextContent('job.contentLanguageNames.pl');
+    expect(screen.getByRole('status')).not.toHaveTextContent('jobImport.detectedLanguage');
+  });
 });
