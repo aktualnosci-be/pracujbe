@@ -106,6 +106,7 @@ export function emailTargetPath(
     case 'teamInvitationSignup':
       return '/rejestracja-pracodawca';
     case 'jobMatch':
+    case 'followedCompanyJobs':
       return '/candidate/wyszukiwania';
     case 'guestApplicationConfirm':
       return '/aplikacja/potwierdz';
@@ -262,7 +263,7 @@ export function buildDeliveryData(
       messageUrl: url,
       jobUrl: url,
       salary,
-      ...(row.template === 'jobMatch' ? { jobs: deliveryJobMatchJobs(payload, base, locale) } : {}),
+      ...(row.template === 'jobMatch' || row.template === 'followedCompanyJobs' ? { jobs: deliveryJobMatchJobs(payload, base, locale) } : {}),
     },
   };
 }

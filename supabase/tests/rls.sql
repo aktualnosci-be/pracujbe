@@ -21126,6 +21126,83 @@ select pg_temp.assert(
   'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
 
 -- ============================================================================
+-- DS834. Postęp kreatora szkicu (0216, #834): save_job_draft z kluczem `draft_step` zapisuje
+--        najdalszy krok z udanym zapisem w tej samej transakcji co treść kroku; zapis spoza
+--        kreatora (bez klucza) postępu nie zmienia, wartość spoza 1–9 odrzuca cały krok.
+-- ============================================================================
+select pg_temp.assert((select draft_step is null from public.jobs where id = :'JOBDC'),
+  'DS834-0 szkic bez zapisu z kreatora nie ma postępu (start od kroku 1)');
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Krok 3"}, "draft_step": 3}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 3 and title = 'Krok 3' from public.jobs where id = :'JOBDC'),
+  'DS834-1 zapis kroku 3 utrwala treść i postęp 3');
+
+-- DS834-2: powrót do wcześniejszego kroku (zapis kroku 2) nie cofa postępu; dalszy krok go podnosi.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"contract_type": "temporary"}, "draft_step": 2}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 3 and contract_type::text = 'temporary' from public.jobs where id = :'JOBDC'),
+  'DS834-2 zapis wcześniejszego kroku zapisuje treść, postęp zostaje 3');
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"skills_optional": ["Wózek widłowy"], "draft_step": 7}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC'),
+  'DS834-2b krok tylko z relacjami też podnosi postęp (7)');
+
+-- DS834-3: zapis bez klucza (import AI, inne ścieżki) nie zmienia postępu.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Import"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 and title = 'Import' from public.jobs where id = :'JOBDC'),
+  'DS834-3 zapis bez draft_step nie zmienia postępu');
+
+-- DS834-4 (kontrole ujemne): krok spoza 1–9, tekst, ułamek, null = VALIDATION_FAILED bez zmiany treści.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": 0}'), 'VALIDATION_FAILED', 'DS834-4a krok 0 odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": 10}'), 'VALIDATION_FAILED', 'DS834-4b krok 10 odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": "9"}'), 'VALIDATION_FAILED', 'DS834-4c krok jako tekst odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": 8.5}'), 'VALIDATION_FAILED', 'DS834-4d krok ułamkowy odrzucony');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"title": "Zły krok"}, "draft_step": null}'), 'VALIDATION_FAILED', 'DS834-4e krok null odrzucony');
+-- Błąd treści kroku cofa też postęp (jedna transakcja).
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"job": {"category": "nie-ma-takiej"}, "draft_step": 9}'), 'job_category', 'DS834-4f błąd treści kroku');
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 and title = 'Import' from public.jobs where id = :'JOBDC'),
+  'DS834-4g odrzucone zapisy nie zmieniły ani treści, ani postępu');
+
+-- DS834-5: CHECK w bazie niezależny od RPC; nie-członek nie podniesie postępu cudzego szkicu.
+select pg_temp.expect_error(format('update public.jobs set draft_step = 10 where id = %L', :'JOBDC'),
+  'jobs_draft_step_range', 'DS834-5 CHECK odrzuca krok spoza 1–9');
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'JOBDC',
+  '{"draft_step": 9}'), 'PERMISSION_DENIED', 'DS834-5b nie-członek firmy nie zmieni postępu');
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC'),
+  'DS834-5c postęp bez zmian po odrzuconych próbach');
+
+-- DS834-N (kontrola ujemna): definicja z 0194 (rollback funkcji, kolumna zostaje) pomija klucz
+-- `draft_step` — postęp nie byłby zapisywany, więc DS834-1 wykrywa brak migracji.
+begin;
+\ir ../rollback/0216_job_draft_resume_step.down.sql
+alter table public.jobs add column draft_step smallint;
+set local role authenticated; set local app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Stara funkcja"}, "draft_step": 9}'::jsonb);
+reset role;
+select pg_temp.assert((select draft_step is null and title = 'Stara funkcja' from public.jobs where id = :'JOBDC'),
+  'DS834-N kontrola ujemna: save_job_draft z 0194 nie zapisuje postępu kreatora');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC')
+  and pg_get_functiondef('public.save_job_draft(uuid, jsonb, timestamptz)'::regprocedure) like '%draft_step%',
+  'DS834-N2 po cofnięciu transakcji baza wraca do stanu po 0216');
+
+-- ============================================================================
 -- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
 --         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
 -- ============================================================================
@@ -23238,6 +23315,333 @@ reset role;
 rollback;
 
 -- ============================================================================
+-- PS969 / FC969 — pauza alertów (#810) i obserwowanie firmy (#855), migracja 0215.
+-- Działa w trybie ogłoszeniowym (bez profilu kandydata). Kontrole ujemne: definicja
+-- workera z usuniętą klauzulą pauzy / dolną granicą / filtrem firmy (zmiana cofana).
+-- ============================================================================
+\echo '--- PS969 pauza alertów i obserwowanie firmy w trybie ogłoszeniowym ---'
+\set PSA 'f0215000-0000-4000-8000-0000000000a1'
+\set PSB 'f0215000-0000-4000-8000-0000000000a2'
+\set PSE 'f0215000-0000-4000-8000-0000000000b1'
+\set PSC1 'f0215000-0000-4000-8000-0000000000c1'
+\set PSC2 'f0215000-0000-4000-8000-0000000000c2'
+\set PSC3 'f0215000-0000-4000-8000-0000000000c3'
+\set PSJ1 'f0215000-0000-4000-8000-0000000000d1'
+\set PSJ2 'f0215000-0000-4000-8000-0000000000d2'
+\set PSJ3 'f0215000-0000-4000-8000-0000000000d3'
+\set PSJ4 'f0215000-0000-4000-8000-0000000000d4'
+\set PSJ5 'f0215000-0000-4000-8000-0000000000d5'
+reset role; reset app.current_uid;
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql PS969', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'PS969-0 tryb ogłoszeniowy na czas sekcji');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PSA','psa@test.be','Pola A','{"role":"candidate","first_name":"Pola","last_name":"A","locale":"nl"}'),
+  (:'PSB','psb@test.be','Pola B','{"role":"candidate","first_name":"Pola","last_name":"B","locale":"en"}'),
+  (:'PSE','pse@test.be','Pola E','{"role":"employer","first_name":"Pola","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,slug,status) values
+  (:'PSC1','Firma PS969 Jeden','ps969-jeden','verified'),
+  (:'PSC2','Firma PS969 Dwa','ps969-dwa','verified'),
+  (:'PSC3','Firma PS969 Trzy','ps969-trzy','pending');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'PSC1',:'PSE','owner',true);
+
+-- PS969-1: pauza — walidacja i uprawnienia.
+set role authenticated; set app.current_uid = :'PSE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 3)$$,
+  'PERMISSION_DENIED', 'PS969-1a pracodawca nie wstrzymuje alertów');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date)$$,
+  'VALIDATION_FAILED', 'PS969-1b dzisiejsza data odrzucona (wznowienie najwcześniej jutro)');
+select pg_temp.expect_error($$select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 400)$$,
+  'VALIDATION_FAILED', 'PS969-1c pauza dłuższa niż rok odrzucona');
+select saved_search_id as ps1 from public.save_saved_search(
+  'Magazyn PS969', 'nl', '{"keyword":"Magazijnier PS969","categories":["warehouse"]}',
+  '?keyword=Magazijnier+PS969&category=warehouse') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select saved_search_id as ps2 from public.save_saved_search(
+  'Magazyn B PS969', 'en', '{"keyword":"Magazijnier PS969","categories":["warehouse"]}',
+  '?keyword=Magazijnier+PS969&category=warehouse') \gset
+reset role; reset app.current_uid;
+
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'PSJ1',:'PSC1','ps969-j1','Magazijnier PS969 pauza','warehouse','permanent','Gent','Flandria','active','nl', now() - interval '3 hours'),
+  (:'PSJ2',:'PSC1','ps969-j2','Magazijnier PS969 po pauzie','warehouse','permanent','Gent','Flandria','active','nl', now() - interval '30 minutes');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days'
+  where id in (:'ps1', :'ps2');
+
+-- PS969-2: pauza do za 3 dni — konto A nie dostaje niczego, konto B (bez pauzy) tak.
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 3) is not null as ps_paused \gset
+select pg_temp.assert(:'ps_paused'::boolean, 'PS969-2a RPC zwraca koniec pauzy');
+select pg_temp.assert((select paused_until > now() + interval '2 days' from public.saved_search_alert_pauses where profile_id = :'PSA'),
+  'PS969-2b własna pauza widoczna pod RLS');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.saved_search_alert_pauses where profile_id = :'PSA'),
+  'PS969-2c cudzej pauzy nie widać');
+reset role; reset app.current_uid;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.saved_search_alerts where saved_search_id = :'ps1')
+  and not exists (select 1 from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch')
+  and not exists (select 1 from public.notifications where profile_id = :'PSA' and type = 'job_match')
+  and (select next_run_at <= now() from public.saved_searches where id = :'ps1'),
+  'PS969-2d w pauzie: brak alertu, e-maila i powiadomienia; wyszukiwanie zostaje do wykonania');
+select pg_temp.assert(
+  exists (select 1 from public.saved_search_alerts where saved_search_id = :'ps2' and job_id in (:'PSJ1', :'PSJ2'))
+  and exists (select 1 from public.email_deliveries where profile_id = :'PSB' and template = 'jobMatch'),
+  'PS969-2e konto bez pauzy dostaje alert (pauza jest per konto)');
+
+-- PS969-N1: kontrola ujemna — bez klauzuli pauzy worker wysyła alert mimo pauzy.
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure);
+  d := replace(d, 'and (ap.paused_until is null or ap.paused_until <= v_run_at)', 'and true');
+  -- Bez klauzuli pauzy dolna granica „od końca pauzy” (przyszłość) też by nic nie zwróciła — zdejmij ją.
+  d := replace(d, $r$coalesce(v_search.paused_until, '-infinity'::timestamptz)$r$, $r$'-infinity'::timestamptz$r$);
+  execute d;
+end $do$;
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(exists (select 1 from public.saved_search_alerts where saved_search_id = :'ps1'),
+  'PS969-N1 kontrola ujemna: bez klauzuli pauzy konto w pauzie dostaje alert');
+rollback;
+reset role; reset app.current_uid;
+
+-- PS969-3: koniec pauzy — oferta z okresu pauzy nie wraca, oferta po wznowieniu trafia do alertu.
+update public.saved_search_alert_pauses set paused_until = now() - interval '1 hour' where profile_id = :'PSA';
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure);
+  d := replace(d, $r$coalesce(v_search.paused_until, '-infinity'::timestamptz)$r$, $r$'-infinity'::timestamptz$r$);
+  execute d;
+end $do$;
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id order by job_id) from public.saved_search_alerts where saved_search_id = :'ps1') = array[:'PSJ1'::uuid, :'PSJ2'::uuid],
+  'PS969-N2 kontrola ujemna: bez dolnej granicy oferta z okresu pauzy wraca w digeście');
+rollback;
+reset role; reset app.current_uid;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id) from public.saved_search_alerts where saved_search_id = :'ps1') = array[:'PSJ2'::uuid]
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch' and locale = 'nl') = 1
+  and (select count(*) from public.notifications where profile_id = :'PSA' and type = 'job_match'
+         and entity_type = 'saved_search' and entity_id = :'ps1') = 1,
+  'PS969-3 po pauzie: tylko oferta opublikowana po wznowieniu, jeden digest (bez lawiny zaległych)');
+
+-- PS969-4: wcześniejsze wznowienie (null) kończy pauzę „teraz”; brak pauzy = bez zmian.
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 5);
+select public.set_saved_search_alerts_pause(null) is null as ps_none \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ps_none'::boolean and (select paused_until <= now() from public.saved_search_alert_pauses where profile_id = :'PSA'),
+  'PS969-4 wznowienie null kończy trwającą pauzę od razu');
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause(null);
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.saved_search_alert_pauses where profile_id = :'PSB'),
+  'PS969-4b wznowienie bez pauzy niczego nie tworzy');
+
+-- FC969-1: obserwowanie firmy — uprawnienia i idempotencja.
+delete from public.saved_search_alert_pauses where profile_id = :'PSA';
+delete from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch';
+set role authenticated; set app.current_uid = :'PSE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select * from public.follow_company('f0215000-0000-4000-8000-0000000000c1', 'pl')$$,
+  'PERMISSION_DENIED', 'FC969-1a pracodawca nie obserwuje firm');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select saved_search_id as fc1, created as fc1c from public.follow_company(:'PSC1'::uuid, 'nl') \gset
+select created as fc1d from public.follow_company(:'PSC1'::uuid, 'nl') \gset
+select pg_temp.assert(:'fc1c'::boolean and not :'fc1d'::boolean, 'FC969-1b druga obserwacja tej samej firmy = ten sam wiersz');
+select pg_temp.expect_error($$select * from public.follow_company('f0215000-0000-4000-8000-0000000000c3', 'nl')$$,
+  'NOT_FOUND', 'FC969-1c firma niezweryfikowana nie jest obserwowalna');
+select pg_temp.expect_error($$select * from public.follow_company(gen_random_uuid(), 'nl')$$,
+  'NOT_FOUND', 'FC969-1d nieistniejąca firma');
+select pg_temp.assert(
+  (select count(*) = 1 and min(company_slug) = 'ps969-jeden' from public.get_my_followed_companies()),
+  'FC969-1e własne obserwacje z adresem profilu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select name = 'Firma PS969 Jeden' and company_id = :'PSC1'::uuid and filters = '{}'::jsonb and alerts_enabled
+     from public.saved_searches where id = :'fc1'),
+  'FC969-1f obserwacja = wyszukiwanie z kluczem firmy i pustymi filtrami v1');
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_my_followed_companies()) = 0
+  and not exists (select 1 from public.saved_searches where id = :'fc1'),
+  'FC969-1g cudzej obserwacji nie widać (firma nie ma żadnego odczytu obserwujących)');
+select public.set_company_block(:'PSC2'::uuid, true);
+select pg_temp.expect_error($$select * from public.follow_company('f0215000-0000-4000-8000-0000000000c2', 'en')$$,
+  'NOT_FOUND', 'FC969-1h firma zablokowana przez kandydata nie jest obserwowalna');
+reset role; reset app.current_uid;
+
+-- FC969-2: worker — tylko nowe, publiczne oferty obserwowanej firmy, raz na parę.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'PSJ3',:'PSC2','ps969-j3','Inna firma PS969','warehouse','permanent','Gent','Flandria','active','nl', now() - interval '20 minutes'),
+  (:'PSJ4',:'PSC1','ps969-j4','Wstrzymana oferta PS969','warehouse','permanent','Gent','Flandria','paused','nl', now() - interval '10 minutes');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days'
+  where id = :'fc1';
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure);
+  d := replace(d, 'where j.company_id = v_search.company_id', 'where true');
+  execute d;
+end $do$;
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(exists (select 1 from public.saved_search_alerts where saved_search_id = :'fc1' and job_id = :'PSJ3'),
+  'FC969-N1 kontrola ujemna: bez filtra firmy obserwacja dostaje oferty innej firmy');
+rollback;
+reset role; reset app.current_uid;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id order by job_id) from public.saved_search_alerts where saved_search_id = :'fc1') = array[:'PSJ1'::uuid, :'PSJ2'::uuid]
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs' and locale = 'nl') = 1
+  and (select count(*) from public.notifications where profile_id = :'PSA' and type = 'job_match'
+         and entity_type = 'saved_search' and entity_id = :'fc1') = 1,
+  'FC969-2 obserwacja: oferty tej firmy (aktywne), bez innej firmy i wstrzymanej; jeden digest');
+-- Osobny szablon „Nowe oferty firmy …”: nazwa firmy z bazy, bez nazwy wyszukiwania i zapytania.
+select pg_temp.assert(
+  (select payload ->> 'companyName' = 'Firma PS969 Jeden' and (payload ->> 'count')::int = 2
+          and not (payload ? 'searchName') and not (payload ? 'query')
+          and jsonb_array_length(payload -> 'jobs') = 2
+          and not exists (select 1 from jsonb_array_elements(payload -> 'jobs') x where x ? 'companyName')
+          and entity_type = 'saved_search' and entity_id = :'fc1'::uuid
+     from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs'),
+  'FC969-2b digest obserwacji = szablon followedCompanyJobs z nazwą firmy (nie jobMatch z nazwą wyszukiwania)');
+select pg_temp.assert(not exists (select 1 from public.email_deliveries
+    where profile_id = :'PSA' and template = 'jobMatch' and entity_id = :'fc1'::uuid),
+  'FC969-2c obserwacja nie kolejkuje szablonu jobMatch');
+select pg_temp.assert(
+  public.email_preference_category('followedCompanyJobs') = 'job_matches'
+  and public.email_send_pool('followedCompanyJobs') = 'marketing',
+  'FC969-2d kategoria (zgoda email_job_matches) i pula jak jobMatch');
+-- Kolejny przebieg bez nowych ofert: brak drugiego alertu (deduplikacja pary).
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'fc1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'fc1') = 2
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs' and locale = 'nl') = 1,
+  'FC969-3 ponowny przebieg nie dubluje alertów ani e-maila');
+-- Nowa oferta obserwowanej firmy po pierwszym alercie trafia do następnego digestu.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+  values (:'PSJ5', :'PSC1','ps969-j5','Nowa oferta PS969','warehouse','permanent','Gent','Flandria','active','nl', now());
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'fc1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'fc1') = 3
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs') = 2,
+  'FC969-4 nowa oferta obserwowanej firmy → kolejny digest');
+
+-- FC969-5: odobserwowanie — wiersz i historia alertów znikają, ponowne wywołanie bez błędu.
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select public.unfollow_company(:'PSC1'::uuid);
+select public.unfollow_company(:'PSC1'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.saved_searches where id = :'fc1')
+  and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'fc1'),
+  'FC969-5 odobserwowanie usuwa obserwację i historię alertów (idempotentnie)');
+
+-- PS969-5 (#810): digest zakolejkowany PRZED pauzą nie wychodzi — claim i kontrola tuż przed
+-- wysyłką wygaszają go (oba szablony alertu). Bez pauzy (przeszłość) wychodzi.
+select id as psb_search from public.saved_searches where profile_id = :'PSB' and company_id is null limit 1 \gset
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q3',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select public.enqueue_email(:'PSB', 'jobPublished', 'job', :'PSJ1', 'ps969-q4', '{"jobTitle":"Magazijnier PS969 pauza"}'::jsonb);
+select id as psq3 from public.email_deliveries where idempotency_key = 'ps969-q3' \gset
+select id as psq4 from public.email_deliveries where idempotency_key = 'ps969-q4' \gset
+-- Przed pauzą: q3 i q4 zostają claimowane (dzierżawa workera trwa do kontroli przed wysyłką).
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c where c.id in (:'psq3', :'psq4')) = 2,
+  'PS969-5a bez pauzy claim wydaje digest obserwacji i inny mail (tryb ogłoszeniowy)');
+select lock_token as psq3_lt from public.email_deliveries where id = :'psq3' \gset
+select lock_token as psq4_lt from public.email_deliveries where id = :'psq4' \gset
+-- Limit dobowy jobMatch z wcześniejszej sekcji (SS45) nie dotyczy tego testu.
+update public.email_recipient_budget_config set max_per_recipient = 1000 where scope = 'template:jobMatch';
+select public.enqueue_email(:'PSB', 'jobMatch', 'saved_search', :'psb_search', 'ps969-q1',
+  '{"searchName":"Magazyn B PS969","count":1}'::jsonb);
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q2',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select id as psq1 from public.email_deliveries where idempotency_key = 'ps969-q1' \gset
+select id as psq2 from public.email_deliveries where idempotency_key = 'ps969-q2' \gset
+-- q1/q2 czekają w kolejce (niewydane) — konto B ustawia pauzę PO zakolejkowaniu.
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 2);
+reset role; reset app.current_uid;
+-- KONTROLA UJEMNA: stara definicja (0175, bez pauzy) przepuściłaby digest — zgoda i alert włączone.
+select pg_temp.assert(
+  public.email_allowed(:'PSB', 'followedCompanyJobs') is true
+  and exists (select 1 from public.saved_searches s where s.id = :'psb_search' and s.alerts_enabled),
+  'PS969-5b kontrola ujemna: zgoda i alert włączone — samo to nie zatrzyma digestu');
+set role service_role;
+select pg_temp.assert(public.email_delivery_send_check(:'psq3'::uuid, :'psq3_lt'::uuid) = 'suppressed_alert_paused',
+  'PS969-5c pauza po claimie → kontrola tuż przed wysyłką zatrzymuje digest obserwacji');
+select pg_temp.assert(public.email_delivery_send_check(:'psq4'::uuid, :'psq4_lt'::uuid) is null,
+  'PS969-5d pauza nie dotyka innych powiadomień konta (inny typ maila wychodzi)');
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.id in (:'psq1', :'psq2')),
+  'PS969-5e claim nie wydaje digestów zakolejkowanych przed pauzą (jobMatch i followedCompanyJobs)');
+select pg_temp.assert(
+  (select bool_and(status::text = 'failed' and suppressed_at is not null and error_message = 'suppressed_alert_paused')
+     from public.email_deliveries where id in (:'psq1', :'psq2', :'psq3')),
+  'PS969-5f wiersze wygaszone z przyczyną suppressed_alert_paused, ślad zostaje');
+-- Koniec pauzy: nowy digest wychodzi.
+update public.saved_search_alert_pauses set paused_until = now() - interval '1 minute' where profile_id = :'PSB';
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q5',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select pg_temp.assert(
+  exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'ps969-q5'),
+  'PS969-5g po końcu pauzy digest wychodzi');
+-- PS969-N3: kontrola ujemna — definicja bez klauzuli pauzy przepuszcza digest zakolejkowany przed pauzą.
+update public.saved_search_alert_pauses set paused_until = now() + interval '2 days' where profile_id = :'PSB';
+select public.enqueue_email(:'PSB', 'jobMatch', 'saved_search', :'psb_search', 'ps969-q6',
+  '{"searchName":"Magazyn B PS969","count":1}'::jsonb);
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure);
+  d := replace(d, 'ap.paused_until > now()', 'false');
+  execute d;
+end $do$;
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'PSB', 'jobMatch', 'psb@test.be', null, 'saved_search', :'psb_search') is null,
+  'PS969-N3 kontrola ujemna: bez klauzuli pauzy digest zakolejkowany przed pauzą wychodzi');
+rollback;
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'PSB', 'jobMatch', 'psb@test.be', null, 'saved_search', :'psb_search') = 'suppressed_alert_paused',
+  'PS969-N3b po cofnięciu zmiany pauza znów wygasza digest');
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql PS969: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
 -- SJ968. Cel zapisu oferty (#882, 0199): kandydat zapisuje WYŁĄCZNIE ofertę publiczną
 --        (szkic, oferta usunięta, firma niezweryfikowana = NOT_FOUND), a
 --        `get_saved_jobs_display` pokazuje metadane oferty niepublicznej tylko przy dowodzie
@@ -25016,6 +25420,542 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- CX1091. Eksport danych kandydata (#1091, 0218): zgłoszenia treści złożone przez kandydata
+-- (bez zgłoszonej treści, identyfikatora celu i kodu dostępu) i ostrzeżenia retencji wysłane
+-- do kandydata; bez danych innej osoby. Kontrole ujemne: rollback 0218 gubi oba klucze,
+-- definicja bez filtra właściciela ujawnia zgłoszenie innej osoby.
+-- ============================================================================
+\echo '--- CX1091 eksport kandydata: zgłoszenia treści i ostrzeżenia retencji ---'
+reset role; reset app.current_uid;
+\set CX1 'c1091000-0000-4000-8000-000000000001'
+\set CX2 'c1091000-0000-4000-8000-000000000002'
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CX1','cx1@test.be','Cx Jeden','{"role":"candidate","first_name":"Cx","last_name":"Jeden","locale":"pl"}'),
+  (:'CX2','cx2@test.be','Cx Dwa','{"role":"candidate","first_name":"Cx","last_name":"Dwa","locale":"nl"}');
+insert into public.reports(id, reporter_id, target_type, target_id, reason, details, category, content_url,
+                           reporter_name, reporter_email, access_code_hash, target_snapshot)
+values
+  ('c1091000-0000-4000-8000-0000000000a1', :'CX1', 'job', :'JOBA', 'spam', 'Opis zgłoszenia CX1',
+   'fraud', 'https://pracuj.be/pl/oferty-pracy/job-a', 'Cx Jeden', 'cx1@test.be',
+   'HASH-KODU-CX1', '{"thirdParty":"TRZECIA-OSOBA-CX"}'::jsonb),
+  ('c1091000-0000-4000-8000-0000000000a2', :'CX2', 'job', :'JOBA', 'spam', 'Opis zgłoszenia CX2',
+   null, null, null, null, null, null);
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'CX1', 'inactive_candidate_cv', now() - interval '400 days', now() + interval '5 days'),
+  (:'CX2', 'inactive_candidate_account', now() - interval '700 days', now() + interval '20 days');
+
+-- CX1091-1: kandydat nie woła części wewnętrznej z pominięciem eksportu.
+set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data_pre_reports()', 'permission denied',
+  'CX1091-1 część wewnętrzna eksportu bez EXECUTE dla kandydata');
+select public.export_my_data()::text as cx_exp \gset
+reset role; reset app.current_uid;
+
+select pg_temp.assert(
+  jsonb_array_length(:'cx_exp'::jsonb->'contentReports') = 1
+  and :'cx_exp'::jsonb->'contentReports'->0->>'details' = 'Opis zgłoszenia CX1'
+  and :'cx_exp'::jsonb->'contentReports'->0->>'category' = 'fraud'
+  and :'cx_exp'::jsonb->'contentReports'->0->>'reporterEmail' = 'cx1@test.be'
+  and :'cx_exp'::jsonb->'contentReports'->0->>'status' = 'open',
+  'CX1091-2 eksport zawiera własne zgłoszenie treści z opisem i danymi podanymi w formularzu');
+select pg_temp.assert(
+  jsonb_array_length(:'cx_exp'::jsonb->'retentionWarnings') = 1
+  and :'cx_exp'::jsonb->'retentionWarnings'->0->>'policyKey' = 'inactive_candidate_cv'
+  and :'cx_exp'::jsonb->'retentionWarnings'->0 ? 'dueAt'
+  and :'cx_exp'::jsonb->'retentionWarnings'->0 ? 'warnedAt',
+  'CX1091-3 eksport zawiera własne ostrzeżenie retencji z terminem');
+select pg_temp.assert(
+  position('TRZECIA-OSOBA-CX' in :'cx_exp') = 0
+  and position('HASH-KODU-CX1' in :'cx_exp') = 0
+  and position(:'JOBA' in :'cx_exp') = 0
+  and position('Opis zgłoszenia CX2' in :'cx_exp') = 0
+  and position('inactive_candidate_account' in :'cx_exp') = 0,
+  'CX1091-4 bez zgłoszonej treści, kodu dostępu, identyfikatora celu i danych innego kandydata');
+select pg_temp.assert(:'cx_exp'::jsonb ? 'applicationJournal' and :'cx_exp'::jsonb ? 'ageAttestations'
+  and :'cx_exp'::jsonb ? 'profile',
+  'CX1091-5 dotychczasowe klucze eksportu zostają');
+
+-- CX1091-6: pracodawca nadal bez eksportu kandydata.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED',
+  'CX1091-6 pracodawca bez eksportu kandydata po 0218');
+reset role; reset app.current_uid;
+
+-- CX1091-N1: kontrola ujemna — definicja bez filtra właściciela ujawnia cudze zgłoszenie.
+savepoint cx1091n1;
+do $$ begin
+  execute replace(pg_get_functiondef('public.export_my_data()'::regprocedure),
+                  'where rp.reporter_id = auth.uid()', 'where true');
+end $$;
+set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
+select public.export_my_data()::text as cx_leak \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(position('Opis zgłoszenia CX2' in :'cx_leak') > 0,
+  'CX1091-N1 kontrola ujemna: bez filtra właściciela eksport ujawnia zgłoszenie innej osoby');
+rollback to savepoint cx1091n1;
+
+-- CX1091-N2: kontrola ujemna — po rollbacku 0218 eksport gubi oba klucze.
+savepoint cx1091n2;
+\ir ../rollback/0218_candidate_export_reports_warnings.down.sql
+set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
+select public.export_my_data()::text as cx_old \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(not (:'cx_old'::jsonb ? 'contentReports') and not (:'cx_old'::jsonb ? 'retentionWarnings'),
+  'CX1091-N2 kontrola ujemna: definicja sprzed 0218 pomija zgłoszenia treści i ostrzeżenia retencji');
+rollback to savepoint cx1091n2;
+-- TMR867. Przywrócenie wyłączonego członka przez zaproszenie respektuje hierarchię ról
+-- (0217, #867): admin nie przywróci wyłączonego admina zaproszeniem na niższą rolę ani przy
+-- tworzeniu zaproszenia, ani przy jego przyjęciu; owner może. Kontrola ujemna: po rollbacku
+-- 0217 obejście znowu działa.
+-- ============================================================================
+\echo '--- TMR867 reaktywacja członka przez zaproszenie ---'
+\set R8O  'e9530000-0000-0000-0000-0000000000a1'
+\set R8A1 'e9530000-0000-0000-0000-0000000000a2'
+\set R8A2 'e9530000-0000-0000-0000-0000000000a3'
+\set R8A3 'e9530000-0000-0000-0000-0000000000a4'
+\set R8R  'e9530000-0000-0000-0000-0000000000a5'
+\set R8M  'e9530000-0000-0000-0000-0000000000a6'
+\set R8C  'e9530000-0000-0000-0000-0000000000f1'
+begin;
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'R8O','r8o@test.be','Olaf O','{"role":"employer","first_name":"Olaf","last_name":"Owner","locale":"pl"}'),
+  (:'R8A1','r8a1@test.be','Ada A','{"role":"employer","first_name":"Ada","last_name":"Admin","locale":"pl"}'),
+  (:'R8A2','r8a2@test.be','Bea B','{"role":"employer","first_name":"Bea","last_name":"Admin","locale":"nl"}'),
+  (:'R8A3','r8a3@test.be','Cid C','{"role":"employer","first_name":"Cid","last_name":"Admin","locale":"fr"}'),
+  (:'R8R','r8r@test.be','Rui R','{"role":"employer","first_name":"Rui","last_name":"Recruiter","locale":"en"}'),
+  (:'R8M','r8m@test.be','Mia M','{"role":"employer","first_name":"Mia","last_name":"Member","locale":"en"}');
+update auth.users set email_verified = true where id in (:'R8O',:'R8A1',:'R8A2',:'R8A3',:'R8R',:'R8M');
+insert into public.companies(id,name,status) values (:'R8C','Firma R867','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'R8C',:'R8O','owner',true), (:'R8C',:'R8A1','admin',true),
+  (:'R8C',:'R8A2','admin',false), (:'R8C',:'R8A3','admin',false),
+  (:'R8C',:'R8R','recruiter',false), (:'R8C',:'R8M','member',false);
+create or replace function pg_temp.r8_hash() returns text language sql volatile as $$
+  select encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex') $$;
+create or replace function pg_temp.r8_nonce() returns text language sql volatile as $$
+  select replace(gen_random_uuid()::text, '-', '') $$;
+create or replace function pg_temp.r8_member(p_profile uuid) returns text language sql stable as $$
+  select role::text || ':' || is_active::text from public.company_members
+   where company_id = 'e9530000-0000-0000-0000-0000000000f1' and profile_id = p_profile $$;
+
+-- TMR867-1: admin nie zaprosi wyłączonego admina (nawet na rolę recruiter) — nic się nie zmienia.
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'R8C' || ''', ''r8a2@test.be'', ''recruiter'', ''pl'', pg_temp.r8_hash(), pg_temp.r8_nonce())',
+  'MEMBER_REACTIVATION_DENIED', 'TMR867-1 admin nie zaprasza wyłączonego admina na niższą rolę');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_invitations where company_id = :'R8C' and email = 'r8a2@test.be') = 0
+  and pg_temp.r8_member(:'R8A2') = 'admin:false',
+  'TMR867-1b brak zaproszenia, członkostwo nadal wyłączone');
+
+-- TMR867-2: admin przywraca wyłączonego rekrutera zaproszeniem (jego rola mieści się w hierarchii).
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select invitation_id as r8invr from public.invite_company_member(:'R8C', 'r8r@test.be', 'member', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+set local role authenticated; set local app.current_uid = :'R8R'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'r8invr', true);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8R') = 'member:true',
+  'TMR867-2 admin przywraca wyłączonego rekrutera jako member (pozytyw)');
+
+-- TMR867-3: zaproszenie sprzed 0217 (bez strażnika) — przyjęcie odrzucone, stan bez zmian.
+alter table public.company_invitations disable trigger trg_company_invitations_reactivation_guard;
+insert into public.company_invitations (company_id, email, role, invited_by, locale, signup_token_hash)
+  values (:'R8C', 'r8a2@test.be', 'recruiter', :'R8A1', 'pl', pg_temp.r8_hash())
+  returning id as r8inva2 \gset
+alter table public.company_invitations enable trigger trg_company_invitations_reactivation_guard;
+set local role authenticated; set local app.current_uid = :'R8A2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'r8inva2' || ''', true)',
+  'REACTIVATION_NOT_ALLOWED', 'TMR867-3 przyjęcie zaproszenia admina od admina odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  pg_temp.r8_member(:'R8A2') = 'admin:false'
+  and (select status from public.company_invitations where id = :'r8inva2') = 'pending',
+  'TMR867-3b członkostwo wyłączone, zaproszenie nadal oczekuje');
+
+-- TMR867-4: owner odświeża to zaproszenie i przywraca wyłączonego admina jako recruiter.
+set local role authenticated; set local app.current_uid = :'R8O'; select pg_temp.assert_client_role();
+select invitation_id as r8inva2o, created as r8createdo
+  from public.invite_company_member(:'R8C', 'r8a2@test.be', 'recruiter', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'r8inva2o' = :'r8inva2' and not :'r8createdo'::boolean,
+  'TMR867-4 owner odświeża oczekujące zaproszenie');
+set local role authenticated; set local app.current_uid = :'R8A2'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'r8inva2', true);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8A2') = 'recruiter:true',
+  'TMR867-4b owner przywraca wyłączonego admina (pozytyw)');
+
+-- TMR867-5: zapraszający stracił uprawnienia przed przyjęciem — przyjęcie odrzucone.
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select invitation_id as r8invm from public.invite_company_member(:'R8C', 'r8m@test.be', 'member', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+update public.company_members set is_active = false where company_id = :'R8C' and profile_id = :'R8A1';
+set local role authenticated; set local app.current_uid = :'R8M'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.respond_to_company_invitation(''' || :'r8invm' || ''', true)',
+  'REACTIVATION_NOT_ALLOWED', 'TMR867-5 zaproszenie od wyłączonego admina nie przywraca członka');
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8M') = 'member:false', 'TMR867-5b członkostwo nadal wyłączone');
+update public.company_members set is_active = true where company_id = :'R8C' and profile_id = :'R8A1';
+
+-- Kontrola ujemna: bez 0217 admin przywraca wyłączonego admina zaproszeniem na rekrutera.
+\ir ../rollback/0217_team_member_reactivation_hierarchy.down.sql
+set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
+select invitation_id as r8inva3 from public.invite_company_member(:'R8C', 'r8a3@test.be', 'recruiter', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
+reset role; reset app.current_uid;
+set local role authenticated; set local app.current_uid = :'R8A3'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'r8inva3', true);
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_temp.r8_member(:'R8A3') = 'recruiter:true',
+  'TMR867-N kontrola ujemna: bez 0217 admin przywraca wyłączonego admina zaproszeniem');
+-- PF1215. Lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (0213, #1215,
+-- audyt PERF-01). Definicje z 0194 (LANGUAGE sql, plan generyczny) zastąpione plpgsql
+-- z `plan_cache_mode = force_custom_plan`. 4000 ofert z remisami `published_at` (po 7)
+-- i wynagrodzenia (okresy, waluty, brak kwoty), tłumaczeniami, językami, wymiarem pracy,
+-- firmą-agencją, firmą zablokowaną przez kandydata, firmą niezweryfikowaną, ofertami
+-- zamkniętymi/wygasłymi/usuniętymi. PF1215-1..3: wyniki (kolejność wierszy włącznie) każdej
+-- kombinacji filtrów, sortowania i strony = definicje z 0194 (rollback 0213 w savepoincie),
+-- dla gościa, kandydata z blokadą i service_role (alerty). PF1215-4: strona 1 i sortowanie
+-- po wynagrodzeniu czytają kilkadziesiąt ofert (indeks + LIMIT), licznik bez słowa kluczowego
+-- nie czyta tłumaczeń; KONTROLA UJEMNA: definicje z 0194 czytają wszystkie oferty (strona 1
+-- i sortowanie po wynagrodzeniu).
+-- Cała sekcja w transakcji cofanej.
+-- ============================================================================
+\echo '--- PF1215 publiczne RPC ofert: plan dla wartości parametrów (0213) ---'
+create function pg_temp.pf1215_cases() returns table (label text, filters text, page text)
+language sql as $$
+  values
+    ('default', '', ''),
+    ('p100', '', 'p_limit => 100'),
+    ('p100o100', '', 'p_limit => 100, p_offset => 100'),
+    ('p100o2300', '', 'p_limit => 100, p_offset => 2300'),
+    ('limit0', '', 'p_limit => 0'),
+    ('limit500neg', '', 'p_limit => 500, p_offset => -5'),
+    ('offsetmax', '', 'p_offset => 20000'),
+    ('salary', '', 'p_sort => ''salary'', p_limit => 100'),
+    ('salaryo700', '', 'p_sort => ''salary'', p_limit => 100, p_offset => 700'),
+    ('salaryhour', 'p_salary_unit => ''hour''', 'p_sort => ''salary'', p_limit => 100'),
+    ('salaryhouro300', 'p_salary_unit => ''hour''', 'p_sort => ''salary'', p_limit => 100, p_offset => 300'),
+    ('sortbogus', '', 'p_sort => ''bogus'', p_limit => 50'),
+    ('keyword', 'p_keyword => ''kierowca pf1215''', 'p_limit => 100'),
+    ('keywordtr', 'p_keyword => ''welder''', 'p_limit => 100'),
+    ('keywordtren', 'p_locale => ''en'', p_keyword => ''welder''', 'p_limit => 100'),
+    ('keywordsalary', 'p_keyword => ''pf1215''', 'p_sort => ''salary'', p_limit => 100, p_offset => 40'),
+    ('localexx', 'p_locale => ''xx''', 'p_limit => 30'),
+    ('localefr', 'p_locale => ''fr''', 'p_limit => 100, p_offset => 50'),
+    ('city', 'p_city => ''Gent''', 'p_limit => 100'),
+    ('locations', 'p_locations => array[''Gent'',''Bruxelles'']', 'p_limit => 100'),
+    ('locationsempty', 'p_locations => array[]::text[], p_categories => array[]::text[]', 'p_limit => 40'),
+    ('catcontract', 'p_categories => array[''transport'',''cleaning''], p_contract_types => array[''interim'']', 'p_limit => 100'),
+    ('salaryrange', 'p_salary_min => 2200, p_salary_max => 2600', 'p_limit => 100'),
+    ('salaryhourrange', 'p_salary_min => 14, p_salary_unit => ''hour''', 'p_sort => ''salary'', p_limit => 100'),
+    ('accimm', 'p_accommodation => true, p_immediate => true', 'p_limit => 100'),
+    ('noacc', 'p_accommodation => false, p_no_language => true', 'p_limit => 100'),
+    ('direct', 'p_direct_only => true', 'p_limit => 100'),
+    ('since', 'p_since => now() - interval ''3 hours''', 'p_limit => 100'),
+    ('language', 'p_language => ''nl'', p_language_level => ''fluent''', 'p_limit => 100'),
+    ('languagefr', 'p_language => ''fr''', 'p_limit => 100'),
+    ('worktime', 'p_work_time => ''part_time''', 'p_limit => 100'),
+    ('near', 'p_near => ''Gent'', p_radius_km => 60', 'p_limit => 100'),
+    ('nearunknown', 'p_near => ''Nieznane PF1215''', 'p_limit => 100'),
+    ('combo', 'p_keyword => ''pf1215'', p_locations => array[''Gent''], p_salary_min => 1500, p_direct_only => true', 'p_sort => ''salary'', p_limit => 100');
+$$;
+-- Odcisk wyników: lista (z numerem wiersza — kolejność), licznik, facety (posortowane).
+create function pg_temp.pf1215_snapshot() returns text language plpgsql as $$
+declare c record; v text; acc text := '';
+begin
+  for c in select * from pg_temp.pf1215_cases() loop
+    execute format(
+      'select count(*)::text || '':'' || md5(coalesce(string_agg(row_to_json(r)::text, ''|'' order by r.ordinality), '''')) '
+      'from public.get_public_jobs(%s) with ordinality r',
+      concat_ws(', ', nullif(c.filters, ''), nullif(c.page, ''))) into v;
+    acc := acc || c.label || ':list=' || v;
+    execute format('select public.get_public_jobs_count(%s)::text', c.filters) into v;
+    acc := acc || ':count=' || v;
+    execute format(
+      'select md5(coalesce(string_agg(f.dimension || ''/'' || coalesce(f.key, ''∅'') || ''='' || f.total, ''|'' '
+      'order by f.dimension, f.key nulls first), '''')) from public.get_public_job_filter_facets(%s) f',
+      c.filters) into v;
+    acc := acc || ':facets=' || v || E'\n';
+  end loop;
+  return acc;
+end $$;
+-- Kopia filtrów dla alertów (tylko service_role): pierwsza strona, strona od kursora, filtry.
+create function pg_temp.pf1215_saved() returns text language plpgsql as $$
+declare c record; v text; acc text := '';
+  base text := 'p_locale => ''pl'', p_keyword => %s, p_city => null, p_categories => null, p_locations => %s, '
+    'p_contract_types => null, p_salary_min => %s, p_salary_max => null, p_accommodation => null, '
+    'p_immediate => null, p_no_language => null, p_since => null, p_salary_unit => ''month'', '
+    'p_after_published_at => %s, p_after_id => %s, p_limit => %s';
+begin
+  for c in select * from (values
+    ('all', 'null', 'null', 'null', 'null', 'null', '1000'),
+    ('cursor', 'null', 'null', 'null',
+      '(select published_at from public.jobs where slug = ''pf1215-1400'')',
+      '(select id from public.jobs where slug = ''pf1215-1400'')', '300'),
+    ('filters', '''pf1215''', 'array[''Gent'',''Namur'']', '1800', 'null', 'null', '1000')
+  ) x(label, kw, loc, smin, apub, aid, lim) loop
+    execute format('select count(*)::text || '':'' || md5(coalesce(string_agg(r.id::text || r.published_at::text, ''|'' '
+      'order by r.ordinality), '''')) from public.saved_search_jobs_after(' || base || ') with ordinality r',
+      c.kw, c.loc, c.smin, c.apub, c.aid, c.lim) into v;
+    acc := acc || c.label || '=' || v || E'\n';
+  end loop;
+  return acc;
+end $$;
+-- Odczytane wiersze tabeli w bieżącej transakcji (skan sekwencyjny + pobrania z indeksu).
+create function pg_temp.pf1215_reads(p_rel regclass) returns bigint language sql as $$
+  select pg_stat_get_xact_tuples_returned(p_rel) + pg_stat_get_xact_tuples_fetched(p_rel);
+$$;
+
+begin;
+\set PFA 'e9c31215-0000-0000-0000-0000000000a1'
+\set PFC 'e9c31215-0000-0000-0000-0000000000c1'
+\set PFG 'e9c31215-0000-0000-0000-0000000000c2'
+\set PFB 'e9c31215-0000-0000-0000-0000000000c3'
+\set PFU 'e9c31215-0000-0000-0000-0000000000c4'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PFA','pfa@test.be','Pia A','{"role":"candidate","first_name":"Pia","last_name":"A","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status,is_agency) values
+  (:'PFC','Firma PF1215','verified',false), (:'PFG','Agencja PF1215','verified',true),
+  (:'PFB','Firma PF1215 zablokowana','verified',false), (:'PFU','Firma PF1215 niezweryfikowana','pending',false);
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'PFA', :'PFB');
+
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status,
+  default_locale, published_at, expires_at, deleted_at, remote, salary_min, salary_max, salary_period,
+  currency, accommodation, immediate, no_language_required, work_time)
+select
+  case when n % 10 < 7 then :'PFC'::uuid when n % 10 = 7 then :'PFG'::uuid
+       when n % 10 = 8 then :'PFB'::uuid else :'PFU'::uuid end,
+  'pf1215-' || n,
+  (array['Kierowca PF1215 ', 'Spawacz PF1215 ', 'Magazynier PF1215 '])[1 + n % 3] || n,
+  (array['transport', 'production', 'warehouse', 'cleaning'])[1 + n % 4]::public.job_category,
+  (array['permanent', 'temporary', 'interim'])[1 + n % 3]::public.contract_type,
+  (array['Gent', 'Bruxelles', 'Antwerpen', 'Liège', 'Namur'])[1 + n % 5], 'BE',
+  case when n % 23 = 0 then 'closed' else 'active' end::public.job_status,
+  case when n % 4 = 0 then 'nl' else 'pl' end,
+  date_trunc('minute', now()) - make_interval(mins => n / 7),
+  case when n % 31 = 0 then now() - interval '1 day' when n % 13 = 0 then now() + interval '10 days' end,
+  case when n % 37 = 0 then now() end,
+  n % 41 = 0,
+  case n % 6 when 0 then null when 1 then 2000 + (n % 9) * 100 when 2 then 30000 + (n % 5) * 1000
+    when 3 then 12 + n % 5 when 4 then 2500 else 1900 + (n % 4) * 100 end,
+  case n % 6 when 0 then null when 1 then 2400 + (n % 9) * 100 when 2 then null
+    when 3 then 15 + n % 5 when 4 then 3000 else null end,
+  (case n % 6 when 2 then 'year' when 3 then 'hour' else 'month' end)::public.salary_period,
+  case when n % 6 = 4 then 'PLN' else 'EUR' end,
+  n % 5 = 0, n % 7 = 0, n % 9 = 0,
+  (array[null, 'full_time', 'part_time', 'both'])[1 + n % 4]
+from generate_series(1, 4000) n;
+insert into public.job_translations(job_id, locale, title, highlights)
+select j.id, 'en', replace(replace(j.title, 'Spawacz', 'Welder'), 'Kierowca', 'Driver'), array['en ' || j.slug]
+from public.jobs j where j.slug like 'pf1215-%' and (substring(j.slug from 8))::int % 2 = 0;
+insert into public.job_translations(job_id, locale, title)
+select j.id, 'fr', 'Soudeur PF1215 ' || j.slug
+from public.jobs j where j.slug like 'pf1215-%' and (substring(j.slug from 8))::int % 5 = 0;
+insert into public.job_languages(job_id, language_label, level)
+select j.id, case when n % 8 = 1 then 'Niderlandzki' else 'Francuski' end,
+  case when n % 8 = 1 then (array['basic', 'fluent', 'native'])[1 + n % 3]::public.language_level end
+from (select id, (substring(slug from 8))::int n from public.jobs where slug like 'pf1215-%') j
+where n % 8 in (1, 3) and n % 9 <> 0;
+analyze public.jobs; analyze public.job_translations; analyze public.companies; analyze public.job_languages;
+
+select pg_temp.assert(
+  (select count(*) from public.jobs j join public.companies c on c.id = j.company_id
+    where j.slug like 'pf1215-%' and j.status = 'active' and j.deleted_at is null and c.status = 'verified'
+      and (j.expires_at is null or j.expires_at > now())) > 2500
+  and (select count(distinct published_at) from public.jobs where slug like 'pf1215-%') < 600
+  and exists (select 1 from public.jobs where slug like 'pf1215-%' and location_id is not null)
+  and exists (select 1 from public.job_languages jl join public.languages lg on lg.id = jl.language_id
+              where lg.code = 'nl'),
+  'PF1215-0 dane: tysiące ofert publicznych, remisy published_at, miejscowości i języki ze słownika');
+
+-- Odciski wyników nowych definicji (gość, kandydat z blokadą firmy, service_role).
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_new_anon \gset
+reset role;
+set role authenticated; set app.current_uid = :'PFA'; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_new_cand \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.pf1215_saved() as pf_new_saved \gset
+reset role;
+
+select pg_temp.assert(
+  position('default:list=20:' in :'pf_new_anon') > 0
+  and position('p100o2300:list=100:' in :'pf_new_anon') > 0
+  and position('limit0:list=1:' in :'pf_new_anon') > 0
+  and position('keywordtren:list=0:' in :'pf_new_anon') = 0
+  and position('offsetmax:list=0:' in :'pf_new_anon') > 0
+  and :'pf_new_anon' <> :'pf_new_cand'
+  and position('all=1000:' in :'pf_new_saved') > 0 and position('cursor=300:' in :'pf_new_saved') > 0,
+  'PF1215-1 odciski niepuste: strony pełne, offset za końcem pusty, blokada firmy zmienia wynik kandydata');
+
+-- PF1215-4: odczyty tabel (statystyki bieżącej transakcji).
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_reads('public.jobs') as pf_r0 \gset
+select count(*) from public.get_public_jobs('pl', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_r1 \gset
+select count(*) from public.get_public_jobs('pl', p_sort => 'salary', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_r2 \gset
+select pg_temp.pf1215_reads('public.job_translations') as pf_t0 \gset
+select public.get_public_jobs_count('pl') \g /dev/null
+select pg_temp.pf1215_reads('public.job_translations') as pf_t1 \gset
+reset role;
+select pg_temp.assert(:pf_r1 - :pf_r0 < 200,
+  'PF1215-4 strona 1 bez filtrów czyta najwyżej kilkadziesiąt ofert (indeks published_at + LIMIT), przeczytano ' || (:pf_r1 - :pf_r0));
+select pg_temp.assert(:pf_r2 - :pf_r1 < 400,
+  'PF1215-4b sortowanie po wynagrodzeniu idzie indeksem klucza wynagrodzenia, przeczytano ' || (:pf_r2 - :pf_r1));
+select pg_temp.assert(:pf_t1 - :pf_t0 = 0,
+  'PF1215-4c licznik bez słowa kluczowego nie czyta tłumaczeń, przeczytano ' || (:pf_t1 - :pf_t0));
+select pg_temp.assert(
+  (select proconfig @> array['plan_cache_mode=force_custom_plan', 'jit=off'] and prolang = (select oid from pg_language where lanname = 'plpgsql')
+     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)'::regprocedure)
+  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE'),
+  'PF1215-4d plpgsql SECURITY DEFINER z force_custom_plan i bez JIT; granty bez zmian');
+
+-- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
+savepoint pf1215_old;
+\ir ../rollback/0213_public_jobs_custom_plan.down.sql
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_old_anon \gset
+reset role;
+set role authenticated; set app.current_uid = :'PFA'; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_old_cand \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.pf1215_saved() as pf_old_saved \gset
+reset role;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_reads('public.jobs') as pf_o0 \gset
+select count(*) from public.get_public_jobs('pl', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_o1 \gset
+select count(*) from public.get_public_jobs('pl', p_sort => 'salary', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_o2 \gset
+reset role;
+select pg_temp.assert(:pf_o1 - :pf_o0 > 3000 and :pf_o2 - :pf_o1 > 3000,
+  'PF1215-N KONTROLA UJEMNA: definicja z 0194 czyta wszystkie oferty dla strony 1 (' || (:pf_o1 - :pf_o0)
+  || ') i dla sortowania po wynagrodzeniu (' || (:pf_o2 - :pf_o1) || ')');
+rollback to savepoint pf1215_old;
+
+select pg_temp.assert(:'pf_new_anon' = :'pf_old_anon',
+  'PF1215-2 gość: lista (kolejność), licznik i facety każdej kombinacji = definicje z 0194');
+select pg_temp.assert(:'pf_new_cand' = :'pf_old_cand',
+  'PF1215-2b kandydat z blokadą firmy: wyniki = definicje z 0194');
+select pg_temp.assert(:'pf_new_saved' = :'pf_old_saved',
+  'PF1215-3 saved_search_jobs_after (strona, kursor, filtry) = definicja z 0194');
+select pg_temp.assert(
+  (select prolang = (select oid from pg_language where lanname = 'plpgsql')
+   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure),
+  'PF1215-5 po cofnięciu savepointu stan 0213 zostaje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- KQ866. Słowo kluczowe listy ofert szuka też w kwalifikacjach oferty (0214, #866).
+-- Oferty o tytułach bez szukanego słowa: certyfikat VCA, umiejętność „wózek widłowy”,
+-- wymaganie w języku oferty (pl) i wymaganie tylko w innym języku (en). KQ866-1..6: lista,
+-- licznik, facety i kopia dla alertów znajdują ofertę po kwalifikacji, bez wielkości liter
+-- i diakrytyków; wymaganie w innym języku niż wyświetlany nie daje trafienia; oferta firmy
+-- niezweryfikowanej nadal ukryta; tytuł działa jak dotąd. KQ866-N: KONTROLA UJEMNA — po
+-- rollbacku 0214 (definicje z 0213) oferta po samej kwalifikacji nie jest znajdowana.
+-- ============================================================================
+\echo '--- KQ866 słowo kluczowe w kwalifikacjach oferty (0214) ---'
+begin;
+\set KQC 'e9c30866-0000-0000-0000-0000000000c1'
+\set KQU 'e9c30866-0000-0000-0000-0000000000c2'
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values
+  (:'KQC', 'Firma KQ866', 'verified'), (:'KQU', 'Firma KQ866 niezweryfikowana', 'pending');
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status,
+  default_locale, published_at)
+values
+  (:'KQC', 'kq866-vca', 'Magazynier KQ866 alfa', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '1 hour'),
+  (:'KQC', 'kq866-skill', 'Magazynier KQ866 beta', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '2 hours'),
+  (:'KQC', 'kq866-req', 'Kierowca KQ866 gamma', 'transport', 'interim', 'Gent', 'BE', 'active', 'pl', now() - interval '3 hours'),
+  (:'KQC', 'kq866-reqen', 'Kierowca KQ866 delta', 'transport', 'interim', 'Gent', 'BE', 'active', 'pl', now() - interval '4 hours'),
+  (:'KQU', 'kq866-unverified', 'Magazynier KQ866 omega', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '5 hours');
+set constraints all immediate;
+insert into public.job_certificates(job_id, certificate_label)
+select id, 'Certyfikat VCA-kq866' from public.jobs where slug in ('kq866-vca', 'kq866-unverified');
+insert into public.job_skills(job_id, skill_label)
+select id, 'Wózek widłowy kq866' from public.jobs where slug = 'kq866-skill';
+insert into public.job_requirements(job_id, locale, kind, position, content)
+select id, 'pl', 'mandatory', 0, 'Prawo jazdy kat. CE kq866' from public.jobs where slug = 'kq866-req';
+insert into public.job_requirements(job_id, locale, kind, position, content)
+select id, 'pl', 'mandatory'::public.requirement_kind, 0, 'Doświadczenie w transporcie kq866' from public.jobs where slug = 'kq866-reqen'
+union all
+select id, 'en', 'mandatory'::public.requirement_kind, 0, 'Tachograph card kq866' from public.jobs where slug = 'kq866-reqen';
+
+create function pg_temp.kq_slugs(p_locale text, p_keyword text) returns text language sql as $$
+  select coalesce(string_agg(slug, ',' order by slug), '')
+  from public.get_public_jobs(p_locale, p_keyword, p_limit => 100);
+$$;
+create function pg_temp.kq_facet_total(p_locale text, p_keyword text) returns bigint language sql as $$
+  select coalesce(sum(total), 0) from public.get_public_job_filter_facets(p_locale, p_keyword)
+  where dimension = 'category';
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-KQ866') = 'kq866-vca'
+  and public.get_public_jobs_count('pl', 'vca-KQ866') = 1
+  and pg_temp.kq_facet_total('pl', 'vca-KQ866') = 1,
+  'KQ866-1 certyfikat: lista, licznik i facety znajdują ofertę (bez firmy niezweryfikowanej)');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'WOZEK widlowy kq866') = 'kq866-skill'
+  and public.get_public_jobs_count('pl', 'WOZEK widlowy kq866') = 1,
+  'KQ866-2 umiejętność: bez wielkości liter i diakrytyków');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'kat. ce kq866') = 'kq866-req'
+  and pg_temp.kq_slugs('nl', 'kat. ce kq866') = 'kq866-req',
+  'KQ866-3 wymaganie w języku oferty: strona pl i strona nl (brak wymagań nl = język oferty)');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'tachograph card kq866') = ''
+  and public.get_public_jobs_count('pl', 'tachograph card kq866') = 0
+  and pg_temp.kq_slugs('en', 'tachograph card kq866') = 'kq866-reqen'
+  and public.get_public_jobs_count('en', 'tachograph card kq866') = 1,
+  'KQ866-4 wymaganie tylko w języku en: niewidoczne na stronie pl nie daje trafienia, na en daje');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'magazynier kq866') = 'kq866-skill,kq866-vca'
+  and pg_temp.kq_slugs('pl', 'kq866') = 'kq866-req,kq866-reqen,kq866-skill,kq866-vca'
+  and public.get_public_jobs_count('pl', 'kq866') = 4,
+  'KQ866-5 tytuł bez zmian; słowo z tytułu i kwalifikacji = suma zbiorów bez dubli');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'kq866%') = '',
+  'KQ866-5b znak % jest literałem także w kwalifikacjach');
+reset role;
+set role service_role;
+select pg_temp.assert((select count(*) from public.saved_search_jobs_after(
+    p_locale => 'pl', p_keyword => 'vca-kq866', p_city => null, p_categories => null, p_locations => null,
+    p_contract_types => null, p_salary_min => null, p_salary_max => null, p_accommodation => null,
+    p_immediate => null, p_no_language => null, p_since => null, p_salary_unit => 'month',
+    p_after_published_at => null, p_after_id => null, p_limit => 100)) = 1,
+  'KQ866-6 kopia filtrów dla alertów znajduje ofertę po certyfikacie');
+reset role;
+select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_candidates(text)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.job_keyword_qualification_match(uuid, text, text, text)', 'EXECUTE'),
+  'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
+
+savepoint kq866_old;
+\ir ../rollback/0214_keyword_job_qualifications.down.sql
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
+  and public.get_public_jobs_count('pl', 'wozek widlowy kq866') = 0
+  and pg_temp.kq_slugs('pl', 'magazynier kq866') = 'kq866-skill,kq866-vca',
+  'KQ866-N KONTROLA UJEMNA: definicje z 0213 szukają tylko w tytule');
+reset role;
+rollback to savepoint kq866_old;
+select pg_temp.assert(to_regprocedure('public.search_keyword_candidates(text)') is not null,
+  'KQ866-8 po cofnięciu savepointu stan 0214 zostaje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- PC1119. Miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119, #1076/M-4,
 --         migracja 0212): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
 --         rozpoznanego miasta; facet lokalizacji w języku widoku (location_names), tylko gdy
@@ -25164,6 +26104,8 @@ select pg_temp.assert(public.location_display_name('Sint-Niklaas', 'fr') = 'Sain
   'PC1119-N2 kontrola ujemna: bez strażnika nazwa prowadzi do innej gminy');
 rollback;
 reset role; reset app.current_uid;
+
+-- ============================================================================
 -- SD1112. Termin digestu zapisanych wyszukiwań bez dryfu (#1112, TIME21-04, migracja 0211).
 --   * `saved_search_next_run_at`: poprzedni termin + pełne okresy w czasie ściennym
 --     Europe/Brussels, pierwszy termin po chwili przebiegu (zaległe okresy pominięte), pora

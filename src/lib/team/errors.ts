@@ -8,7 +8,9 @@ export type TeamSpecificError =
   | 'MEMBER_ALREADY_EXISTS'
   | 'INVITATION_LIMIT_REACHED'
   | 'COMPANY_LIMIT_REACHED'
-  | 'LAST_OWNER';
+  | 'LAST_OWNER'
+  | 'MEMBER_REACTIVATION_DENIED'
+  | 'REACTIVATION_NOT_ALLOWED';
 
 export type TeamError = ErrorCode | TeamSpecificError;
 
@@ -17,6 +19,10 @@ const TEAM_KEYS: Record<TeamSpecificError, string> = {
   INVITATION_LIMIT_REACHED: 'team.error.invitationLimit',
   COMPANY_LIMIT_REACHED: 'team.error.companyLimit',
   LAST_OWNER: 'team.error.lastOwner',
+  // #867 (0217): wyłączonego członka przywraca zaproszeniem tylko ktoś, kto zarządza jego
+  // dotychczasową rolą — przy zapraszaniu i przy przyjęciu zaproszenia.
+  MEMBER_REACTIVATION_DENIED: 'team.error.reactivationDenied',
+  REACTIVATION_NOT_ALLOWED: 'team.error.reactivationNotAllowed',
 };
 
 /** Komunikat błędu Postgresa/RLS z RPC zespołu → stabilny kod. */
@@ -26,6 +32,8 @@ export function mapTeamError(message: string | undefined): TeamError {
   if (m.includes('INVITATION_LIMIT_REACHED')) return 'INVITATION_LIMIT_REACHED';
   if (m.includes('COMPANY_LIMIT_REACHED')) return 'COMPANY_LIMIT_REACHED';
   if (m.includes('aktywnego właściciela')) return 'LAST_OWNER';
+  if (m.includes('MEMBER_REACTIVATION_DENIED')) return 'MEMBER_REACTIVATION_DENIED';
+  if (m.includes('REACTIVATION_NOT_ALLOWED')) return 'REACTIVATION_NOT_ALLOWED';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (

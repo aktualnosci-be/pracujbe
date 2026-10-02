@@ -29,6 +29,8 @@ select pg_temp.assert(
 -- facety i listę ofert z nowymi parametrami, więc najpierw jej rollback, potem 0183.
 -- Odroczone triggery (tłumaczenia, zaufanie treści) po wstawieniu ofert blokują ALTER TABLE.
 set constraints all immediate;
+-- 0213 (#1215) zależy od 0194 (indeksy na job_salary_sort_key z 0194) — najpierw jej rollback.
+\ir ../rollback/0213_public_jobs_custom_plan.down.sql
 \ir ../rollback/0194_job_filters_language_worktime_radius.down.sql
 \ir ../rollback/0183_city_sections_in_filters.down.sql
 

@@ -283,9 +283,12 @@ type AlertOffRow = {
   created_at?: string | null;
 };
 
-/** Token wyłączenia JEDNEGO alertu (digest `jobMatch` zapisanego wyszukiwania) albo `null`. */
+/** Digesty alertów z linkiem „wyłącz tylko ten alert”: zapisane wyszukiwanie i obserwowana firma. */
+const ALERT_OFF_TEMPLATES: ReadonlySet<string> = new Set(['jobMatch', 'followedCompanyJobs']);
+
+/** Token wyłączenia JEDNEGO alertu (digest `jobMatch`/`followedCompanyJobs`) albo `null`. */
 function alertOffTokenFor(row: AlertOffRow, secret: string | null): string | null {
-  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
+  if (!ALERT_OFF_TEMPLATES.has(row.template) || row.entity_type !== 'saved_search') return null;
   if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
   return createAlertOffToken(
     { profileId: row.profile_id, savedSearchId: row.entity_id },
