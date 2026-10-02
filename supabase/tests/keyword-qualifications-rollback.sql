@@ -26,6 +26,8 @@ select pg_temp.assert(
   'KQ866-R0 baza w stanie po 0214');
 
 begin;
+-- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
+\ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0214_keyword_job_qualifications.down.sql
 
 select pg_temp.assert(

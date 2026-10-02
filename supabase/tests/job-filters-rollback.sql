@@ -28,8 +28,12 @@ select pg_temp.assert(
 
 -- Odroczone triggery kolejki tłumaczeń (0146) z insertów fikstury — przed ALTER TABLE.
 set constraints all immediate;
+-- 0227 (grafik pracy, numer tymczasowy) redefiniuje te same funkcje z nowym parametrem — najpierw jej rollback.
+\ir ../rollback/0227_job_shift_patterns.down.sql
+
 -- 0213 (#1215) zależy od 0194 (indeksy na job_salary_sort_key z 0194) — najpierw jej rollback.
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql
+
 \ir ../rollback/0194_job_filters_language_worktime_radius.down.sql
 
 -- Po rollbacku: sygnatury i zachowanie sprzed 0194 (PLN porównywane liczbowo, bez work_time).

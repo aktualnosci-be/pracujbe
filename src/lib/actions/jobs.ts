@@ -37,6 +37,7 @@ import {
 import { routing } from '@/i18n/routing';
 import { asciiSlugBase } from '@/lib/slug';
 import { workModePatch } from '@/lib/job-work-mode';
+import { normalizeShiftPatterns } from '@/lib/job-shift-patterns';
 import {
   step1Schema,
   step2Schema,
@@ -581,6 +582,8 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       shifts: nullIfEmpty(s2.shifts),
       // #811 (0194): wymiar pracy (brak = brak deklaracji).
       work_time: s2.workTime ?? null,
+      // #858 (0227): typy grafiku (pusta lista = brak deklaracji).
+      shift_patterns: normalizeShiftPatterns(s2.shiftPatterns),
       start_immediately: s2.startImmediately,
       start_date: s2.startDate ?? null,
       city: s3.city,

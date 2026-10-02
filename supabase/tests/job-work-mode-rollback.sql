@@ -31,6 +31,8 @@ select pg_temp.assert(
 select pg_temp.assert(
   position('work_mode' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) = 0
   and position('work_time' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) > 0
+  and position('shift_patterns' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) > 0
+  and position('shift_patterns' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) > 0
   and position('work_mode' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) = 0
   and position('job_operation_context' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) > 0
   and position('work_mode' in pg_get_functiondef('public.job_edit_audit_snapshot(public.jobs)'::regprocedure)) = 0
@@ -39,7 +41,7 @@ select pg_temp.assert(
   and has_function_privilege('anon', 'public.get_public_job(text,text)', 'EXECUTE')
   and not exists (select 1 from pg_proc p cross join lateral unnest(p.proargnames) a
                    where p.oid = 'public.get_public_job(text,text)'::regprocedure and a = 'work_mode'),
-  'WD792-R2 definicje z 0194/0200 przywrócone (z grantami RPC)');
+  'WD792-R2 definicje z 0194/0200/0227 przywrócone (z grantami RPC)');
 rollback;
 select pg_temp.assert(
   exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'jobs' and column_name = 'work_mode'),

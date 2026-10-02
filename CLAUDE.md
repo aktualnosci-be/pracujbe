@@ -857,6 +857,22 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
   jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
   ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
+  Grafik pracy (#858, migracja `0227` — numer tymczasowy): `jobs.shift_patterns text[]` = typy
+  z zamkniętej listy (`job_shift_pattern_values()`: day, two_shift, three_shift, night, weekend,
+  split, continuous; lustro `src/lib/job-shift-patterns.ts`), null = brak deklaracji; CHECK
+  `job_shift_patterns_valid`, zapis przez `job_shift_patterns_from_jsonb` (kolejność listy, bez
+  duplikatów). Kreator: pola wyboru w kroku 2 obok opisu zmian (tekst zostaje uzupełnieniem),
+  `save_job_draft` (stan 0194) i `update_published_job` (stan 0203) z kluczem `shift_patterns`,
+  kopia szkicu triggerem. Filtr `?shift=a,b` (parametr `p_shift_patterns`, ostatni) w liście,
+  liczniku, facetach (baza wymiarów) i kopii alertów (`saved_search_jobs_after`, blok 1:1):
+  oferta z którymkolwiek typem (`&&`), bez deklaracji nie pasuje; starych ofert nie
+  klasyfikujemy z tekstu. Zapisane wyszukiwanie: klucz `shiftPatterns`. Szczegół oferty:
+  „Grafik pracy” z `get_public_job_shift_patterns` (odczyt pomocniczy, `get_public_job` bez
+  zmian). Dowód: `rls.sql` sekcja SP858 (kontrole ujemne: bez warunku w liście i kopii alertów,
+  bez CHECK, bez klucza w kreatorze), rollback `0227_…down.sql` (`job-shift-patterns-rollback.sql`,
+  także przed 0194 w `job-filters-rollback.sql` i `city-sections-filters-rollback.sql`), unit
+  `job-shift-patterns`. **Otwarte:** grafik w JobPosting i audycie edycji, filtr wykluczający
+  (np. „bez weekendów”).
   Spójność wyszukiwania miast i filtrów (#1077/#1119, bez migracji): `resolveLocationKey`
   (`src/lib/locations/city-aliases.ts`) porównuje CAŁĄ nazwę po `nameKey` (lustro SQL `city_key` z
   0153: bez wielkości liter, diakrytyków i różnic spacji/myślnika), więc „Bruxelles”/„bruxelles”/
@@ -2028,6 +2044,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`dashboard.duplicateJobModerationLocked`); audyt `job.duplicated`. Dowód: `rls.sql` sekcja
   JD216 (kontrole ujemne: bramka recruiter+, wpis klucza), unit `job-duplicate-draft`, E2E
   `employer-job-duplicate` (demo, 4 języki, axe 320 px).
+  Źródło pod blokadą (#1098, migracja `0226` — numer tymczasowy): `duplicate_job_as_draft` czyta
+  ofertę źródłową `FOR SHARE`, więc trwająca edycja (`save_job_draft`/`update_published_job`
+  blokują wiersz `FOR UPDATE`) kończy się przed kopiowaniem — kopia nie łączy danych sprzed i po
+  edycji. Dowód: `rls.sql` sekcja OC778 (OC1098, dblink; kontrola ujemna: bez `FOR SHARE` kopia
+  nie czeka), rollback `0226_…down.sql` (`owner-copy-locks-rollback.sql`).
 - [~] „Koszty i dodatki” w ofercie (migracja `0169`): krok 8 kreatora ma
   opcjonalne pola deklarowane przez pracodawcę — zakwaterowanie (zapewnione / pomoc / brak; przy
   „zapewnione”: koszt EUR za tydzień lub miesiąc, 0 = bez kosztów, potrącenie z pensji,
@@ -2273,6 +2294,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
   nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
   TM403-13c przez `INVITATION_LIMIT_REACHED`).
+  Ostatni właściciel przy równoległych zmianach (#778, migracja `0226` — numer tymczasowy): dwie
+  sesje mogły równocześnie odebrać rolę albo dostęp DWÓM różnym właścicielom (każda blokowała
+  tylko swój wiersz, licznik bez blokady) i zostawić firmę bez aktywnego właściciela.
+  `set_company_member_role`/`set_company_member_active` i strażnik `enforce_owner_invariants`
+  (bezpośredni UPDATE/DELETE) biorą blokadę doradczą firmy `company_owners:<id>` po blokadzie
+  wiersza celu i przed kontrolami (uprawnienia i licznik na świeżym stanie); przegrana sesja
+  dostaje kontrolowany błąd (`NOT_FOUND` — utracone uprawnienia, albo `VALIDATION_FAILED`).
+  `erase_employer_subject` już blokuje wszystkie członkostwa firmy. Dowód: `rls.sql` sekcja OC778
+  (dblink: dezaktywacja, degradacja, wariant mieszany, bezpośredni UPDATE; kontrola ujemna: bez
+  blokady obie dezaktywacje przechodzą i firma nie ma właściciela), rollback `0226_…down.sql`.
+
   Przywrócenie wyłączonego członka przez zaproszenie (#867, migracja `0217` — numer tymczasowy):
   zaproszenie na adres osoby z NIEAKTYWNYM członkostwem wymaga, by zapraszający zarządzał jej
   dotychczasową rolą i rolą z zaproszenia (reguła `set_company_member_active`) — strażnik BEFORE
@@ -2287,6 +2319,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   limitu 3/dobę zostawia token z ostatnio wysłanego e-maila (link działa); wynik RPC bez zmian,
   adres z kontem jak dotąd. Podpowiedź `team.inviteLinkHint` opisuje limit. Dowód: `rls.sql`
   TI611-3 (równolegle) i P2C994 (kontrola ujemna: definicja z 0178 wymienia token bez e-maila).
+
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — **wyłączone w trybie ogłoszeniowym (#1131)** — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -2474,6 +2507,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
   (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
   unit `translation-worker`, `translation-job-sync`.
+  Integralność kolejki (#644/#754/#755, migracja `0223` — numer tymczasowy): dzierżawa ważna do
+  `lease_expires_at` — `complete/fail/defer_translation_job` po terminie = `stale_lease` także bez
+  ponownego przejęcia, a worker nie woła modelu przy zapasie dzierżawy < 90 s
+  (`MIN_LEASE_REMAINING_MS`, kod `lease_too_short`, zadanie wraca do puli); źródło tylko dla
+  istniejącej, nieusuniętej encji właściwego typu (`translation_entity_exists`: oferta + firma,
+  `candidate_profiles.id` + konto) — inaczej `NOT_FOUND`, ukrycie źródła encji, której nie ma,
+  = purge, sieroty usunięte jednorazowo; korekta ręczna wymaga autora (null =
+  `VALIDATION_FAILED: author`, autor = aktywny admin, recruiter+ firmy oferty albo właściciel
+  profilu, inaczej `PERMISSION_DENIED`). Walidator faktów (#1106): negacja także w zdaniach
+  z faktami przy innej liczbie zdań (kotwica = odcisk faktów zdania; łączenie/dzielenie zdań bez
+  fałszywych odrzuceń). Dowód: `rls.sql` sekcja TQ952 (kontrole ujemne na definicjach sprzed 0223),
+  rollback `0223_…down.sql` (`translation-queue-integrity-rollback.sql`), unit
+  `translation-facts`, `translation-worker`.
+
   Wyścig wznowienia oferty z zawieszeniem firmy (#802, migracja `0210`):
   `sync_job_translation_source` czyta firmę z `FOR SHARE OF c` — synchronizacja oferty czeka na
   zatwierdzenie zmiany statusu firmy i widzi `suspended` (źródło nieaktywne, zadania nie wracają);
@@ -2482,6 +2529,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   niepuste pola bez klucza w przekładzie; opis oferty i opis firmy w oryginale mają `lang` języka
   źródła. Dowód: `rls.sql` P2C994 (kontrola ujemna: sync z 0190 reaktywuje źródło), unit
   `job-machine-translation`, `job-detail-partial-translation-lang` (kontrole ujemne).
+
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -2836,6 +2884,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wywołanego poza normalną interakcją użytkownika. Dowód: unit
   `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
   ujemna bez zapisu w toku, odblokowanie po błędzie).
+  Tylko oferty publiczne (#720, migracja `0224` — numer tymczasowy): `email_campaign_unavailable_slugs`
+  (warunki `campaign_job_source` z 0102: aktywna, nieusunięta, niewygasła, nie demo, firma
+  `verified`) — zapis rewizji i aktywacja odrzucają `CAMPAIGN_JOB_UNAVAILABLE: slugi` (edytor: błąd
+  przy polu sluga `campaignEditorErrorJobUnavailable`, aktywacja: komunikat
+  `campaignJobsUnavailableActivate`), `process_email_campaigns` pomija rewizję (bez rezerwacji
+  odbiorców), `email_delivery_send_check` wygasza zakolejkowany newsletter
+  (`suppressed_campaign_job_unavailable`), szczegół rewizji pokazuje ostrzeżenie ze slugami.
+  `enqueue_campaign_batch` bez zmian. Dowód: `rls.sql` sekcja GC746 (kontrola ujemna: definicje
+  0155/0111 zapisują i aktywują martwą ofertę), unit `campaign-job-availability`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -3883,7 +3940,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
-  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163; od `0224` — numer tymczasowy —
+  w partiach po 5000 z indeksem czasu i SKIP LOCKED, najwyżej 10 partii na przebieg, flaga
+  `technicalGcBacklog`, inbox liczony od zakończenia `updated_at` zamiast `seen_at` (#746/#722,
+  sekcja GC746 z kontrolami ujemnymi, `src/lib/maintenance/technical-gc.ts`)), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
@@ -4012,6 +4072,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `recordConsent`, zaktualizowany w tym samym PR). Dowód: `rls.sql` sekcja CVR142 (kontrole
   ujemne: nieistniejąca wersja nie trafia do receiptu, wersja nieopublikowana — przyszła lub szkic — też nie,
   authenticated nie dopisuje/nie nadpisuje receiptu cudzego konta).
+  Język receiptu (#672, migracja `0225` — numer tymczasowy): ta sama wersja może mieć osobne
+  wiersze `consent_versions` dla każdego języka, więc `recordConsent(…, version, locale)` dostaje
+  język banera (`useLocale` w `CookieConsent` → `updateConsent` → `saveConsent`; spoza
+  `routing.locales` = null), a `record_consent(…, p_locale)` wybiera deterministycznie: wiersz
+  w języku banera → wspólny (`locale is null`) → `en` → pozostałe alfabetycznie po kodzie, remis
+  dat po `id` — tak samo dla wersji z klienta i fallbacku do bieżącej. Dowód: `rls.sql` sekcja
+  CVL672 (kontrola ujemna: definicja z 0142 przypisuje receipt `pl` do wiersza `nl`), rollback
+  `0225_…down.sql` (`consent-receipt-locale-rollback.sql`), unit `consent-action`, `consent-store`,
+  E2E `cookie-consent-categories` (język w wywołaniu akcji).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
   Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta

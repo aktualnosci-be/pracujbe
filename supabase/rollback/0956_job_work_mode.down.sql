@@ -1,6 +1,6 @@
 -- =============================================================================
--- Rollback 0956_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0216),
--- job_edit_audit_snapshot (0200) i update_published_job (0203), get_public_job (0194), a potem usuwa
+-- Rollback 0956_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0227),
+-- job_edit_audit_snapshot (0200) i update_published_job (0227), get_public_job (0194), a potem usuwa
 -- triggery, ograniczenia, kolumny `jobs.work_mode` / `jobs.remote_applicant_countries`
 -- i funkcje pomocnicze. Dawny boolean `jobs.remote` zostaje z wartością liczoną z trybu.
 -- Test: supabase/tests/job-work-mode-rollback.sql (scripts/test-rls.sh).
@@ -42,7 +42,9 @@ begin
                     -- 0172: kanał aplikowania u ogłoszeniodawcy
                     'apply_url', 'apply_email', 'apply_phone',
                     -- 0194, #811: wymiar czasu pracy
-                    'work_time')
+                    'work_time',
+                    -- 0227, #858: typy grafiku pracy
+                    'shift_patterns')
     limit 1;
   if v_bad is null then
     select k into v_bad from jsonb_object_keys(tr) k
@@ -121,7 +123,8 @@ begin
       apply_url                = case when j ? 'apply_url' then nullif(btrim(coalesce(j->>'apply_url', '')), '') else apply_url end,
       apply_email              = case when j ? 'apply_email' then nullif(btrim(coalesce(j->>'apply_email', '')), '') else apply_email end,
       apply_phone              = case when j ? 'apply_phone' then nullif(btrim(coalesce(j->>'apply_phone', '')), '') else apply_phone end,
-      work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end
+      work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end,
+      shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end
     where id = p_job_id;
   end if;
 
@@ -307,6 +310,8 @@ begin
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
     -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji; przeniesione z main).
     work_time                = nullif(j->>'work_time', ''),
+    -- 0227 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
+    shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
     updated_at               = now()
   where id = p_job_id;
   delete from public.job_operation_context

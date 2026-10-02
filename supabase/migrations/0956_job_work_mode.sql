@@ -16,7 +16,7 @@
 -- 2. `jobs.remote` zostaje (filtr promienia 0194, matching) i przy ustawionym
 --    trybie liczy go trigger BEFORE: `remote = (work_mode = 'remote')` — praca hybrydowa nie
 --    omija filtra promienia ani punktów lokalizacji w dopasowaniu. Tryb nieznany = bez zmian.
--- 3. `save_job_draft` (stan 0216: 0194 + postęp kreatora `draft_step`) i `update_published_job` (stan 0203) + dwa nowe klucze;
+-- 3. `save_job_draft` (stan 0227: 0216 + `shift_patterns`) i `update_published_job` (stan 0227) + dwa nowe klucze;
 --    migawka audytu edycji (`job_edit_audit_snapshot`, 0200) + tryb i kraje.
 -- 4. `get_public_job` (stan 0194, drop + create) + `work_mode`, `remote_applicant_countries`
 --    na końcu listy (bramki oferty publicznej bez zmian).
@@ -91,7 +91,7 @@ create trigger trg_jobs_sync_remote_from_work_mode
   before insert or update on public.jobs
   for each row execute function public.jobs_sync_remote_from_work_mode();
 
--- --- 3a. Kreator: save_job_draft (stan 0216) + tryb pracy -------------------------------------
+-- --- 3a. Kreator: save_job_draft (stan 0227) + tryb pracy -------------------------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -124,6 +124,8 @@ begin
                     'apply_url', 'apply_email', 'apply_phone',
                     -- 0194, #811: wymiar czasu pracy
                     'work_time',
+                    -- 0227, #858: typy grafiku pracy
+                    'shift_patterns',
                     -- 0956, #792: tryb pracy i kraje kandydata przy pracy w 100% zdalnej
                     'work_mode', 'remote_applicant_countries')
     limit 1;
@@ -205,6 +207,7 @@ begin
       apply_email              = case when j ? 'apply_email' then nullif(btrim(coalesce(j->>'apply_email', '')), '') else apply_email end,
       apply_phone              = case when j ? 'apply_phone' then nullif(btrim(coalesce(j->>'apply_phone', '')), '') else apply_phone end,
       work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end,
+      shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end,
       work_mode                = case when j ? 'work_mode' then nullif(j->>'work_mode', '') else work_mode end,
       -- Tryb inny niż w 100% zdalny = bez krajów (CHECK), także gdy klucz krajów nie przyszedł.
       remote_applicant_countries = case
@@ -315,7 +318,7 @@ $$;
 revoke all on function public.job_edit_audit_snapshot(public.jobs) from public, anon, authenticated;
 
 
--- --- 3c. update_published_job (stan 0203) + tryb pracy -------------------------------------
+-- --- 3c. update_published_job (stan 0227) + tryb pracy -------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -401,6 +404,8 @@ begin
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
     -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji; przeniesione z main).
     work_time                = nullif(j->>'work_time', ''),
+    -- 0227 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
+    shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
     -- 0956 (#792): tryb pracy i kraje kandydata (brak klucza = tryb nieznany, bez krajów).
     work_mode                = nullif(j->>'work_mode', ''),
     remote_applicant_countries = case when coalesce(j->>'work_mode', '') = 'remote'

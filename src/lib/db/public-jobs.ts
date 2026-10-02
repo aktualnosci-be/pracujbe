@@ -47,10 +47,11 @@ const FILTER_ARGUMENTS = `
   p_language_level => $16::text,
   p_work_time => $17::text,
   p_near => $18::text,
-  p_radius_km => $19::integer`;
+  p_radius_km => $19::integer,
+  p_shift_patterns => $20::text[]`;
 
 /** Liczba parametrów filtra — sortowanie i paginacja listy idą po nich. */
-const FILTER_ARGUMENT_COUNT = 19;
+const FILTER_ARGUMENT_COUNT = 20;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -84,6 +85,8 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.workTime ?? null,
     params.near?.trim() ? params.near.trim() : null,
     params.near?.trim() ? (params.radiusKm ?? null) : null,
+    // 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich).
+    params.shiftPatterns?.length ? params.shiftPatterns : null,
   ];
 }
 
@@ -533,6 +536,23 @@ export async function getPublicJobCosts(
       [jobId],
     )) as { rows: PublicJobRow[] };
     return result.rows[0] ?? null;
+  });
+}
+
+/**
+ * Grafik pracy oferty publicznej (#858, 0227) — RPC pod rolą anon zwraca tablicę tylko dla
+ * oferty publicznej (`job_is_public`); null = brak deklaracji albo oferta niepubliczna.
+ */
+export async function getPublicJobShiftPatterns(
+  pool: TransactionPool,
+  jobId: string,
+): Promise<unknown> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT public.get_public_job_shift_patterns(p_job_id => $1::uuid) AS shift_patterns`,
+      [jobId],
+    )) as { rows: { shift_patterns: unknown }[] };
+    return result.rows[0]?.shift_patterns ?? null;
   });
 }
 

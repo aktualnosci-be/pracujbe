@@ -12,6 +12,7 @@ import type {
 import { cleanLocalizedText } from '@/lib/screening/questions';
 import { jobCostsPatch } from '@/lib/job-costs';
 import { workModePatch } from '@/lib/job-work-mode';
+import { normalizeShiftPatterns } from '@/lib/job-shift-patterns';
 
 /** Puste/whitespace → null (kolumny nullable), w innym wypadku wartość surowa. */
 function nullIfEmpty(value: string | undefined | null): string | null {
@@ -42,6 +43,8 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
           shifts: nullIfEmpty(v.shifts),
           // #811 (0194): brak wyboru = brak deklaracji (null czyści zapisany wymiar).
           work_time: v.workTime ?? null,
+          // #858 (0227): typy grafiku; pusta lista = brak deklaracji (baza zapisuje null).
+          shift_patterns: normalizeShiftPatterns(v.shiftPatterns),
           start_immediately: v.startImmediately,
           start_date: v.startDate ?? null,
         },

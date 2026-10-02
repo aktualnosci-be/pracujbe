@@ -12,7 +12,8 @@ import { DO_NOT_TRANSLATE } from '@/lib/translation/glossary';
  *   języka tekstu: „15,50” pl/nl/fr = „15.50” en) → waluty → jednostki (%, km, kg…) →
  *   pojęcia brutto/netto i okres stawki (godzina/miesiąc) → terminy chronione (kwalifikacje
  *   z glosariusza, oznaczenia litera+cyfra jak BA4/C95, nazwy własne przekazane jawnie) →
- *   obecność negacji.
+ *   negacja: w polu, zdanie po zdaniu (ta sama liczba zdań) i w zdaniach z faktami
+ *   (odpowiednik zdania wskazany przez jego fakty, także przy innej liczbie zdań, #1106).
  *
  * Kontrola jest celowo zachowawcza (fail-closed): liczba zapisana słownie w przekładzie albo
  * zmieniony format daty kończy się odrzuceniem, a nie zgadywaniem. Nie wykrywa zmian
@@ -51,6 +52,13 @@ export interface Facts {
    * maskowana inną negacją w innym miejscu pola.
    */
   negations: boolean[];
+  /**
+   * Zdania z faktami (#1106): odcisk faktów zdania (liczby, godziny, daty, kontakty, waluty,
+   * jednostki, terminy) + obecność negacji. Zdanie przekładu z tym samym odciskiem to
+   * odpowiednik zdania źródła także wtedy, gdy liczba zdań się różni — negacja musi się zgadzać
+   * w tym zdaniu, a nie tylko gdzieś w polu.
+   */
+  negationAnchors: { key: string; negated: boolean }[];
 }
 
 const NOT_LETTER_BEFORE = '(?<![\\p{L}\\p{N}_])';
@@ -257,6 +265,26 @@ function splitSentences(text: string): string[] {
 
 /** Wyciąga fakty z jednego tekstu. `protectedTerms` — nazwy własne (np. firma), dosłownie. */
 export function extractFacts(input: string, locale: Locale, protectedTerms: readonly string[] = []): Facts {
+  const facts = extractCore(input, locale, protectedTerms);
+  const sentences = splitSentences(input.normalize('NFC'));
+  const negationAnchors =
+    sentences.length < 2
+      ? []
+      : sentences.flatMap((sentence) => {
+          const f = extractCore(sentence, locale, protectedTerms);
+          const key = anchorKey(f);
+          return key ? [{ key, negated: f.negation }] : [];
+        });
+  return { ...facts, negationAnchors };
+}
+
+/** Odcisk faktów zdania; pusty = zdanie bez faktów (bez kotwicy). Bez pay_terms (słowa języka). */
+function anchorKey(f: Omit<Facts, 'negationAnchors'>): string {
+  const parts = [f.emails, f.urls, f.dates, f.times, f.phones, f.numbers, f.currencies, f.units, f.terms];
+  return parts.some((p) => p.length > 0) ? JSON.stringify(parts) : '';
+}
+
+function extractCore(input: string, locale: Locale, protectedTerms: readonly string[]): Omit<Facts, 'negationAnchors'> {
   const original = input.normalize('NFC');
   const text = { value: original };
 
@@ -375,5 +403,31 @@ export function compareFacts(source: Facts, translation: Facts): FactKind | null
   const a = source.negations;
   const b = translation.negations;
   if (a.length >= 2 && a.length === b.length && a.some((v, i) => v !== b[i])) return 'negation';
+  if (anchoredNegationMismatch(source, translation)) return 'negation';
   return null;
+}
+
+/**
+ * Negacja w zdaniach z faktami (#1106), także przy innej liczbie zdań. Porównujemy tylko
+ * kotwice jednoznaczne (odcisk występuje raz w źródle i raz w przekładzie). Przekład, który
+ * łączy zdania, może dołączyć cudzą negację do zdania z faktami, a dzielący — ją oddzielić,
+ * więc dodatkowa negacja liczy się tylko bez łączenia zdań, a brakująca — bez dzielenia.
+ */
+function anchoredNegationMismatch(source: Facts, translation: Facts): boolean {
+  const unique = (anchors: Facts['negationAnchors']) => {
+    const seen = new Map<string, boolean | null>();
+    for (const { key, negated } of anchors) seen.set(key, seen.has(key) ? null : negated);
+    return seen;
+  };
+  const src = unique(source.negationAnchors);
+  const tr = unique(translation.negationAnchors);
+  const merged = translation.negations.length < source.negations.length;
+  const split = translation.negations.length > source.negations.length;
+  for (const [key, negated] of src) {
+    const other = tr.get(key);
+    if (negated === null || other === null || other === undefined || other === negated) continue;
+    if (other && !merged) return true;
+    if (!other && !split) return true;
+  }
+  return false;
 }
