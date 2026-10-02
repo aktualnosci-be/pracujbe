@@ -34,6 +34,30 @@ pracujbe-cron → Logs / Cron Events).
 
 Worker nie ma adresu HTTP (`workers_dev = false`, brak tras, brak obsługi `fetch`).
 
+## Limit czasu kolejki poczty (#731)
+
+`/api/email/process` obsługuje obie kolejki (`email_deliveries` i `auth.email_outbox`) w jednym
+budżecie czasu `EMAIL_RUN_BUDGET_MS` = **90 s** (`src/lib/email/run-deadline.ts`), krótszym od
+limitu workera `CRON_TIMEOUT_SECONDS` = **120 s**. Nie podnoś budżetu bez podniesienia limitu
+workera (test `email-run-deadline` pilnuje: budżet ≤ limit − 20 s, dzierżawa 300 s > limit,
+okno wysyłki 25 s ≥ sprawdzenie GET + POST EmailLabs po 10 s).
+
+- Nowa wysyłka startuje tylko z oknem co najmniej 25 s do końca budżetu i do końca dzierżawy;
+  jej termin nie wykracza poza budżet przebiegu. Rozłączenie callera (sygnał żądania) też
+  zatrzymuje kolejne wysyłki.
+- Rekordy, na które zabrakło czasu, wracają do kolejki **bez zużycia próby** i nie są liczone
+  jako `failed`. Odpowiedź to wtedy `503` z licznikiem `deadlineDeferred` (oraz `leaseLost`
+  w `auth`, gdy dzierżawa wygasła przed obsługą) — przebieg jest nieudany w Cron Events, choć
+  część listów wyszła. To sygnał zaległości, nie awarii dostawcy.
+- Dzierżawa (300 s) przeżywa cały przebieg, więc kolejny trigger (po 5 min) nie dostanie
+  rekordu trzymanego przez trwający przebieg; claim z `SKIP LOCKED` dzieli resztę.
+
+**Sprawdzenie zaległości po pierwszym uruchomieniu:** w Cron Events kolejne przebiegi
+`*/5 * * * *` powinny wrócić do OK, gdy kolejka się opróżni (seria `503` = zaległość albo
+wolny dostawca). `/api/health/ops` (z `HEALTH_CHECK_SECRET`) pokazuje wiek najstarszego
+zlecenia obu kolejek (`email_queue_age`, `auth_email_queue_age`) — po opróżnieniu zaległości
+wraca poniżej progu.
+
 ## Bramka hasła
 
 `SITE_ACCESS_PASSWORD` działa w middleware, którego `matcher` pomija całe `/api/*`

@@ -545,6 +545,11 @@ export interface JobWizardProps {
    */
   screeningEnabled?: boolean;
   /**
+   * #1225: tryb z serwera dla podtytułu edycji opublikowanej oferty (domyślnie ogłoszeniowy —
+   * bez wzmianki o zgłoszeniach).
+   */
+  recruitmentEnabled?: boolean;
+  /**
    * Firma, dla której wyrenderowano kreator nowej oferty (EMP-02). `createJobDraft` tworzy
    * szkic tylko wtedy, gdy to nadal aktywna firma — inaczej `ACTIVE_COMPANY_CHANGED`
    * zamiast szkicu w firmie przełączonej w innej karcie. Wznowienie istniejącego szkicu
@@ -672,6 +677,7 @@ export function JobWizard({
   importReview,
   assistEnabled = false,
   screeningEnabled = false,
+  recruitmentEnabled = false,
   companyId = null,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
@@ -1291,8 +1297,8 @@ export function JobWizard({
           <p className={INTRO}>
             {isEdit
               ? published?.status === 'paused'
-                ? t('editSubtitlePaused')
-                : t('editSubtitleActive')
+                ? t(recruitmentEnabled ? 'editSubtitlePaused' : 'editSubtitlePausedListing')
+                : t(recruitmentEnabled ? 'editSubtitleActive' : 'editSubtitleActiveListing')
               : t('subtitle')}
           </p>
           {showViewLink ? (

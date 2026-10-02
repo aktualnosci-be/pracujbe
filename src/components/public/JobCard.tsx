@@ -64,6 +64,9 @@ export async function JobCard({
     period: period => t(`passport.salaryPeriods.${period}`),
   });
   const highlights = job.highlights.slice(0, 2);
+  // #1223: tytuł i wyróżniki w innym języku niż strona (tłumaczenie zastępcze) — `lang`
+  // fragmentu, żeby czytnik ekranu użył właściwej wymowy (jak `lang` treści na szczególe).
+  const contentLang = job.contentLocale && job.contentLocale !== locale ? job.contentLocale : undefined;
   const relative = formatPublishedRelative(job.publishedAt, locale);
   // #1131: tryb ogłoszeniowy — brak paska dopasowania niezależnie od propsów.
   const withMatch = showMatch === true && typeof matchScore === 'number' && isRecruitmentEnabled('matching');
@@ -78,7 +81,7 @@ export async function JobCard({
         <PublicSaveJobButton jobId={job.id} iconOnly plain />
       </header>
 
-      <h3>
+      <h3 lang={contentLang}>
         <Link
           href={`${JOB_DETAIL_BASE}/${job.slug}`}
           className="after:absolute after:inset-0 after:rounded-[24px] after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 max-[500px]:after:rounded-[20px]"
@@ -164,7 +167,7 @@ export async function JobCard({
           <dt>{t('passport.conditions')}</dt>
           <dd>
             {tContract(job.contractType)}
-            {highlights.length > 0 ? <small>{highlights.join(' · ')}</small> : null}
+            {highlights.length > 0 ? <small lang={contentLang}>{highlights.join(' · ')}</small> : null}
           </dd>
         </div>
       </dl>

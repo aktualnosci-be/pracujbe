@@ -29,7 +29,7 @@ import { createUnsubscribeToken, verifyUnsubscribeToken } from '@/lib/email/unsu
 import { applyAlertOff, inspectAlertOffToken } from '@/lib/email/saved-search-alert-off';
 import { renameSavedSearchAction } from '@/lib/actions/saved-searches';
 import { renderEmail } from '@/emails/templates';
-import { jobMatchAlertOffLabel } from '@/emails/copy';
+import { followedCompanyAlertOffLabel, jobMatchAlertOffLabel } from '@/emails/copy';
 
 const SECRET = 'test-unsubscribe-secret-0123456789abcdef';
 const PROFILE = '8f2c1d3e-4b5a-4c6d-8e7f-901234567890';
@@ -206,6 +206,35 @@ describe('e-mail jobMatch: link „wyłącz tylko ten alert”', () => {
   });
 });
 
+describe('e-mail followedCompanyJobs: „Nowe oferty firmy …” i link wyłączenia tej obserwacji', () => {
+  it('temat, nagłówek i link w każdym języku odbiorcy; nazwa firmy zamiast nazwy wyszukiwania', async () => {
+    for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
+      const url = `${SITE}/${locale}/wypisz-alert#t=tok`;
+      const out = await renderEmail(
+        'followedCompanyJobs',
+        locale,
+        { companyName: 'Acme Logistics', count: 3, actionUrl: `${SITE}/${locale}/candidate/wyszukiwania` },
+        { alertOffUrl: url },
+      );
+      expect(out.subject).toContain('Acme Logistics');
+      expect(out.html).toContain(followedCompanyAlertOffLabel[locale]);
+      expect(out.html).not.toContain(jobMatchAlertOffLabel[locale]);
+      expect(out.html).toContain(url);
+      expect(out.text).toContain(url);
+    }
+  });
+
+  it('KONTROLA UJEMNA: payload kolejki nie podstawi własnego linku', async () => {
+    const out = await renderEmail('followedCompanyJobs', 'pl', {
+      companyName: 'Acme',
+      count: 1,
+      actionUrl: `${SITE}/pl/candidate/wyszukiwania`,
+      alertOffUrl: 'https://evil.example/off',
+    });
+    expect(out.html).not.toContain('evil.example');
+  });
+});
+
 describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
   function row(id: string, template: string, extra: Record<string, unknown> = {}) {
     return {
@@ -258,6 +287,28 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
     expect(headers['List-Unsubscribe']).not.toContain('d1@example.test');
     // Stopka nadal ma też wypisanie z kategorii (świadomy wybór odbiorcy).
     expect(send.mock.calls[0]![0].html).toContain(`${SITE}/fr/wypisz#t=`);
+  });
+
+  it('digest obserwowanej firmy: ten sam token alertu, link i List-Unsubscribe wyłączają tylko tę obserwację', async () => {
+    mockQueue([
+      row('d1', 'followedCompanyJobs', {
+        entity_type: 'saved_search',
+        entity_id: SEARCH,
+        payload: { companyName: 'Acme', count: 2, jobs: [], searchName: 'nie z payloadu' },
+      }),
+    ]);
+    const { processEmailQueue } = await import('@/lib/email/outbox');
+    expect(await processEmailQueue()).toMatchObject({ sent: 1, suppressed: 0 });
+    const message = send.mock.calls[0]![0];
+    expect(message.subject).toContain('Acme');
+    expect(message.html).not.toContain('nie z payloadu');
+    expect(message.html).toContain(followedCompanyAlertOffLabel.fr);
+    const headers = message.headers as Record<string, string>;
+    const oneClick = new URL(headers['List-Unsubscribe']!.slice(1, -1));
+    expect(oneClick.pathname).toBe('/api/email/unsubscribe-alert');
+    expect(verifyAlertOffToken(oneClick.searchParams.get('t'), SECRET)).toMatchObject({
+      ok: true, profileId: PROFILE, savedSearchId: SEARCH,
+    });
   });
 
   it('inne maile i jobMatch bez wyszukiwania: nagłówek kategorii bez zmian', async () => {

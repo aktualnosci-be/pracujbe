@@ -84,6 +84,16 @@ describe('#856 — token wyłączenia alertu (jobMatch) stabilny między próbam
     expect(secondHeaders).toEqual(firstHeaders);
   });
 
+  it('digest obserwowanej firmy (followedCompanyJobs): ten sam stabilny token co jobMatch', () => {
+    const follow = { ...alertRow, template: 'followedCompanyJobs' };
+    vi.setSystemTime(new Date('2026-01-01T00:00:05.000Z'));
+    const first = alertOffLinkFor(follow, 'pl', SITE, SECRET);
+    vi.setSystemTime(new Date('2026-01-01T00:05:00.000Z'));
+    expect(first).not.toBeNull();
+    expect(alertOffLinkFor(follow, 'pl', SITE, SECRET)).toBe(first);
+    expect(first).toBe(alertOffLinkFor(alertRow, 'pl', SITE, SECRET));
+  });
+
   it('KONTROLA UJEMNA: inny wiersz (inny created_at) dostaje inny token alertu', () => {
     const other = { ...alertRow, created_at: '2026-06-01T00:00:00.000Z' };
     const linkA = alertOffLinkFor(alertRow, 'pl', SITE, SECRET);

@@ -520,8 +520,15 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.saved_searches': {
     activities: ['matching-search'],
     subjects: ['candidate'],
-    columns: { profile_id: 'reference', name: 'preferences', filters: 'preferences', query: 'preferences', locale: 'preferences' },
+    columns: { profile_id: 'reference', name: 'preferences', filters: 'preferences', query: 'preferences', locale: 'preferences', company_id: 'preferences' },
     notPersonal: { filters_hash: 'Skrót filtrów do deduplikacji wyszukiwań — nie identyfikuje osoby poza wierszem.' },
+  },
+  'public.saved_search_alert_pauses': {
+    activities: ['matching-search', 'email-notifications'],
+    subjects: ['candidate'],
+    columns: { profile_id: 'reference', paused_until: 'preferences' },
+    notPersonal: { updated_at: 'Czas ostatniej zmiany pauzy alertów.' },
+    note: 'Czasowa pauza alertów o nowych ofertach (#810, 0215): jeden wiersz na konto, sama data wznowienia.',
   },
   'public.candidate_application_journal': {
     activities: ['candidate-profile', 'data-rights'],
@@ -1145,6 +1152,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
   'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
+  'public.location_names': DICTIONARY('nazwy miejscowości w języku serwisu PL/NL/FR/EN (0212)'),
   'public.joint_committees': DICTIONARY('komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169'),
   'public.language_aliases': DICTIONARY('nazwy języków PL/NL/FR/EN (0168)'),
   'public.occupations': DICTIONARY('zawody'),

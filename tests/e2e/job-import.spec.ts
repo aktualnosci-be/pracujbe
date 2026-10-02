@@ -64,6 +64,11 @@ for (const [locale, m] of Object.entries({ pl, en })) {
 
     // Treść zostaje w języku ogłoszenia (nl), niezależnie od języka panelu.
     await expect(page.getByLabel(t.titleLabel)).toHaveValue('Orderpicker magazijn (m/v/x)');
+    // #1048: „Język ogłoszenia” = język wykryty w źródle (nl), nie język panelu.
+    await expect(page.locator('#job-content-locale-trigger')).toContainText(m.job.contentLanguageNames.nl);
+    await expect(status).toContainText(
+      m.jobImport.detectedLanguage.replace('{language}', m.job.contentLanguageNames.nl),
+    );
     await expect(page.getByLabel(t.occupationLabel)).toHaveValue('Orderpicker');
     const note = page.getByRole('note');
     await expect(note).toContainText(m.jobImport.reviewStepTitle);

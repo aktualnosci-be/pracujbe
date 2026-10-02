@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
  * w konfiguracji fixture).
  */
 const WORKFLOWS = join(process.cwd(), '.github/workflows');
-const FILES = ['ci.yml', 'delete-old-runs.yml'];
+const FILES = ['ci.yml', 'delete-old-runs.yml', 'backup-image.yml'];
 const PLAYWRIGHT_CONFIG = join(process.cwd(), 'playwright.config.ts');
 const dirs: string[] = [];
 
@@ -39,6 +39,18 @@ function mutated(edit: (ci: string) => string): string {
   const next = edit(ci);
   expect(next, 'mutacja musi zmienić ci.yml').not.toBe(ci);
   writeFileSync(join(dir, 'ci.yml'), next);
+  return dir;
+}
+
+/** Kopia workflowów z jednym celowym błędem w delete-old-runs.yml (#1105). */
+function mutatedCleanup(edit: (cleanup: string) => string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'ci-guard-cleanup-'));
+  dirs.push(dir);
+  for (const file of FILES) copyFileSync(join(WORKFLOWS, file), join(dir, file));
+  const cleanup = readFileSync(join(dir, 'delete-old-runs.yml'), 'utf8');
+  const next = edit(cleanup);
+  expect(next, 'mutacja musi zmienić delete-old-runs.yml').not.toBe(cleanup);
+  writeFileSync(join(dir, 'delete-old-runs.yml'), next);
   return dir;
 }
 
@@ -77,6 +89,93 @@ describe('strażnik workflowów CI', () => {
     expect(code).toBe(0);
   });
 
+  describe('sprzątanie przebiegów zachowuje historię main (#1105)', () => {
+    it('kopia delete-old-runs.yml bez zmian przechodzi', () => {
+      const dir = mutatedCleanup((cleanup) => `${cleanup}\n`);
+      expect(runGuard(dir).code).toBe(0);
+    });
+
+    it.each([
+      ['krótkie okno retain_days (dawne 6 dni)', (c: string) => c.replace(/retain_days: \d+/, 'retain_days: 6'), 'retain_days < 90'],
+      ['małe keep_minimum_runs (dawne 4)', (c: string) => c.replace(/keep_minimum_runs: \d+/, 'keep_minimum_runs: 4'), 'keep_minimum_runs < 50'],
+      ['brak retain_days', (c: string) => c.replace(/^\s+retain_days: \d+\n/m, ''), 'retain_days musi wystąpić'],
+      [
+        'zepsuty filtr check_branch_existence',
+        (c: string) => c.replace(/(keep_minimum_runs: \d+)/, '$1\n          check_branch_existence: true'),
+        'check_branch_existence',
+      ],
+    ])('kontrola ujemna: %s', (_name, edit, message) => {
+      const { code, output } = runGuard(mutatedCleanup(edit));
+      expect(code).not.toBe(0);
+      expect(output).toContain(message);
+    });
+  });
+
+  describe('obraz kopii bazy (#751)', () => {
+    /** Kopia docker/backup/Dockerfile (płaska nazwa w katalogu tymczasowym). */
+    const mutatedDockerfile = (edit: (source: string) => string) => {
+      const dir = mkdtempSync(join(tmpdir(), 'ci-guard-dockerfile-'));
+      dirs.push(dir);
+      const source = readFileSync(join(process.cwd(), 'docker/backup/Dockerfile'), 'utf8');
+      const next = edit(source);
+      expect(next, 'mutacja musi zmienić Dockerfile').not.toBe(source);
+      const file = join(dir, 'Dockerfile');
+      writeFileSync(file, next);
+      return file;
+    };
+
+    /** Kopia workflowów z jednym celowym błędem w backup-image.yml. */
+    const mutatedBackup = (edit: (source: string) => string) => {
+      const dir = mkdtempSync(join(tmpdir(), 'ci-guard-backup-'));
+      dirs.push(dir);
+      for (const file of FILES) copyFileSync(join(WORKFLOWS, file), join(dir, file));
+      const source = readFileSync(join(dir, 'backup-image.yml'), 'utf8');
+      const next = edit(source);
+      expect(next, 'mutacja musi zmienić backup-image.yml').not.toBe(source);
+      writeFileSync(join(dir, 'backup-image.yml'), next);
+      return dir;
+    };
+
+    it('kopia backup-image.yml bez zmian przechodzi', () => {
+      expect(runGuard(mutatedBackup((source) => `${source}\n`)).code).toBe(0);
+    });
+
+    it.each([
+      ['build bez --no-cache', (w: string) => w.replace('docker build --pull --no-cache', 'docker build --pull'), 'zbuduj docker/backup/Dockerfile od zera'],
+      ['bez smoke obrazu', (w: string) => w.replace(/\n      - name: Smoke backup image\n        run: .*\n/, '\n'), 'smoke obrazu'],
+      ['skaner na ruchomym tagu', (w: string) => w.replace(/(TRIVY_IMAGE: aquasec\/trivy:[\d.]+)@sha256:[0-9a-f]{64}/, '$1'), 'skaner przypięty do wersji i digestu'],
+      ['bez SBOM', (w: string) => w.replace('--format cyclonedx', '--format table'), 'SBOM CycloneDX'],
+      ['bez bramki podatności', (w: string) => w.replace('node scripts/security/backup-image-scan.mjs', 'echo skan'), 'bramka podatności'],
+      ['bramka miękka (continue-on-error)', (w: string) => w.replace('      - name: Vulnerability gate\n', '      - name: Vulnerability gate\n        continue-on-error: true\n'), 'bez continue-on-error'],
+      ['bez harmonogramu tygodniowego', (w: string) => w.replace(/^  schedule:\n    - cron: .*\n/m, ''), 'harmonogram tygodniowy'],
+      ['bez workflow_dispatch', (w: string) => w.replace(/^  workflow_dispatch:\n/m, ''), 'workflow_dispatch'],
+      ['PR bez ścieżki docker/backup/**', (w: string) => w.replace(/(pull_request:[\s\S]*?)      - docker\/backup\/\*\*\n/, '$1'), 'pull_request przy zmianie docker/backup/**'],
+      ['bez timeoutu', (w: string) => w.replace(/^    timeout-minutes: \d+\n/m, ''), 'ustaw timeout-minutes'],
+    ])('kontrola ujemna: %s', (_name, edit, message) => {
+      const { code, output } = runGuard(mutatedBackup(edit));
+      expect(code).not.toBe(0);
+      expect(output).toContain(message);
+    });
+
+    it('kontrola ujemna: skan obrazu z powrotem w ci.yml (blokowałby wdrożenie)', () => {
+      const { code, output } = runGuard(mutated((ci) => ci.replace('      - name: Build application\n', '      - name: Build application\n        # docker/backup/Dockerfile\n')));
+      expect(code).not.toBe(0);
+      expect(output).toContain('nie do ci.yml');
+    });
+
+    it('kontrola ujemna: Dockerfile z samym ruchomym tagiem obrazu bazowego', () => {
+      const file = mutatedDockerfile((source) => source.replace(/^(FROM \S+?)@sha256:[0-9a-f]{64}$/m, '$1'));
+      const { code, output } = runGuard(undefined, undefined, undefined, { CI_GUARD_BACKUP_DOCKERFILE: file });
+      expect(code).not.toBe(0);
+      expect(output).toContain('przypnij obraz bazowy do digestu');
+    });
+
+    it('Dockerfile bez zmian przechodzi (kontrola dodatnia)', () => {
+      const file = mutatedDockerfile((source) => `${source}\n`);
+      expect(runGuard(undefined, undefined, undefined, { CI_GUARD_BACKUP_DOCKERFILE: file }).code).toBe(0);
+    });
+  });
+
   it('kopia bez zmian przechodzi (argument katalogu działa)', () => {
     const dir = mutated((ci) => `${ci}\n`);
     expect(runGuard(dir).code).toBe(0);
@@ -88,7 +187,16 @@ describe('strażnik workflowów CI', () => {
 
   const negatives: Array<[string, (ci: string) => string, string]> = [
     ['zmieniona nazwa wymaganego checka', (ci) => ci.replace('name: E2E (Playwright)', 'name: E2E'), 'E2E (Playwright)'],
-    ['job zbiorczy bez always()', (ci) => ci.replace('if: always() && (', 'if: ('), 'always()'],
+    ['job zbiorczy bez always()', (ci) => ci.replace('    if: always()\n', ''), 'always()'],
+    // PR z forków (#671): pełne CI bez sekretów i bez zapisu — każde obejście = czerwony.
+    ['job pomija PR z forków', (ci) => ci.replace('    name: Lint\n', "    name: Lint\n    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\n"), 'pomijać PR-ów z forków'],
+    ['job zbiorczy pomija PR z forków', (ci) => ci.replace('    if: always()\n', "    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n"), 'always()'],
+    ['sekret w kroku', (ci) => ci.replace("  NEXT_TELEMETRY_DISABLED: '1'\n", "  NEXT_TELEMETRY_DISABLED: '1'\n  API_KEY: ${{ secrets.API_KEY }}\n"), 'bez sekretów'],
+    ['wyzwalacz pull_request_target', (ci) => ci.replace('  pull_request:\n', '  pull_request_target:\n'), 'pull_request'],
+    ['token przekazany do kroku', (ci) => ci.replace("  NEXT_TELEMETRY_DISABLED: '1'\n", "  NEXT_TELEMETRY_DISABLED: '1'\n  GITHUB_TOKEN: ${{ github.token }}\n"), 'tokenu'],
+    ['uprawnienia zapisu tokenu', (ci) => ci.replace('permissions:\n  contents: read\n', 'permissions:\n  contents: write\n'), 'contents: read'],
+    ['uprawnienia jobu', (ci) => ci.replace('    name: Lint\n', '    name: Lint\n    permissions:\n      pull-requests: write\n'), 'bez uprawnień jobu'],
+    ['środowisko z sekretami', (ci) => ci.replace('    name: Lint\n', '    name: Lint\n    environment: production\n'), 'środowiska'],
     ['job zbiorczy nie sprawdza wyniku części', (ci) => ci.replace('job.result !== "success"', 'job.result === "failure"'), 'success'],
     ['job zbiorczy bez shardów w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]', 'needs: [build, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]'), 'zależności'],
     ['mianownik shardu ≠ macierz', (ci) => ci.replace('E2E_DEMO_SHARD: ${{ matrix.shard }}', 'E2E_DEMO_SHARD: 9'), 'E2E_DEMO_SHARD'],

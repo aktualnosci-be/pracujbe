@@ -151,6 +151,22 @@ describe('wiadomości', () => {
     }
   });
 
+  it.each(['x', 'demo', `${CONVERSATION}x`])('#1109: identyfikator „%s” w złym formacie → VALIDATION_FAILED bez sesji, limitu i RPC', async (bad) => {
+    expect(await sendMessage(bad, 'Dzień dobry', CLIENT_MSG)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await markConversationRead(bad)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await openConversation({ applicationId: bad })).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await openConversation({ offerId: bad })).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(fakeDb.calls).toHaveLength(0);
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('#1109 kontrola ujemna: tryb demo zachowuje nie-UUID identyfikatory rozmów demonstracyjnych', async () => {
+    fakeSession.configured = false;
+    expect(await sendMessage('demo-c1', 'Dzień dobry', CLIENT_MSG)).toEqual({ ok: true, id: 'demo' });
+    expect(await markConversationRead('demo-c1')).toEqual({ ok: true });
+    expect(await openConversation({ applicationId: 'demo-app-1' })).toEqual({ ok: true, id: 'demo' });
+  });
+
   it('wyjątek spoza bazy → INTERNAL', async () => {
     fakeDb.rpc('send_message', () => { throw new Error('ECONNRESET 10.0.0.1'); });
     expect(await sendMessage(CONVERSATION, 'Dzień dobry', CLIENT_MSG)).toEqual({ ok: false, error: 'INTERNAL' });

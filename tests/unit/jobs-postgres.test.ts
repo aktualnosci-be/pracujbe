@@ -12,6 +12,7 @@ const adapters = vi.hoisted(() => ({
   translations: vi.fn(),
   screening: vi.fn(async () => [] as unknown[]),
   costs: vi.fn(async () => null as Record<string, unknown> | null),
+  qualifications: vi.fn(async () => ({ skills: [] as unknown[], certificates: [] as unknown[] })),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -25,6 +26,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobTranslations: adapters.translations,
   getPublicJobScreeningQuestions: adapters.screening,
   getPublicJobCosts: adapters.costs,
+  getPublicJobQualifications: adapters.qualifications,
 }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -154,6 +156,43 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
 
     expect(job?.accommodation).toBe(true);
     expect(job).not.toHaveProperty('costs');
+  });
+  it('#866: detal niesie umiejętności i certyfikaty (język strony), JobPosting skills/qualifications', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'spawacz', title: 'Spawacz', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.qualifications.mockResolvedValueOnce({
+      skills: [{ skill_label: 'Lassen', is_mandatory: true, localized_label: 'Spawanie' }],
+      certificates: [{ certificate_label: 'VCA Basis' }],
+    });
+
+    const job = await getJobBySlug('spawacz', 'nl');
+
+    expect(adapters.qualifications).toHaveBeenCalledWith(adapters.pool, 'job-1', 'nl');
+    expect(job?.qualifications).toEqual({
+      skillsMandatory: [{ label: 'Spawanie', localized: true }],
+      skillsOptional: [],
+      certificates: [{ label: 'VCA Basis', localized: false }],
+    });
+    const ld = buildJobPostingJsonLd(job!, 'https://pracuj.be/nl/oferty-pracy/spawacz', {
+      responsibilities: 'R', requirementsMandatory: 'M', requirementsOptional: 'O',
+      conditions: 'C', workingHours: 'H', shifts: 'S',
+    });
+    expect(ld).toMatchObject({
+      skills: 'Spawanie',
+      qualifications: [{ '@type': 'EducationalOccupationalCredential', name: 'VCA Basis' }],
+    });
+  });
+  it('#866: awaria odczytu kwalifikacji nie blokuje oferty (bez sekcji i bez pól JSON-LD)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'spawacz', title: 'Spawacz', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.qualifications.mockRejectedValueOnce(new Error('permission denied'));
+
+    const job = await getJobBySlug('spawacz', 'pl');
+
+    expect(job?.title).toBe('Spawacz');
+    expect(job).not.toHaveProperty('qualifications');
   });
   describe('JobPosting z wiersza get_public_job (audyt P1-12)', () => {
     const labels: JobPostingLabels = {

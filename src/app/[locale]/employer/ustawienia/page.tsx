@@ -69,7 +69,7 @@ export default async function EmployerSettingsPage({
       <EmailLocaleSection locale={locale} />
 
       {/* #486 (0161): eksport danych konta pracodawcy i usunięcie konta. */}
-      <AccountDataSettings variant="employer" />
+      <AccountDataSettings variant="employer" recruitmentEnabled={isRecruitmentEnabled()} />
     </div>
   );
 }

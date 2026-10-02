@@ -1,7 +1,7 @@
 'use server';
 
 import { getPortalIdentity, isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -96,7 +96,7 @@ export async function submitContactMessage(
     return { ok: true, reference: row.reference, created: row.created === true };
   } catch (error) {
     const code = isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'INTERNAL';
-    if (code === 'INTERNAL') captureError(error, { area: 'contact.submit' });
+    if (code === 'INTERNAL') captureActionError(error, 'contact.submit');
     return { ok: false, error: code };
   }
 }

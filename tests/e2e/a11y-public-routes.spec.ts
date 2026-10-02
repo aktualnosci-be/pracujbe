@@ -31,6 +31,8 @@ const ROUTES = [
   '/praca/miasto/brussels',
   '/poradniki',
   '/poradniki/praca-w-belgii-bez-znajomosci-jezyka',
+  '/poradniki/jak-zaczac-prace',
+  '/poradniki/jak-zaczac-prace/walonia',
   '/dla-pracodawcow',
   '/o-nas',
   '/kontakt',
