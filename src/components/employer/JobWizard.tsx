@@ -136,6 +136,13 @@ import { isWorkTime, type WorkTime } from '@/lib/job-filter-options';
 const TOTAL_STEPS = 9;
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
+/** #834: zapisany postęp szkicu → krok startowy (poza 1–9 albo brak = krok 1). */
+export function resumeWizardStep(saved: number | null | undefined): WizardStep {
+  return typeof saved === 'number' && Number.isInteger(saved) && saved >= 1 && saved <= 9
+    ? (saved as WizardStep)
+    : 1;
+}
+
 type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
 type SalaryPeriod = (typeof SALARY_PERIODS)[number];
 type Currency = 'EUR' | 'PLN';
@@ -503,6 +510,12 @@ export interface JobWizardProps {
    */
   draftVersion?: string;
   /**
+   * #834: krok, od którego wznawiamy szkic (`jobs.draft_step` — najdalszy krok z udanym
+   * zapisem). Brak/wartość spoza 1–9 = krok 1 (stare szkice, nowa oferta, import). Ignorowany
+   * w trybie edycji opublikowanej oferty. Samo wznowienie niczego nie zapisuje.
+   */
+  initialStep?: number;
+  /**
    * #325: oferta już opublikowana (aktywna/wstrzymana) — kreator w trybie edycji. `updatedAt`
    * = wczytana wersja (ochrona przed cichym nadpisaniem równoległej poprawki).
    */
@@ -657,6 +670,7 @@ export function JobWizard({
   initialJobId,
   initialValues,
   draftVersion,
+  initialStep,
   published,
   contentLocale: contentLocaleProp,
   importSlot,
@@ -791,7 +805,9 @@ export function JobWizard({
     );
   }
 
-  const [step, setStep] = React.useState<WizardStep>(1);
+  const [step, setStep] = React.useState<WizardStep>(() =>
+    published ? 1 : resumeWizardStep(initialStep),
+  );
 
   // P1-10: podpowiedź miasta ze słownika miejscowości (rozpoznana nazwa + propozycje).
   // Tylko informacja — wpisany tekst zostaje, miejscowość do filtrów ustala baza przy zapisie.

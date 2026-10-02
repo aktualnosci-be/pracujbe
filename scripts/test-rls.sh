@@ -95,6 +95,11 @@ echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-rollback.sql"
 
+echo ">> rollback 0216 (postęp kreatora szkicu, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-draft-step-rollback.sql"
+echo ">> rollback 0215 (pauza alertów, obserwowanie firmy, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-search-pause-follow-rollback.sql"
+
 echo ">> rollback 0202 (reopen = nowa publikacja, zaproszenia usuwanego pracodawcy; w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-decisions-0202-rollback.sql"
 
@@ -138,6 +143,8 @@ echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, 
 echo ">> rollback 0949 (eksport kandydata: zgłoszenia treści i ostrzeżenia retencji, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/candidate-export-reports-rollback.sql"
 
+echo ">> rollback 0217 (przywrócenie członka przez zaproszenie, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/team-reactivation-rollback.sql"
 echo ">> rollback 0209 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/age-policy-cas-rollback.sql"
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
@@ -146,6 +153,12 @@ echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofane
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-jobs-alias-relink-rollback.sql"
 echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
+
+echo ">> rollback 0213 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/public-jobs-plan-rollback.sql"
+
+echo ">> rollback 0214 (słowo kluczowe w kwalifikacjach oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/keyword-qualifications-rollback.sql"
 
 echo ">> sprzątanie"
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null

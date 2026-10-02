@@ -8,6 +8,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { JobCard } from '@/components/public/JobCard';
+import { FollowCompanyButton } from '@/components/candidate/FollowCompanyButton';
 import { Pagination } from '@/components/public/Pagination';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import { routing } from '@/i18n/routing';
@@ -307,6 +308,21 @@ export async function CompanyProfileView({
             ) : null}
           </div>
         )}
+
+        {/* #855: obserwowanie firmy — wyspa klienta (strona zostaje ISR, stan z sesji po załadowaniu). */}
+        <FollowCompanyButton
+          companyId={company.id}
+          companySlug={company.slug}
+          labels={{
+            follow: t('follow'),
+            following: t('following'),
+            followed: t('followed'),
+            unfollowed: t('unfollowed'),
+            login: t('followLogin'),
+            stateError: t('followStateError'),
+            networkError: t('followNetworkError'),
+          }}
+        />
 
         <section className="mt-8" aria-labelledby="company-jobs-heading">
           <h2 id="company-jobs-heading" className="text-lg font-semibold text-foreground">
