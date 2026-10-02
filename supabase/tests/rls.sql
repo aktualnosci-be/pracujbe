@@ -6986,12 +6986,14 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
--- Encje TR31 to identyfikatory bez wiersza w jobs: od 0133 aktywne oferty z fixture'ów same
--- trafiają do kolejki (triggery), więc sekcja rdzenia używa własnych encji i wygasza ich zadania.
+-- Encje TR31 to SZKICE ofert (od 0223 źródło wymaga istniejącej encji, #754): szkic nie jest
+-- publiczny, więc triggery 0146 nie kolejkują go same — sekcja rdzenia steruje kolejką wprost.
 \set TRJA 'f0310000-0000-0000-0000-0000000000a1'
 \set TRJB 'f0310000-0000-0000-0000-0000000000b1'
 reset role; reset app.current_uid;
 select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJA', :'COMPA', :'EMPA', 'draft-tr31-a', 'Magazynier TR31', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 \set TRF1 '{"title":"Magazynier  ","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
 \set TRF1WS '{"title":"  Magazynier","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.  ","requirements.0":"Certyfikat VCA","empty":"   "}'
 \set TRF2 '{"title":"Magazynier (zmiana nocna)","description":"Praca w magazynie od 22:00, stawka 17,00 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
@@ -7207,6 +7209,8 @@ reset role;
 -- Ten sam scenariusz co TR31-7 na podmienionej funkcji w cofanej transakcji — asercja z TR31-7d
 -- byłaby czerwona, więc to kontrola rewizji (a nie przypadek) chroni przekład.
 begin;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJB', :'COMPA', :'EMPA', 'draft-tr31-b', 'Magazynier TR31 B', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 create or replace function public.complete_translation_job(
   p_job_id uuid, p_lease_id uuid, p_fields jsonb, p_model text default null,
   p_input_tokens integer default 0, p_output_tokens integer default 0
@@ -7279,6 +7283,8 @@ select pg_temp.assert((select status = 'retry' from public.translation_jobs wher
   'TR31-13Nb kontrola ujemna cofnięta');
 drop table tr13_log;
 select public.deactivate_translation_source('job', :'JOBB', true) >= 0 as tr13_purged \gset
+reset role;
+delete from public.jobs where id = :'TRJA';
 
 -- ============================================================================
 -- SR497. Kontrola treści pytań screeningowych przed publikacją (0103, #497): detektor w bazie
@@ -7668,6 +7674,12 @@ rollback;
 \set CMN5 'e0450000-0000-0000-0000-0000000000d5'
 \set CMW 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 \set CMJOBS '{"pl":{"jobs":[{"slug":"magazynier-gent","title":"Magazynier","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"magazijnier-gent","title":"Magazijnier","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"magasinier-gand","title":"Magasinier","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"warehouse-gent","title":"Warehouse worker","city":"Ghent","locale":"en","isDemo":false}]}}'
+-- 0224 (#720): oferty z treści kampanii muszą być publiczne — fikstura dla sekcji kampanii
+-- (CM45, AC45, AC155): aktywne oferty zweryfikowanej firmy o slugach z CMJOBS.
+insert into public.companies(id, name, status) values ('e0224000-0000-0000-0000-0000000000f0', 'Firma kampanii CM45', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+select gen_random_uuid(), 'e0224000-0000-0000-0000-0000000000f0', s, 'Oferta kampanii', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'
+  from unnest(array['magazynier-gent', 'magazijnier-gent', 'magasinier-gand', 'warehouse-gent']) s;
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CMA','cma@test.be','Cm A','{"role":"candidate","first_name":"Cm","last_name":"A","locale":"pl"}'),
@@ -12845,7 +12857,7 @@ reset role; drop table tr33_claim;
 -- TR33-6: korekta ręczna (fr) przetrwa kolejną edycję — AI jej nie nadpisze (wynik = proposal).
 set role service_role;
 select public.save_manual_translation('job', :'TRJ1', 'fr',
-  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'EMPA') as tr33_manual \gset
+  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'ADMIN') as tr33_manual \gset
 reset role;
 update public.job_translations set title = 'Magazijnmedewerker (nacht)' where job_id = :'TRJ1' and locale = 'nl';
 select id as tr33_rev3, fields::text as tr33_f3 from public.translation_source_revisions
@@ -12857,7 +12869,7 @@ set role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tr33_fr3', :'tr33_fr3_lease', :'tr33_f3'::jsonb) = 'proposal',
   'TR33-6 wynik AI przy korekcie ręcznej = proposal');
 reset role;
-select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'EMPA'
+select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'ADMIN'
   from public.translation_documents where entity_id = :'TRJ1' and locale = 'fr'),
   'TR33-6b korekta ręczna nietknięta po edycji oferty');
 drop table tr33_claim;
@@ -13046,6 +13058,9 @@ rollback;
 
 -- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
 -- przy tej samej treści = nowa rewizja; bez nazw (5/6 argumentów) jak w 0145.
+-- TPE1 = szkic (od 0223 źródło wymaga istniejącej encji, #754).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TPE1', :'TPCO', 'draft-tp740-e1', 'Magazynier', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl');
 set role service_role;
 select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
     'tr-v1', 0, array[' Beta ', 'Alfa', 'Alfa', '', null]))->>'status') = 'created', 'TP740-3 rewizja z nazwami');
@@ -13087,6 +13102,7 @@ select pg_temp.assert(
   'TP740-6 RPC tylko dla serwera, stara sygnatura usunięta, pipeline v2');
 
 select count(public.deactivate_translation_source('job', :'TPE1'::uuid, true));
+delete from public.jobs where id = :'TPE1';
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
@@ -16153,12 +16169,13 @@ select pg_temp.assert(
 -- KONTROLA UJEMNA: definicje sprzed 0163 — bez grantu service_role dostaje permission denied,
 -- a bez dolnej granicy argument 1 s kasuje trwające okno limitera.
 begin;
-revoke execute on function public.rate_limit_gc(integer) from service_role;
+revoke execute on function public.rate_limit_gc(integer, integer) from service_role;
 set local role service_role;
 select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied',
   'GC163-N1 bez grantu 0163 maintenance dostaje permission denied');
 reset role;
-create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400)
+-- (0224: sygnatura z limitem partii; treść = 0015 bez dolnej granicy)
+create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400, p_limit integer default 5000)
 returns integer language plpgsql security definer set search_path = public as $gcneg$
 declare v_deleted integer;
 begin
@@ -16175,6 +16192,243 @@ rollback;
 reset role;
 delete from public.rate_limits where key like 'gc193:%';
 delete from public.processed_webhooks where id like 'gc193:%';
+
+-- ============================================================================
+-- GC746. GC w partiach i retencja inboxu od zakończenia (0224, #746/#722) oraz kampanie
+--        tylko z ofertami publicznymi (#720).
+--   * rate_limit_gc / processed_webhooks_gc: limit partii (najstarsze pierwsze), indeks po
+--     kolumnie czasu, SKIP LOCKED (wiersz zablokowany przez rate_limit_hit nie wstrzymuje GC),
+--     inbox liczony od `updated_at` (zakończenie/ostatnia próba), nie od `seen_at`.
+--   * email_campaign_unavailable_slugs: każda oferta treści = aktywna, nieusunięta,
+--     niewygasła, nie demo, firma zweryfikowana; edytor, aktywacja, harmonogram i send_check.
+--   Kontrole ujemne: definicja 0195 (seen_at) kasuje świeżo zakończony wpis; definicja 0163
+--   (bez SKIP LOCKED) czeka na blokadę; definicje 0155/0111 zapisują/aktywują martwą ofertę.
+-- ============================================================================
+\echo '--- GC746 GC w partiach, oferty kampanii ---'
+reset role; reset app.current_uid;
+begin;
+insert into public.rate_limits(key, window_start, count, updated_at)
+select format('gc746:old:%s', lpad(n::text, 2, '0')), now() - interval '5 days', 1,
+       now() - interval '3 days' - make_interval(mins => n)
+  from generate_series(1, 12) n;
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc746:fresh', now(), 1, now());
+
+-- GC746-1: partia = limit, najstarsze najpierw; zaległość schodzi w kolejnych wywołaniach.
+set local role service_role;
+select pg_temp.assert(public.rate_limit_gc(86400, 5) = 5, 'GC746-1 rate_limit_gc usuwa najwyżej p_limit wierszy');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.rate_limits where key like 'gc746:old:%') = 7
+  and not exists (select 1 from public.rate_limits where key in ('gc746:old:12', 'gc746:old:08')),
+  'GC746-1b pierwsza partia = 5 najstarszych (najdłużej nieaktualizowanych)');
+set local role service_role;
+select pg_temp.assert(public.rate_limit_gc(86400, 5) = 5 and public.rate_limit_gc(86400, 5) = 2
+                      and public.rate_limit_gc(86400, 5) = 0,
+  'GC746-1c kolejne partie nadrabiają zaległość (5, 2, 0)');
+reset role;
+select pg_temp.assert(exists (select 1 from public.rate_limits where key = 'gc746:fresh'),
+  'GC746-1d trwające okno zostaje');
+
+-- GC746-2: plan używa indeksu po updated_at (rate_limits) i częściowego indeksu inboxu.
+set local enable_seqscan = off;
+create temp table gc746_plan(p text) on commit drop;
+do $$ declare v json; begin
+  execute 'explain (format json) select key from public.rate_limits where updated_at < now() order by updated_at limit 5' into v;
+  insert into gc746_plan values (v::text);
+  execute 'explain (format json) select id from public.processed_webhooks where status in (''completed'', ''failed'') and updated_at < now() order by updated_at limit 5' into v;
+  insert into gc746_plan values (v::text);
+end $$;
+set local enable_seqscan = on;
+select pg_temp.assert(
+  exists (select 1 from gc746_plan where p like '%idx_rate_limits_updated_at%')
+  and exists (select 1 from gc746_plan where p like '%idx_processed_webhooks_terminal_updated%'),
+  'GC746-2 predykat czasu ma indeks (rate_limits.updated_at, inbox: częściowy po stanach rozstrzygniętych)');
+
+-- GC746-3 (#722): wpis odebrany 40 dni temu, zakończony wczoraj (seria ponowień) zostaje;
+--          wpis zakończony 40 dni temu znika; processing nigdy.
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc746:retried', 'emaillabs', 'completed',  now() - interval '40 days', now() - interval '1 day'),
+  ('gc746:old-a',   'emaillabs', 'completed',  now() - interval '40 days', now() - interval '40 days'),
+  ('gc746:old-b',   'resend',    'failed',     now() - interval '41 days', now() - interval '39 days'),
+  ('gc746:old-c',   'resend',    'completed',  now() - interval '42 days', now() - interval '38 days'),
+  ('gc746:proc',    'emaillabs', 'processing', now() - interval '40 days', now() - interval '40 days');
+set local role service_role;
+select pg_temp.assert(public.processed_webhooks_gc(30, 2) = 2, 'GC746-3 processed_webhooks_gc usuwa najwyżej p_limit wpisów');
+select pg_temp.assert(public.processed_webhooks_gc(30, 2) = 1 and public.processed_webhooks_gc(30, 2) = 0,
+  'GC746-3b reszta zaległości w kolejnej partii');
+reset role;
+select pg_temp.assert(
+  (select array_agg(id order by id) from public.processed_webhooks where id like 'gc746:%')
+  = array['gc746:proc', 'gc746:retried'],
+  'GC746-3c retencja od zakończenia: świeżo zakończony (stary seen_at) i processing zostają');
+rollback;
+
+-- KONTROLA UJEMNA #722: definicja z 0195 (od seen_at) kasuje wpis zakończony wczoraj.
+begin;
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc746:retried', 'emaillabs', 'completed', now() - interval '40 days', now() - interval '1 day');
+create or replace function public.processed_webhooks_gc(p_older_than_days integer default 30, p_limit integer default 5000)
+returns integer language plpgsql security definer set search_path = public, pg_temp as $gcneg$
+declare v_deleted integer;
+begin
+  delete from public.processed_webhooks
+    where status in ('completed', 'failed')
+      and seen_at < now() - make_interval(days => greatest(coalesce(p_older_than_days, 30), 7));
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end $gcneg$;
+select public.processed_webhooks_gc(30);
+select pg_temp.assert(not exists (select 1 from public.processed_webhooks where id = 'gc746:retried'),
+  'GC746-N1 definicja z 0195 (seen_at) usuwa deduplikację zaraz po zakończeniu długo ponawianego zdarzenia');
+rollback;
+
+-- GC746-4: wiersz zablokowany przez równoległy rate_limit_hit nie wstrzymuje GC (SKIP LOCKED).
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc746:locked', now() - interval '5 days', 1, now() - interval '3 days'),
+  ('gc746:free',   now() - interval '5 days', 1, now() - interval '3 days');
+select pg_temp.remote_connect('gc746');
+select dbl.dblink_exec('gc746', 'begin');
+select * from dbl.dblink('gc746',
+  'select key from public.rate_limits where key = ''gc746:locked'' for update') as t(k text);
+begin;
+set local lock_timeout = '500ms';
+set local role service_role;
+select public.rate_limit_gc(86400, 5000) as gc746_n \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.rate_limits where key = 'gc746:locked')
+  and not exists (select 1 from public.rate_limits where key = 'gc746:free'),
+  'GC746-4 GC pomija zablokowany wiersz bez czekania, resztę usuwa');
+rollback;
+-- KONTROLA UJEMNA: jeden DELETE bez SKIP LOCKED (0163) czeka na blokadę → lock timeout.
+begin;
+set local lock_timeout = '300ms';
+select pg_temp.expect_error(
+  $q$delete from public.rate_limits where updated_at < now() - interval '1 day' and key like 'gc746:%'$q$,
+  'lock timeout', 'GC746-N2 DELETE bez SKIP LOCKED (0163) wstrzymuje się na wierszu limitera');
+rollback;
+select dbl.dblink_exec('gc746', 'rollback');
+select dbl.dblink_disconnect('gc746');
+delete from public.rate_limits where key like 'gc746:%';
+
+-- GC746-5: granty — klient nie wywoła nowych sygnatur ani funkcji ofert kampanii.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400, 10)', 'permission denied', 'GC746-5 authenticated nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30, 10)', 'permission denied', 'GC746-5b authenticated nie wywoła processed_webhooks_gc');
+select pg_temp.expect_error('select public.email_campaign_unavailable_slugs(''{}''::jsonb)', 'permission denied',
+  'GC746-5c authenticated nie wywoła email_campaign_unavailable_slugs');
+reset role; reset app.current_uid;
+
+-- GC746-6 (#720): oferty kampanii.
+\set GCCO   'e0224000-0000-0000-0000-0000000000c1'
+\set GCCOU  'e0224000-0000-0000-0000-0000000000c2'
+\set GCCAND 'e0224000-0000-0000-0000-0000000000a1'
+begin;
+insert into public.companies(id, name, status) values (:'GCCO', 'Firma GC746', 'verified'), (:'GCCOU', 'Firma GC746 U', 'pending');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, expires_at, is_demo, deleted_at) values
+  (gen_random_uuid(), :'GCCO',  'gc746-ok',         'OK',        'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, false, null),
+  (gen_random_uuid(), :'GCCO',  'gc746-expired',    'Wygasła',   'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', now() - interval '1 day', false, null),
+  (gen_random_uuid(), :'GCCO',  'gc746-paused',     'Pauza',     'warehouse', 'permanent', 'Gent', 'Flandria', 'paused', 'pl', null, false, null),
+  (gen_random_uuid(), :'GCCO',  'gc746-deleted',    'Usunięta',  'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, false, now()),
+  (gen_random_uuid(), :'GCCO',  'gc746-demo',       'Demo',      'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, true,  null),
+  (gen_random_uuid(), :'GCCOU', 'gc746-unverified', 'Bez wer.',  'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, false, null);
+
+\set GCOK '{"pl":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Ghent","locale":"en","isDemo":false}]}}'
+select pg_temp.assert(
+  public.email_campaign_unavailable_slugs(:'GCOK'::jsonb) = '{}'::text[]
+  and public.email_campaign_unavailable_slugs(jsonb_build_object('pl', jsonb_build_object('jobs', jsonb_build_array(
+        jsonb_build_object('slug', 'gc746-ok'), jsonb_build_object('slug', 'gc746-expired'),
+        jsonb_build_object('slug', 'gc746-paused'), jsonb_build_object('slug', 'gc746-deleted'),
+        jsonb_build_object('slug', 'gc746-demo'), jsonb_build_object('slug', 'gc746-unverified'),
+        jsonb_build_object('slug', 'gc746-missing'), jsonb_build_object('slug', 'gc746-expired')))))
+    = array['gc746-deleted', 'gc746-demo', 'gc746-expired', 'gc746-missing', 'gc746-paused', 'gc746-unverified'],
+  'GC746-6 niedostępne: brak sluga, wygasła, wstrzymana, usunięta, demo, firma niezweryfikowana (unikalne, posortowane)');
+
+-- GC746-7: edytor odrzuca rewizję z niedostępną ofertą, bez zapisu i audytu.
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''gc746-news'', jsonb_set(%L::jsonb, ''{fr,jobs,0,slug}'', ''"gc746-expired"''))',
+  gen_random_uuid(), :'GCOK'), 'CAMPAIGN_JOB_UNAVAILABLE: gc746-expired', 'GC746-7 edytor odrzuca wygasłą ofertę (slug w komunikacie)');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''gc746-news'', jsonb_set(%L::jsonb, ''{pl,jobs,0,slug}'', ''"gc746-missing"''))',
+  gen_random_uuid(), :'GCOK'), 'CAMPAIGN_JOB_UNAVAILABLE: gc746-missing', 'GC746-7b edytor odrzuca nieistniejący slug');
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'gc746-news', :'GCOK'::jsonb) as gc746_rev \gset
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_campaigns where slug = 'gc746-news') = 1,
+  'GC746-7c tylko poprawna rewizja zapisana');
+
+-- GC746-8: oferta wstrzymana między szkicem a aktywacją → aktywacja odrzucona; po wznowieniu działa.
+update public.jobs set status = 'paused' where slug = 'gc746-ok';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', :'gc746_rev'),
+  'CAMPAIGN_JOB_UNAVAILABLE: gc746-ok', 'GC746-8 aktywacja odrzucona, gdy oferta przestała być publiczna');
+reset role;
+update public.jobs set status = 'active' where slug = 'gc746-ok';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'gc746_rev', 'draft');
+reset role;
+select pg_temp.assert((select status from public.email_campaigns where id = :'gc746_rev') = 'active',
+  'GC746-8b aktywacja po wznowieniu oferty');
+
+-- GC746-9: oferta wygasa po aktywacji → harmonogram nie wywołuje paczki tej rewizji
+--          (bez rezerwacji, status zostaje `active`, a nie `completed`).
+update public.jobs set expires_at = now() - interval '1 minute' where slug = 'gc746-ok';
+set local role service_role;
+select public.process_email_campaigns(500);
+reset role;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'gc746_rev') = 'active'
+  and not exists (select 1 from public.email_campaign_recipients where campaign_id = :'gc746_rev'),
+  'GC746-9 harmonogram pomija rewizję z ofertą niedostępną');
+
+-- GC746-10: list zakolejkowany wcześniej nie wychodzi po wygaśnięciu oferty.
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  (:'GCCAND', 'gc746@test.be', 'Gc C', '{"role":"candidate","first_name":"Gc","last_name":"C","locale":"pl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id = :'GCCAND';
+set local role authenticated; set local app.current_uid = :'GCCAND'; select pg_temp.assert_client_role();
+select public.set_notification_preferences(
+  '{"email_applications":true,"email_offers":true,"email_messages":true,"email_job_matches":true,"email_marketing":true,"push_enabled":false,"in_app_enabled":true}'::jsonb,
+  'pl', :'CMW');
+reset role; reset app.current_uid;
+insert into public.email_deliveries(id, profile_id, to_email, template, locale, status, entity_type, entity_id,
+                                    campaign_id, idempotency_key, payload, lock_token, locked_at)
+values
+  ('e0224000-0000-0000-0000-0000000000d1', :'GCCAND', 'gc746@test.be', 'newsletter', 'pl', 'queued',
+   'email_campaign', :'gc746_rev', :'gc746_rev', 'gc746-d1', jsonb_build_object('jobs', :'GCOK'::jsonb -> 'pl' -> 'jobs'),
+   'e0224000-0000-0000-0000-0000000000e1', now());
+set local role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check('e0224000-0000-0000-0000-0000000000d1', 'e0224000-0000-0000-0000-0000000000e1')
+    = 'suppressed_campaign_job_unavailable',
+  'GC746-10 send_check wygasza newsletter z ofertą, która wygasła po zakolejkowaniu');
+reset role;
+select pg_temp.assert(
+  (select status::text = 'failed' and suppressed_at is not null from public.email_deliveries
+    where id = 'e0224000-0000-0000-0000-0000000000d1'),
+  'GC746-10b wiersz wygaszony, ślad zostaje');
+-- KONTROLA UJEMNA: ta sama oferta znów publiczna → ten sam list przechodzi kontrolę.
+update public.jobs set expires_at = null where slug = 'gc746-ok';
+update public.email_deliveries set status = 'queued', suppressed_at = null, error_message = null,
+       lock_token = 'e0224000-0000-0000-0000-0000000000e1', locked_at = now()
+ where id = 'e0224000-0000-0000-0000-0000000000d1';
+set local role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check('e0224000-0000-0000-0000-0000000000d1', 'e0224000-0000-0000-0000-0000000000e1') is null,
+  'GC746-N3 kontrola ujemna: oferta publiczna — list przechodzi (wygaszenie wynika z oferty)');
+reset role;
+
+-- KONTROLA UJEMNA: definicje sprzed 0224 zapisują i aktywują rewizję z martwą ofertą.
+\ir ../rollback/0224_gc_batches_campaign_jobs.down.sql
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'gc746-dead',
+  jsonb_set(:'GCOK'::jsonb, '{pl,jobs,0,slug}', '"gc746-missing"')) as gc746_dead \gset
+select public.admin_activate_email_campaign(:'gc746_dead', 'draft');
+reset role;
+select pg_temp.assert((select status from public.email_campaigns where id = :'gc746_dead') = 'active',
+  'GC746-N4 kontrola ujemna: bez 0224 rewizja z nieistniejącą ofertą zapisuje się i aktywuje');
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- SV162. Zapisane oferty ze stanem oferty (0162): `get_saved_jobs_display` zwraca KAŻDY
@@ -20404,12 +20658,15 @@ select pg_temp.assert(exists (select 1 from public.candidate_skills where candid
   'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
 
 \echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0176, #1152, #1153) ---'
--- Start i koniec w RECRUITMENT. Encje kolejki = identyfikatory bez wierszy w jobs (jak TR31).
-\set CLAIP1 'c1a10176-0000-0000-0000-0000000000c1'
+-- Start i koniec w RECRUITMENT. Encje kolejki (od 0223 muszą istnieć, #754): CLAIP1 = profil
+-- kandydata CANDA, CLAIJ1 = szkic oferty; CLAIP2 bez wiersza (odrzuca go strażnik trybu).
 \set CLAIP2 'c1a10176-0000-0000-0000-0000000000c2'
 \set CLAIJ1 'c1a10176-0000-0000-0000-0000000000d1'
 \set CLAIF '{"title":"Magazynier","description":"Szukam pracy na zmianie nocnej."}'
 reset role; reset app.current_uid;
+select id as "CLAIP1" from public.candidate_profiles where profile_id = :'CANDA' \gset
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'CLAIJ1', :'COMPA', 'draft-claib-j1', 'Magazynier CLAIB', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 select set_config('pracujbe.allow_recruitment_write', '', false);
 
 -- Stan sprzed trybu: w RECRUITMENT profil kandydata trafia do kolejki (zadania nl/fr/en).
@@ -20490,6 +20747,7 @@ select count(public.deactivate_translation_source(entity_type, entity_id, false)
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
+delete from public.jobs where id = :'CLAIJ1';
 
 \echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0185, #1033/#1034/#1089/#1091/#1090) ---'
 -- Sekcja niezależna od trybu portalu (rekordy procesu wstawia superuser ze znacznikiem seedu).
@@ -26654,6 +26912,283 @@ update public.companies set name = E'Firma\r\nBcc' where id = :'CCC';
 select pg_temp.assert((select name from public.companies where id = :'CCC') like E'%\r%',
   'CC1244-N2 kontrola ujemna: bez CHECK nazwa firmy przyjmuje CR/LF');
 rollback to savepoint cc_neg;
+rollback;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- =============================================================================
+-- TQ952 (0223 — numer tymczasowy; #644, #754, #755): integralność kolejki tłumaczeń.
+--   #644: dzierżawa ważna tylko do lease_expires_at (complete/fail/defer po terminie =
+--         stale_lease, nawet bez ponownego przejęcia);
+--   #754: źródło tylko dla istniejącej, nieusuniętej encji właściwego typu; ukrycie źródła
+--         encji, której nie ma, usuwa je;
+--   #755: korekta ręczna wymaga autora z uprawnieniem do encji.
+-- Cała sekcja w cofanej transakcji; kontrole ujemne na definicjach sprzed 0223 (\ir rollbacku).
+-- =============================================================================
+\set TQJ  'f0223000-0000-0000-0000-0000000000a1'
+\set TQJD 'f0223000-0000-0000-0000-0000000000a2'
+\set TQX  'f0223000-0000-0000-0000-0000000000ff'
+\set TQF  '{"title":"Magazynier","description":"Praca w magazynie od 8:00."}'
+\set TQOUT '{"title":"Warehouse worker","description":"Warehouse work from 8:00."}'
+reset role; reset app.current_uid;
+begin;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'TQJ', :'COMPA', :'EMPA', 'draft-tq952', 'Magazynier TQ', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
+  (:'TQJD', :'COMPA', :'EMPA', 'draft-tq952-d', 'Magazynier TQ D', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+update public.jobs set deleted_at = now() where id = :'TQJD';
+select id as tq_cpb from public.candidate_profiles where profile_id = :'CANDB' \gset
+
+-- TQ952-1 (#754): nieistniejąca, usunięta albo pomylona encja = NOT_FOUND, bez żadnego wiersza.
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQX', :'TQF'),
+  'NOT_FOUND', 'TQ952-1 nieistniejąca oferta odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('candidate_profile', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQX', :'TQF'),
+  'NOT_FOUND', 'TQ952-1b nieistniejący profil kandydata odrzucony');
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQJD', :'TQF'),
+  'NOT_FOUND', 'TQ952-1c usunięta oferta odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('candidate_profile', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQJ', :'TQF'),
+  'NOT_FOUND', 'TQ952-1d oferta podana jako profil kandydata odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'tq_cpb', :'TQF'),
+  'NOT_FOUND', 'TQ952-1e profil kandydata podany jako oferta odrzucony');
+select pg_temp.expect_error($q$select public.deactivate_translation_source('offer', gen_random_uuid(), false)$q$,
+  'VALIDATION_FAILED: entity_type', 'TQ952-1f deaktywacja nieznanego typu odrzucona');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id in (:'TQX', :'TQJD', :'tq_cpb'))
+  and not exists (select 1 from public.translation_sources where entity_type = 'candidate_profile' and entity_id = :'TQJ'),
+  'TQ952-1g odrzucone zapisy nie zostawiają głowy, rewizji ani zadań');
+set local role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TQJ', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'jobsQueued')::int = 3,
+  'TQ952-1h istniejąca oferta: źródło i trzy zadania');
+select pg_temp.assert(((public.record_translation_source('candidate_profile', :'tq_cpb', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'TQ952-1i istniejący profil kandydata: źródło');
+reset role;
+
+-- TQ952-2 (#644): dzierżawa po terminie bez ponownego przejęcia — stary worker nie zapisze wyniku.
+create temp table tq_claim on commit drop as select * from public.claim_translation_jobs(100, 300) where entity_id = :'TQJ';
+grant select on tq_claim to service_role;
+select job_id as tq_nl, lease_id as tq_nl_lease from tq_claim where target_locale = 'nl' \gset
+select job_id as tq_fr, lease_id as tq_fr_lease from tq_claim where target_locale = 'fr' \gset
+select job_id as tq_en, lease_id as tq_en_lease from tq_claim where target_locale = 'en' \gset
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id in (:'tq_nl', :'tq_fr', :'tq_en');
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tq_nl', :'tq_nl_lease', :'TQOUT'::jsonb) = 'stale_lease',
+  'TQ952-2 wynik po terminie dzierżawy (bez reclaimu) = stale_lease');
+select pg_temp.assert(public.fail_translation_job(:'tq_fr', :'tq_fr_lease', 'timeout', true) = 'stale_lease',
+  'TQ952-2b błąd po terminie dzierżawy = stale_lease');
+select pg_temp.assert(public.defer_translation_job(:'tq_en', :'tq_en_lease', 'budget_exceeded', 60) = 'stale_lease',
+  'TQ952-2c odroczenie po terminie dzierżawy = stale_lease');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TQJ')
+  and (select bool_and(status = 'leased' and attempts = 1) from public.translation_jobs where id in (:'tq_nl', :'tq_fr', :'tq_en')),
+  'TQ952-2d nic nie opublikowano, zadania czekają na ponowne przejęcie');
+create temp table tq_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300) where entity_id = :'TQJ';
+select lease_id as tq_nl_lease2, attempt as tq_nl_att from tq_claim2 where job_id = :'tq_nl' \gset
+select lease_id as tq_fr_lease2 from tq_claim2 where job_id = :'tq_fr' \gset
+set local role service_role;
+select pg_temp.assert(:tq_nl_att = 2 and public.complete_translation_job(:'tq_nl', :'tq_nl_lease', :'TQOUT'::jsonb) = 'stale_lease'
+  and public.complete_translation_job(:'tq_nl', :'tq_nl_lease2', :'TQOUT'::jsonb) = 'applied',
+  'TQ952-2e po reclaimie zapisuje tylko bieżąca dzierżawa');
+reset role;
+
+-- TQ952-3 (#755): korekta ręczna wymaga autora z uprawnieniem do encji.
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, null)$q$, :'TQJ', :'TQOUT'),
+  'VALIDATION_FAILED: author', 'TQ952-3 korekta bez autora odrzucona');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'TQX'),
+  'PERMISSION_DENIED', 'TQ952-3b nieistniejący autor odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'EMPB'),
+  'PERMISSION_DENIED', 'TQ952-3c pracownik innej firmy odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'CANDA'),
+  'PERMISSION_DENIED', 'TQ952-3d kandydat nie poprawia oferty');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('candidate_profile', %L, 'fr', %L::jsonb, %L)$q$, :'tq_cpb', :'TQOUT', :'CANDA'),
+  'PERMISSION_DENIED', 'TQ952-3e cudzy profil kandydata odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQX', :'TQOUT', :'ADMIN'),
+  'NOT_FOUND', 'TQ952-3f korekta nieistniejącej encji odrzucona');
+select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'fr', :'TQOUT'::jsonb, :'EMPA') = 1
+  and public.save_manual_translation('job', :'TQJ', 'fr', :'TQOUT'::jsonb, :'ADMIN') = 2
+  and public.save_manual_translation('candidate_profile', :'tq_cpb', 'fr', :'TQOUT'::jsonb, :'CANDB') = 1,
+  'TQ952-3g owner firmy, administrator i właściciel profilu zapisują korektę');
+reset role;
+update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'EMPA'),
+  'PERMISSION_DENIED', 'TQ952-3h członkostwo nieaktywne = brak uprawnienia');
+reset role;
+update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
+select pg_temp.assert((select origin = 'manual' and manual_author = :'ADMIN' and manual_version = 2
+  from public.translation_documents where entity_id = :'TQJ' and locale = 'fr'), 'TQ952-3i autor ostatniej korekty zapisany');
+
+-- TQ952-4 (#754): ukrycie źródła encji, której już nie ma (soft-delete profilu), usuwa je.
+update public.candidate_profiles set deleted_at = now() where id = :'tq_cpb';
+set local role service_role;
+select public.deactivate_translation_source('candidate_profile', :'tq_cpb', false) as tq_deact \gset
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'tq_cpb')
+  and not exists (select 1 from public.translation_documents where entity_id = :'tq_cpb'),
+  'TQ952-4 źródło usuniętej encji usunięte (purge), nie tylko ukryte');
+
+-- TQ952-N (kontrole ujemne): definicje sprzed 0223.
+\ir ../rollback/0223_translation_queue_integrity.down.sql
+select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is null, 'TQ952-N0 rollback usuwa helper');
+set local role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TQX', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'TQ952-N1 kontrola ujemna: bez 0223 źródło nieistniejącej oferty powstaje');
+select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'nl', :'TQOUT'::jsonb, null) = 1,
+  'TQ952-N2 kontrola ujemna: bez 0223 korekta bez autora przechodzi');
+reset role;
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id = :'tq_fr';
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tq_fr', :'tq_fr_lease2', :'TQOUT'::jsonb) in ('applied', 'proposal'),
+  'TQ952-N3 kontrola ujemna: bez 0223 wynik po terminie dzierżawy jest zapisywany');
+reset role;
+rollback;
+select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is not null
+  and not exists (select 1 from public.jobs where id in (:'TQJ', :'TQJD'))
+  and not exists (select 1 from public.translation_sources where entity_id in (:'TQJ', :'TQX')),
+  'TQ952-R sekcja cofnięta, funkcje 0223 na miejscu');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0221)
+-- ============================================================================
+\echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'
+begin;
+reset role; reset app.current_uid;
+insert into public.notification_preferences (profile_id, in_app_enabled) values (:'EMPA', false)
+  on conflict (profile_id) do update set in_app_enabled = false;
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-links', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-desc', 'company', :'COMPA', '{"kind":"company_description","status":"approved"}'),
+  (:'EMPA', 'system', 'nt1120-content', 'company', :'COMPA', '{"kind":"job_content_review","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-status', 'company', :'COMPA', '{"kind":"company_status","status":"verified"}'),
+  (:'EMPA', 'system', 'nt1120-nokind', 'company', :'COMPA', null);
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-links', 'nt1120-desc', 'nt1120-content')) = 3,
+  'NT1120-1 decyzje bez e-maila (linki, opis, treść oferty) trafiają do panelu mimo opt-outu');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-status', 'nt1120-nokind')) = 0,
+  'NT1120-2 pozostałe powiadomienia nadal respektują in_app_enabled=false');
+-- Kind spoza listy w innym typie nie omija preferencji.
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'job_match', 'nt1120-type', 'company', :'COMPA', '{"kind":"company_links"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-type') = 0,
+  'NT1120-3 wyjątek tylko dla typu system');
+select pg_temp.assert(not public.notification_inapp_required('system', null)
+  and not public.notification_inapp_required('system', '{"kind":"company_status"}')
+  and public.notification_inapp_required('system', '{"kind":"company_links"}'),
+  'NT1120-4 lista wiadomości serwisowych');
+-- Preferencja włączona: wszystko jak dotąd.
+update public.notification_preferences set in_app_enabled = true where profile_id = :'EMPA';
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-on', 'company', :'COMPA', '{"kind":"company_status"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-on') = 1,
+  'NT1120-5 in_app_enabled=true → powiadomienie utworzone');
+-- Kontrola ujemna: filtr z 0035 ukrywa decyzję bez e-maila.
+update public.notification_preferences set in_app_enabled = false where profile_id = :'EMPA';
+\ir ../rollback/0221_notification_inapp_service_messages.down.sql
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-neg', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-neg') = 0,
+  'NT1120-N kontrola ujemna: bez 0221 decyzja o linkach firmy znika przy opt-oucie');
+rollback;
+reset role; reset app.current_uid;
+
+-- AIX773. „Wyjaśnij ofertę” (#773, 0220): funkcja `job_offer_explain` w budżecie AI —
+--         rezerwacja i rozliczenie działają, limit wspólny z innymi funkcjami, klient bez
+--         dostępu, CHECK rejestru zna funkcję. Kontrole ujemne: nazwa spoza listy odrzucona
+--         (RPC i CHECK); rollback 0220 = odmowa (supabase/tests/ai-job-explain-rollback.sql).
+--         Transakcja cofana — rejestr bez wierszy tej funkcji (rollback 0176/0220 przywraca CHECK).
+-- ============================================================================
+reset role; reset app.current_uid;
+begin;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIX773-1 rezerwacja tylko dla service_role');
+-- Limit wspólny: wydatki innych funkcji z wcześniejszych sekcji się liczą — limity = wydatek + 1000.
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(public.ai_budget_day(), public.ai_budget_day()) + 1000
+ where period = 'day';
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(date_trunc('month', public.ai_budget_day())::date, public.ai_budget_day()) + 1000
+ where period = 'month';
+set local role service_role;
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 999) as aix_r1 \gset
+select pg_temp.assert((select feature = 'job_offer_explain' and model = 'gpt-6-luna' and status = 'reserved'
+                         from public.ai_usage_ledger where id = :'aix_r1'),
+  'AIX773-2 rezerwacja funkcji job_offer_explain zapisana w rejestrze');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''gpt-6-luna'', 2)',
+  'AI_BUDGET_EXCEEDED', 'AIX773-3 otwarta rezerwacja wyjaśnienia liczy się do wspólnego limitu');
+select pg_temp.assert(public.ai_budget_settle(:'aix_r1', 'ok', 900, 300, 10),
+  'AIX773-4 rozliczenie wyjaśnienia rzeczywistym kosztem');
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'gpt-6-luna', 2) is not null,
+  'AIX773-4b po rozliczeniu limit znów dostępny');
+-- Kontrola ujemna: allow-lista nie przepuszcza dowolnej nazwy (literówka funkcji).
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_offer_explainer'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIX773-5 funkcja spoza listy odrzucona');
+reset role;
+select pg_temp.expect_error(
+  $$insert into public.ai_usage_ledger (feature, model, reserved_micro_usd, usage_day)
+    values ('job_offer_explainer', 'gpt-6-luna', 1, current_date)$$,
+  'ai_usage_ledger_feature', 'AIX773-6 CHECK rejestru odrzuca nazwę spoza listy');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- AIS711. Wyszukiwanie opisem (#711, 0222): funkcja AI `job_search_filters` w globalnym budżecie.
+--   Rezerwacja dla nowej funkcji działa (service_role), klient nadal bez dostępu, rejestr
+--   przyjmuje identyfikator. Kontrola ujemna: lista funkcji z 0176 (rollback 0222) odrzuca
+--   rezerwację — budżet nie dałby się wywołać, więc wyszukiwanie opisem nie wołałoby modelu.
+-- ============================================================================
+\echo '--- AIS711 budżet AI: wyszukiwanie opisem ---'
+reset role; reset app.current_uid;
+begin;
+set local role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_search_filters', 'gpt-6-luna', 1500) as ais_r1 \gset
+select pg_temp.assert(
+  (select feature = 'job_search_filters' and reserved_micro_usd = 1500 from public.ai_usage_ledger where id = :'ais_r1'),
+  'AIS711-1 rezerwacja dla job_search_filters zapisana w rejestrze');
+select pg_temp.assert(public.ai_budget_settle(:'ais_r1', 'ok', 900, 120, 150),
+  'AIS711-2 rozliczenie rezerwacji wyszukiwania opisem');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_unknown'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-3 nieznana funkcja nadal odrzucona');
+reset role;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIS711-4 klient nie rezerwuje budżetu (EXECUTE tylko service_role)');
+set local role service_role;
+-- AIS711-5: wcześniejsza funkcja tej listy (`job_offer_explain`, #773) zostaje w budżecie po 0222.
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_r5 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_r5'),
+  'AIS711-5 0222 nie usuwa job_offer_explain z listy funkcji budżetu');
+reset role;
+-- Kontrola ujemna: definicje sprzed 0222 (0176 + job_offer_explain).
+\ir ../rollback/0222_ai_budget_job_search_filters.down.sql
+set local role service_role;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_filters'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-N kontrola ujemna: lista sprzed 0222 odrzuca wyszukiwanie opisem');
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_n2 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_n2'),
+  'AIS711-N2 rollback 0222 zostawia job_offer_explain (#773) w liście funkcji');
 rollback;
 reset role; reset app.current_uid;
 

@@ -24,7 +24,7 @@ import {
  * Tekst skierowany do modelu zamiast do kandydata (PL/NL/FR/EN). Celowo wąskie wzorce —
  * zwykła oferta ich nie zawiera; model dodatkowo zgłasza `suspiciousInstructions`.
  */
-const INJECTION_PATTERNS: readonly RegExp[] = [
+export const INJECTION_PATTERNS: readonly RegExp[] = [
   /\bignore\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier)\s+(?:instructions|prompts?|rules)\b/i,
   /\b(?:system\s+prompt|developer\s+message|you\s+are\s+now\s+(?:an?\s+)?(?:ai|assistant|chatgpt|claude))\b/i,
   /\bzignoruj\s+(?:wszystkie\s+)?(?:poprzednie|wcześniejsze|powyższe)\s+(?:instrukcje|polecenia)\b/i,
@@ -38,8 +38,13 @@ function requestTexts(req: AssistRequest): string[] {
   return [req.title, f.description ?? '', ...(f.responsibilities ?? []), ...(f.requirementsMandatory ?? [])];
 }
 
+/** Czy tekst zawiera polecenie skierowane do modelu (wspólne z wyszukiwaniem AI, #711). */
+export function containsAiInstructions(text: string): boolean {
+  return INJECTION_PATTERNS.some((p) => p.test(text));
+}
+
 export function detectInjection(req: AssistRequest): boolean {
-  return requestTexts(req).some((text) => INJECTION_PATTERNS.some((p) => p.test(text)));
+  return requestTexts(req).some(containsAiInstructions);
 }
 
 /** Czy jest co poprawiać — opis co najmniej 30 znaków albo przynajmniej jedna pozycja listy. */

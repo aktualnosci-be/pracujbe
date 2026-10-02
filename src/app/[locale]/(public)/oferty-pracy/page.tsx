@@ -11,6 +11,8 @@ import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '
 import { getJobFilterFacets, getJobs, isRadiusPlaceKnown, isShowingDemoJobs } from '@/lib/jobs';
 import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
+import { JobSearchAssistDisclosure } from '@/components/public/JobSearchAssistLazy';
+import { isJobSearchAssistEnabled } from '@/lib/ai-search/config';
 
 import {
   localizeLocationFacets,
@@ -150,7 +152,7 @@ export default async function JobsListPage({
 
   const page = parsePage(flat['page']);
 
-  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames] = await Promise.all([
+  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames, tSearchAssist] = await Promise.all([
     getTranslations('jobs'),
     getTranslations('filters'),
     getTranslations('categories'),
@@ -158,6 +160,7 @@ export default async function JobsListPage({
     getTranslations('common'),
     getTranslations('nav'),
     getTranslations('languageNames'),
+    getTranslations('jobSearchAssist'),
   ]);
 
   // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
@@ -389,6 +392,13 @@ export default async function JobsListPage({
             {t('searchJobs')} <span aria-hidden="true">↗</span>
           </button>
         </form>
+
+        {/* #711: wyszukiwanie opisem (AI, za flagą) — tylko propozycja filtrów do zatwierdzenia. */}
+        {isJobSearchAssistEnabled() ? (
+          <div className="mt-4">
+            <JobSearchAssistDisclosure locale={locale} title={tSearchAssist('title')} noScriptText={tCommon('formJsRequired')} />
+          </div>
+        ) : null}
       </header>
 
       {/* Układ wyników */}

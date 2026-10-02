@@ -192,7 +192,7 @@ export const PROCESSORS: readonly Processor[] = [
       'Kandydat importujący własne CV',
     ],
     activation:
-      'OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED, AI_TRANSLATION_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.',
+      'OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_JOB_EXPLAIN_ENABLED, AI_CV_IMPORT_ENABLED, AI_TRANSLATION_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.',
     codeRefs: [
       'src/lib/ai/openai.ts',
       'src/lib/ai/model-config.ts',
@@ -201,6 +201,8 @@ export const PROCESSORS: readonly Processor[] = [
       'src/lib/ai-assist/assist.ts',
       'src/lib/translation/openai-provider.ts',
       'src/lib/ai-assist/guard.ts',
+      'src/lib/ai-explain/explain.ts',
+      'src/lib/ai-explain/sources.ts',
       'src/lib/cv-import/extract.ts',
       'src/lib/cv-import/minimize.ts',
       'docs/AI_JOB_IMPORT.md',
@@ -209,7 +211,7 @@ export const PROCESSORS: readonly Processor[] = [
     ],
     notes: [
       'Wszystkie wywołania idą przez jednego klienta (src/lib/ai/openai.ts): structured output (strict), bez narzędzi, store: false, bez logowania treści.',
-      'Import ogłoszeń i asystent nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.',
+      'Import ogłoszeń, asystent i „Wyjaśnij ofertę” (#773) nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.',
       'Tekst ogłoszenia: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.',
       'Kod nie ustawia regionu przetwarzania (data residency) ani projektu z ograniczoną retencją — do decyzji właściciela.',
     ],

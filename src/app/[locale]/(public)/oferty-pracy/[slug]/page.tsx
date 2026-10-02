@@ -67,6 +67,8 @@ import {
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
 import { EmployerApplyChannel } from '@/components/public/EmployerApplyChannel';
+import { JobExplainPanelLazy as JobExplainPanel } from '@/components/public/JobExplainPanelLazy';
+import { jobExplainProvider } from '@/lib/ai-explain/config';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
@@ -242,6 +244,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
   const messagingOn = isRecruitmentEnabled('messaging');
+  const explainProvider = jobExplainProvider();
 
   const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
@@ -775,6 +778,15 @@ export default async function JobDetailPage({ params }: PageProps) {
               ) : null}
             </Section>
           </div>
+
+          {/*
+            #773: „Wyjaśnij ofertę” — na żądanie, za flagą AI_JOB_EXPLAIN_ENABLED (domyślnie
+            wyłączona). Osobna sekcja pod treścią oferty: treść nie jest zastępowana ani zmieniana.
+            Oferta przykładowa tylko z atrapą (bez kosztów).
+          */}
+          {explainProvider && (!job.isDemo || explainProvider === 'fixture') ? (
+            <JobExplainPanel slug={job.slug} locale={pageLocale} />
+          ) : null}
 
           {/* Informacje o firmie */}
           <div className={cn(PAPER, 'mt-[25px]')}>
