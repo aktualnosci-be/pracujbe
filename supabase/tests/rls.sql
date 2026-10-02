@@ -26578,9 +26578,6 @@ reset role; reset app.current_uid;
 --   odczyt publiczny tylko dla oferty publicznej, wyszukiwanie miasta po dodatkowym miejscu,
 --   kopia szkicu, dowiązanie nowego aliasu. Kontrole ujemne: definicja search_city_candidates
 --   z 0183 (rollback) nie znajduje oferty; polityka USING (true) odsłania listę obcej firmie.
--- =====================================================================rollback;
-reset role; reset app.current_uid;
-
 -- ============================================================================
 \echo '--- JWL850 dodatkowe miejsca pracy oferty ---'
 reset role; reset app.current_uid;
@@ -26712,7 +26709,10 @@ select pg_temp.assert(
   not exists (select 1 from public.get_public_jobs('pl', p_city => 'jwtestowo', p_limit => 100) where id = :'JWA'),
   'JWL850-N2 kontrola ujemna: bez 0982 wyszukiwanie po dodatkowym miejscu nie znajduje oferty');
 reset role;
-=======
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0221)
 -- ============================================================================
 \echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'
