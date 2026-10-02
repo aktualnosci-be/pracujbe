@@ -36,6 +36,7 @@ import {
   RADIUS_KM_OPTIONS,
   WORK_TIME_FILTERS,
 } from '@/lib/job-filter-options';
+import { SHIFT_PATTERN_PARAM, SHIFT_PATTERNS } from '@/lib/job-shift-patterns';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
@@ -337,6 +338,26 @@ function NoScriptFilterForm({
       <p id="nojs-worktime-note" className="text-xs text-muted-foreground">
         {t('workTimeNote')}
       </p>
+
+      {/* 0227 (#858): grafik pracy — bez JS ten sam parametr `shift` (powtórzony klucz łączy
+          `flattenSearchParams` w CSV). */}
+      <fieldset className="space-y-1" aria-describedby="nojs-shift-note">
+        <legend className="mb-2 text-sm font-semibold text-foreground">{t('shiftPatterns')}</legend>
+        {SHIFT_PATTERNS.map((pattern) => (
+          <label key={pattern} className={optionClass}>
+            <input
+              type="checkbox"
+              name={SHIFT_PATTERN_PARAM}
+              value={pattern}
+              defaultChecked={initial.shiftPatterns.includes(pattern)}
+            />
+            <span>{t(`shiftPatternValues.${pattern}`)}</span>
+          </label>
+        ))}
+        <p id="nojs-shift-note" className="text-xs text-muted-foreground">
+          {t('shiftPatternsNote')}
+        </p>
+      </fieldset>
 
       <fieldset className="space-y-3 border-t border-border pt-5">
         <legend className="text-sm font-semibold text-foreground">{t('requiredLanguage')}</legend>

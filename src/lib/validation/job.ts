@@ -8,6 +8,7 @@ import { localeSchema } from '@/lib/validation/auth';
 import { refineScreeningPrimaryLocale, screeningQuestionsSchema } from '@/lib/validation/screening';
 import { isPlausibleCalendarDate, NO_NUL_REGEX } from '@/lib/validation/text';
 import { JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
+import { SHIFT_PATTERNS } from '@/lib/job-shift-patterns';
 import {
   APPLY_EMAIL_MAX_LENGTH,
   APPLY_URL_MAX_LENGTH,
@@ -98,6 +99,8 @@ const step2Base = z.object({
   shifts: z.string().trim().max(120, 'job.error.shiftsTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   /** #811 (0194): wymiar pracy (filtr listy); brak = pracodawca nie podaje. */
   workTime: z.enum(WORK_TIME_VALUES).optional(),
+  /** #858 (0227): typy grafiku pracy (filtr listy); pusta lista = pracodawca nie podaje. */
+  shiftPatterns: z.array(z.enum(SHIFT_PATTERNS)).max(SHIFT_PATTERNS.length).optional(),
   startImmediately: z.boolean().default(false),
   startDate: z
     .string()

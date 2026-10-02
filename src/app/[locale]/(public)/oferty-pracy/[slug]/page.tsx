@@ -260,6 +260,12 @@ export default async function JobDetailPage({ params }: PageProps) {
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
+  // 0227 (#858): grafik pracy w języku widza (te same etykiety co filtr listy).
+  const shiftPatternLabels = job.shiftPatterns?.length
+    ? await getTranslations('filters.shiftPatternValues').then((tShift) =>
+        job.shiftPatterns!.map((pattern) => tShift(pattern)).join(', '),
+      )
+    : null;
   // I18N-02: wymagane języki w języku widza (kod słownika 0168 / nazwa PL-NL-FR-EN), a nie
   // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
   const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
@@ -758,6 +764,18 @@ export default async function JobDetailPage({ params }: PageProps) {
                       {t('workTimeLabel')}
                     </dt>
                     <dd className="font-medium text-foreground">{t(`workTimeValues.${job.workTime}`)}</dd>
+                  </div>
+                ) : null}
+                {shiftPatternLabels ? (
+                  <div className="relative pl-[1.875rem]" data-testid="job-shift-patterns">
+                    <dt className="text-sm text-muted-foreground">
+                      <Clock
+                        className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      {t('shiftPatternsLabel')}
+                    </dt>
+                    <dd className="font-medium text-foreground">{shiftPatternLabels}</dd>
                   </div>
                 ) : null}
                 {job.languages.length > 0 ? (

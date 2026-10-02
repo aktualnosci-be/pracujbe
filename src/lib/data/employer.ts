@@ -36,6 +36,7 @@ import {
 import { canRecruit } from '@/lib/team/permissions';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { captureError } from '@/lib/error-report';
+import { normalizeShiftPatterns } from '@/lib/job-shift-patterns';
 import {
   parseScreeningAnswers,
   parseScreeningQuestions,
@@ -600,6 +601,8 @@ export interface JobDraftValues {
   shifts: string;
   /** #811 (0194): `jobs.work_time`; pusty = brak deklaracji. */
   workTime: string;
+  /** #858 (0227): `jobs.shift_patterns`; pusta lista = brak deklaracji. */
+  shiftPatterns: string[];
   startImmediately: boolean;
   startDate: string;
   city: string;
@@ -757,6 +760,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       workingHours: '38 h / tydzień',
       shifts: '',
       workTime: 'full_time',
+      shiftPatterns: ['day'],
       startImmediately: true,
       startDate: '',
       city: job.city,
@@ -814,7 +818,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     const loaded = await withPortalTransaction(me, async (tx) => {
       const job = await queryOne(tx, 'employer.job-draft',
         `SELECT id, company_id, status, title, category, occupation, contract_type, working_hours,
-                shifts, work_time, start_immediately, start_date, city, region, address, remote, salary_min,
+                shifts, work_time, shift_patterns, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
                 expires_at, updated_at, draft_step,
@@ -889,6 +893,9 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         workingHours: asString(job['working_hours']),
         shifts: asString(job['shifts']),
         workTime: asString(job['work_time']),
+        shiftPatterns: normalizeShiftPatterns(
+          Array.isArray(job['shift_patterns']) ? (job['shift_patterns'] as unknown[]) : [],
+        ),
         startImmediately: job['start_immediately'] === true,
         startDate: asString(job['start_date']),
         city: asString(job['city']),

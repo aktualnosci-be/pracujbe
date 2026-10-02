@@ -25,6 +25,7 @@ import type {
 } from '@/lib/jobs';
 import { routing, type Locale } from '@/i18n/routing';
 import type { WorkTime } from '@/lib/job-filter-options';
+import type { ShiftPattern } from '@/lib/job-shift-patterns';
 
 /** Wartość lokalizowana na wszystkie języki aplikacji. */
 type L<T = string> = Record<Locale, T>;
@@ -375,6 +376,18 @@ const SH = {
 } satisfies Record<string, L>;
 
 type ShKey = keyof typeof SH;
+
+/**
+ * Typy grafiku ofert demonstracyjnych (#858, 0227) — jawne dane zestawu (odpowiednik
+ * `jobs.shift_patterns`, deklaracji pracodawcy), nie zgadywanie z tekstu.
+ */
+const SH_PATTERNS: Record<ShKey, ShiftPattern[]> = {
+  two: ['two_shift'],
+  three: ['three_shift'],
+  day: ['day'],
+  earlyLate: ['two_shift'],
+  weekend: ['weekend'],
+};
 
 /* ---------------------------------------------------------------------------
  * Firmy (demonstracyjne)
@@ -863,6 +876,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     workingHours: WH[raw.workingHoursKey][content],
     ...(WH_WORK_TIME[raw.workingHoursKey] ? { workTime: WH_WORK_TIME[raw.workingHoursKey] } : {}),
     shifts: raw.shiftsKey ? SH[raw.shiftsKey][content] : undefined,
+    ...(raw.shiftsKey ? { shiftPatterns: SH_PATTERNS[raw.shiftsKey] } : {}),
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
     ...(raw.costs ? { costs: raw.costs } : {}),

@@ -2949,9 +2949,9 @@ reset role;
 
 -- SP188-7: granty jak dotąd — anon/authenticated tak, PUBLIC nie.
 select pg_temp.assert(
-  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)', 'execute')
-  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute')
+  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute')
   and not exists (
     select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
     where p.pronamespace = 'public'::regnamespace
@@ -12742,9 +12742,9 @@ select pg_temp.assert(
   and not has_function_privilege('authenticated', 'public.search_title_candidates(text)', 'execute')
   and not has_function_privilege('anon', 'public.search_city_candidates(text)', 'execute')
   and not has_function_privilege('authenticated', 'public.search_city_candidates(text)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute')
-  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute'),
+  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute')
+  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- =============================================================================
@@ -14846,7 +14846,7 @@ reset role;
 -- (po kluczu wynagrodzenia), przed `limit`/`offset` — introspekcja niezależna od danych.
 select pg_temp.assert(
   regexp_replace(pg_get_functiondef(
-    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)'::regprocedure),
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])'::regprocedure),
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
   'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
@@ -14878,7 +14878,9 @@ create or replace function public.get_public_jobs(
   p_language_level text        default null,
   p_work_time      text        default null,
   p_near           text        default null,
-  p_radius_km      integer     default null
+  p_radius_km      integer     default null,
+  -- 0227: grafik pracy
+  p_shift_patterns text[]      default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -14940,7 +14942,7 @@ language sql stable security definer set search_path = public, pg_temp as $jlneg
 $jlneg$;
 select pg_temp.assert(
   not (regexp_replace(pg_get_functiondef(
-    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)'::regprocedure),
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])'::regprocedure),
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
   'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
@@ -18812,7 +18814,7 @@ reset role;
 begin;
 do $ft$
 declare
-  v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure);
+  v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'::regprocedure);
 begin
   if position('or not c.is_agency' in v_def) = 0 then
     raise exception 'ASSERT FAILED: FT167-9d brak warunku agencji w get_public_jobs_count';
@@ -25584,7 +25586,7 @@ begin
   end if;
   execute replace(v_def, p_from, p_to);
 end $$;
-\set FLSIG 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)'
+\set FLSIG 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])'
 -- N1: bez waluty (stara reguła 0091) 3000 PLN staje się „3000 EUR” w sortowaniu i filtrze.
 begin;
 select pg_temp.fl_patch(:'FLSIG', 'j.salary_period, j.currency, p_salary_unit) end', 'j.salary_period, p_salary_unit) end');
@@ -25625,7 +25627,7 @@ select pg_temp.assert(
 rollback;
 -- N6: kopia dla alertów bez nowego warunku daje inny zbiór niż lista.
 begin;
-select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer)',
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[])',
   'j.work_time in (p_work_time, ''both'')', 'true');
 set local role service_role;
 select pg_temp.assert(
@@ -25638,7 +25640,7 @@ rollback;
 -- to samo w liczniku, facetach i kopii alertów.
 begin;
 select pg_temp.fl_patch(:'FLSIG', 'or j.remote is true', 'or false');
-select pg_temp.fl_patch('public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)',
+select pg_temp.fl_patch('public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])',
   'or j.remote is true', 'or false');
 select pg_temp.assert(
   pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2']
@@ -25646,7 +25648,7 @@ select pg_temp.assert(
   'FL974-N7 bez gałęzi pracy zdalnej zdalna oferta daleko poza promieniem odpada');
 rollback;
 begin;
-select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer)',
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[])',
   'or j.remote is true', 'or false');
 set local role service_role;
 select pg_temp.assert(
@@ -25762,6 +25764,190 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- SP858. Strukturalny grafik pracy oferty i filtr listy (#858, migracja 0227 — numer tymczasowy).
+--   `jobs.shift_patterns` (lista zamknięta, CHECK), zapis przez kreator (save_job_draft,
+--   update_published_job) i kopię szkicu, filtr `p_shift_patterns` (oferta z którymkolwiek
+--   z wybranych typów; bez deklaracji nie pasuje) w liście, liczniku, facetach i kopii alertów,
+--   klucz kanoniczny `shiftPatterns` zapisanych wyszukiwań, odczyt strony oferty.
+--   Kontrole ujemne: bez warunku w liście/kopii alertów, bez CHECK, bez klucza w kreatorze.
+-- ============================================================================
+\echo '--- SP858 grafik pracy oferty i filtr ---'
+\set SPC  'f8580000-0000-4000-8000-0000000000c1'
+\set SPE  'f8580000-0000-4000-8000-0000000000e1'
+\set SPK  'f8580000-0000-4000-8000-0000000000a1'
+\set SPJ1 'f8580000-0000-4000-8000-000000000001'
+\set SPJ2 'f8580000-0000-4000-8000-000000000002'
+\set SPJ3 'f8580000-0000-4000-8000-000000000003'
+\set SPJ4 'f8580000-0000-4000-8000-000000000004'
+\set SPJD 'f8580000-0000-4000-8000-0000000000d1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SPE','spe@test.be','Sara E','{"role":"employer","first_name":"Sara","last_name":"E","locale":"nl"}'),
+  (:'SPK','spk@test.be','Simon K','{"role":"candidate","first_name":"Simon","last_name":"K","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'SPC','Firma SP858','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'SPC',:'SPE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        published_at,shifts,shift_patterns) values
+  (:'SPJ1',:'SPC','sp858-1','Operator SP858 dzienny','production','permanent','Gent','Flandria','active','pl', now() - interval '1 minute', 'dagploeg', array['day']),
+  (:'SPJ2',:'SPC','sp858-2','Operator SP858 noce','production','permanent','Gent','Flandria','active','pl', now() - interval '2 minutes', 'nachten + weekend', array['night','weekend']),
+  (:'SPJ3',:'SPC','sp858-3','Operator SP858 zmiany','production','permanent','Gent','Flandria','active','pl', now() - interval '3 minutes', '2-ploegenstelsel', array['two_shift','three_shift']),
+  -- Bez deklaracji: tekst „weekendwerk” nie jest grafikiem (nie zgadujemy z opisu).
+  (:'SPJ4',:'SPC','sp858-4','Operator SP858 bez grafiku','production','permanent','Gent','Flandria','active','pl', now() - interval '4 minutes', 'weekendwerk', null);
+
+create function pg_temp.sp_ids(p_sql text) returns text[] language plpgsql as $$
+declare v text[];
+begin
+  execute format('select coalesce(array_agg(right(slug, 1) order by slug), ''{}'') from (%s) q', p_sql) into v;
+  return v;
+end $$;
+create function pg_temp.sp_check(p_args text, p_expected text[], p_name text) returns void language plpgsql as $$
+declare v_list text[]; v_count bigint; v_facet bigint;
+begin
+  v_list := pg_temp.sp_ids(format('select slug from public.get_public_jobs(p_locale => ''pl'', p_keyword => ''sp858'', p_limit => 100%s)', p_args));
+  execute format('select public.get_public_jobs_count(p_locale => ''pl'', p_keyword => ''sp858''%s)', p_args) into v_count;
+  execute format('select total from public.get_public_job_filter_facets(p_locale => ''pl'', p_keyword => ''sp858''%s) where dimension = ''total''', p_args) into v_facet;
+  if v_list is distinct from p_expected or v_count <> cardinality(p_expected) or v_facet <> cardinality(p_expected) then
+    raise exception 'ASSERT FAILED: % (lista %, licznik %, facety %, oczekiwano %)', p_name, v_list, v_count, v_facet, p_expected;
+  end if;
+end $$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.sp_check('', array['1','2','3','4'], 'SP858-1a bez filtra grafiku: wszystkie oferty sekcji');
+select pg_temp.sp_check(', p_shift_patterns => array[]::text[]', array['1','2','3','4'], 'SP858-1b pusta lista = bez filtra');
+select pg_temp.sp_check(', p_shift_patterns => array[''day'']', array['1'], 'SP858-1c praca dzienna');
+select pg_temp.sp_check(', p_shift_patterns => array[''weekend'']', array['2'], 'SP858-1d weekend: oferta z „weekendwerk” w opisie bez deklaracji nie pasuje');
+select pg_temp.sp_check(', p_shift_patterns => array[''day'',''three_shift'']', array['1','3'], 'SP858-1e kilka typów = którykolwiek z nich');
+select pg_temp.sp_check(', p_shift_patterns => array[''continuous'']', array[]::text[], 'SP858-1f typ bez ofert');
+select pg_temp.sp_check(', p_shift_patterns => array[''xx'']', array[]::text[], 'SP858-1g nieznana wartość: brak wyników (nie brak filtra)');
+reset role;
+
+-- SP858-2: CHECK kolumny (lista zamknięta, bez duplikatów, bez pustej tablicy).
+select pg_temp.expect_error(format($q$update public.jobs set shift_patterns = array['nights'] where id = %L$q$, :'SPJ4'),
+  'jobs_shift_patterns_check', 'SP858-2a wartość spoza listy odrzucona');
+select pg_temp.expect_error(format($q$update public.jobs set shift_patterns = array['day','day'] where id = %L$q$, :'SPJ4'),
+  'jobs_shift_patterns_check', 'SP858-2b duplikat odrzucony');
+select pg_temp.expect_error(format($q$update public.jobs set shift_patterns = array[]::text[] where id = %L$q$, :'SPJ4'),
+  'jobs_shift_patterns_check', 'SP858-2c pusta tablica odrzucona (brak deklaracji = null)');
+
+-- SP858-3: kreator (szkic) — normalizacja, brak klucza nie czyści, pusta lista = null.
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'SPJD',:'SPC',:'SPE','draft-sp858','Operator SP858 szkic','production','permanent','Gent','Flandria','draft','pl');
+set role authenticated; set app.current_uid = :'SPE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SPJD'::uuid, '{"job":{"shift_patterns":["night","day","night"]}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select shift_patterns from public.jobs where id = :'SPJD') = array['day','night'],
+  'SP858-3a save_job_draft zapisuje grafik w kolejności kanonicznej, bez duplikatów');
+set role authenticated; set app.current_uid = :'SPE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'SPJD'::uuid, '{"job":{"title":"Operator SP858 szkic 2"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select shift_patterns from public.jobs where id = :'SPJD') = array['day','night'],
+  'SP858-3b krok bez klucza nie czyści grafiku');
+set role authenticated; set app.current_uid = :'SPE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"shift_patterns":["nights"]}}'::jsonb)$q$, :'SPJD'),
+  'VALIDATION_FAILED: nieznany typ grafiku', 'SP858-3c nieznany typ odrzucony');
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"shift_patterns":"day"}}'::jsonb)$q$, :'SPJD'),
+  'VALIDATION_FAILED: nieznany typ grafiku', 'SP858-3d wartość nie-tablica odrzucona');
+select public.save_job_draft(:'SPJD'::uuid, '{"job":{"shift_patterns":[]}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select shift_patterns is null from public.jobs where id = :'SPJD'),
+  'SP858-3e pusta lista = brak deklaracji');
+
+-- SP858-4: kopia szkicu przenosi grafik.
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('f8580000-0000-4000-8000-0000000000d2',:'SPC',:'SPE','draft-sp858-copy','Kopia SP858','production','permanent','Gent','Flandria','draft','pl');
+insert into public.job_duplications(company_id, created_by, client_key, source_job_id, new_job_id)
+  values (:'SPC', :'SPE', gen_random_uuid(), :'SPJ3', 'f8580000-0000-4000-8000-0000000000d2');
+select pg_temp.assert((select shift_patterns from public.jobs where id = 'f8580000-0000-4000-8000-0000000000d2') = array['two_shift','three_shift'],
+  'SP858-4 kopia szkicu przenosi grafik');
+
+-- SP858-5: edycja opublikowanej oferty zapisuje grafik (brak klucza = brak deklaracji).
+select pg_temp.pj_mk(85, :'SPC', 'active');
+select set_config('pb.sp_upd', (current_setting('pb.rr_ok')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.rr_ok')::jsonb -> 'job')
+       || '{"accommodation": false, "shift_patterns": ["weekend", "split"]}'::jsonb))::text, false);
+set role authenticated; set app.current_uid = :'SPE'; select pg_temp.assert_client_role();
+select public.update_published_job(pg_temp.pj_id(85), current_setting('pb.sp_upd')::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select shift_patterns from public.jobs where id = pg_temp.pj_id(85)) = array['weekend','split'],
+  'SP858-5a update_published_job zapisuje grafik');
+set role authenticated; set app.current_uid = :'SPE'; select pg_temp.assert_client_role();
+select public.update_published_job(pg_temp.pj_id(85),
+  (current_setting('pb.sp_upd')::jsonb || jsonb_build_object('job', (current_setting('pb.sp_upd')::jsonb -> 'job') - 'shift_patterns')));
+reset role; reset app.current_uid;
+select pg_temp.assert((select shift_patterns is null from public.jobs where id = pg_temp.pj_id(85)),
+  'SP858-5b rewizja bez grafiku = brak deklaracji');
+
+-- SP858-6: odczyt strony oferty tylko dla oferty publicznej.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_job_shift_patterns(:'SPJ2') = array['night','weekend']
+  and public.get_public_job_shift_patterns(:'SPJ4') is null
+  and public.get_public_job_shift_patterns(:'SPJD') is null,
+  'SP858-6 grafik oferty publicznej; szkic niewidoczny');
+reset role;
+
+-- SP858-7: zapisane wyszukiwanie — klucz kanoniczny i ten sam zbiór w stronie kursora alertów.
+set role authenticated; set app.current_uid = :'SPK'; select pg_temp.assert_client_role();
+select saved_search_id as sps from public.save_saved_search('SP858', 'pl',
+  '{"keyword":"SP858","shiftPatterns":["weekend","day","day"]}', '?keyword=SP858&shift=day,weekend') \gset
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"shiftPatterns":["nights"]}')$$,
+  'nieznany typ grafiku', 'SP858-7a nieznany typ grafiku odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select filters from public.saved_searches where id = :'sps')
+    = '{"keyword":"sp858","shiftPatterns":["day","weekend"],"locale":"pl"}'::jsonb,
+  'SP858-7b klucz kanoniczny: posortowany, bez duplikatów');
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     (select filters from public.saved_searches where id = :'sps'), 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['sp858-1', 'sp858-2'],
+  'SP858-7c strona kursora alertów = lista (dzienna albo weekendowa)');
+reset role;
+
+-- SP858-N: kontrole ujemne (zmiany definicji w transakcjach cofanych).
+create function pg_temp.sp_patch(p_sig text, p_from text, p_to text) returns void language plpgsql as $$
+declare v_def text := pg_get_functiondef(p_sig::regprocedure);
+begin
+  if position(p_from in v_def) = 0 then
+    raise exception 'ASSERT FAILED: SP858-N fragment „%” nie występuje w %', p_from, p_sig;
+  end if;
+  execute replace(v_def, p_from, p_to);
+end $$;
+-- N1: lista bez warunku grafiku — SP858-1c wykrywa regresję.
+begin;
+select pg_temp.sp_patch('public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])',
+  'or j.shift_patterns && p_shift_patterns', 'or true');
+select pg_temp.assert(
+  pg_temp.sp_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'sp858', p_shift_patterns => array['day'])$q$)
+    = array['1','2','3','4'],
+  'SP858-N1 bez warunku grafiku filtr przepuszcza każdą ofertę');
+rollback;
+-- N2: kopia alertów bez warunku daje inny zbiór niż lista — SP858-7c wykrywa regresję.
+begin;
+select pg_temp.sp_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[])',
+  'or j.shift_patterns && p_shift_patterns', 'or true');
+set local role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_keyset_page(
+     (select filters from public.saved_searches where id = :'sps'), 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id)) = 4,
+  'SP858-N2 rozjazd kopii filtrów alertów');
+rollback;
+-- N3: bez CHECK kolumna przyjmuje dowolny tekst — SP858-2a wykrywa regresję.
+begin;
+alter table public.jobs drop constraint jobs_shift_patterns_check;
+update public.jobs set shift_patterns = array['nights'] where id = :'SPJ4';
+select pg_temp.assert((select shift_patterns from public.jobs where id = :'SPJ4') = array['nights'],
+  'SP858-N3 bez CHECK zapisuje się wartość spoza listy');
+rollback;
+-- N4: kreator bez klucza na liście dozwolonych odrzuca grafik — SP858-3a wykrywa regresję.
+begin;
+select pg_temp.sp_patch('public.save_job_draft(uuid,jsonb,timestamptz)', '''shift_patterns'')', '''work_time'')');
+set local role authenticated; set local app.current_uid = :'SPE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"shift_patterns":["day"]}}'::jsonb)$q$, :'SPJD'),
+  'nieznane pole shift_patterns', 'SP858-N4 bez klucza kreator nie zapisze grafiku');
 -- OC778. Współbieżność (0226): ostatni aktywny właściciel firmy (#778) i blokada źródła
 --        „Kopiuj jako szkic” (#1098). Dwie RÓWNOLEGŁE sesje (dblink) odbierają rolę albo
 --        dostęp dwóm różnym właścicielom tej samej firmy — przez RPC (dezaktywacja, degradacja,
@@ -26352,16 +26538,20 @@ select pg_temp.assert(:pf_t1 - :pf_t0 = 0,
   'PF1215-4c licznik bez słowa kluczowego nie czyta tłumaczeń, przeczytano ' || (:pf_t1 - :pf_t0));
 select pg_temp.assert(
   (select proconfig @> array['plan_cache_mode=force_custom_plan', 'jit=off'] and prolang = (select oid from pg_language where lanname = 'plpgsql')
-     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)'::regprocedure)
-  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE'),
+     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])'::regprocedure)
+  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])', 'EXECUTE'),
   'PF1215-4d plpgsql SECURITY DEFINER z force_custom_plan i bez JIT; granty bez zmian');
 
 -- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
 savepoint pf1215_old;
+-- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
+-- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
+set constraints all immediate;
+\ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.pf1215_snapshot() as pf_old_anon \gset
@@ -26392,8 +26582,9 @@ select pg_temp.assert(:'pf_new_saved' = :'pf_old_saved',
   'PF1215-3 saved_search_jobs_after (strona, kursor, filtry) = definicja z 0194');
 select pg_temp.assert(
   (select prolang = (select oid from pg_language where lanname = 'plpgsql')
-   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure),
+   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'::regprocedure),
   'PF1215-5 po cofnięciu savepointu stan 0213 zostaje');
+
 rollback;
 reset role; reset app.current_uid;
 
@@ -26478,6 +26669,10 @@ select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_
   'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
 
 savepoint kq866_old;
+-- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
+-- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
+set constraints all immediate;
+\ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0214_keyword_job_qualifications.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
