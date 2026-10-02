@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseConfirmAgePolicyArgs } from '../../scripts/db/confirm-age-policy.mjs';
 
-/** Skrypt zatwierdzenia progu wieku przez właściciela (#639, migracja 0946). */
+/** Skrypt zatwierdzenia progu wieku przez właściciela (#639, migracja 0209). */
 describe('parseConfirmAgePolicyArgs', () => {
   const VERSION = '2026-09-25 10:00:00.123456+00';
 

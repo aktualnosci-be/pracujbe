@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // =============================================================================
 // scripts/db/confirm-age-policy.mjs — zatwierdzenie progu wieku kandydatów przez właściciela
-// (#639, migracja 0946).
+// (#639, migracja 0209).
 //
 // Poza CI i poza panelem. Administrator zmienia próg w `/admin/ustawienia`, ale zapisuje tam
 // wyłącznie wartość roboczą; status „zatwierdzone przez właściciela” nadaje tylko ten skrypt,

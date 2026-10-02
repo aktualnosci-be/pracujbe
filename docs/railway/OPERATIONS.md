@@ -374,7 +374,7 @@ zmianą któregokolwiek klucza. Kolejność: (1) zapis decyzji w `docs/railway/S
 alarm między krokami jest oczekiwany. Po odtworzeniu kopii baza wraca w trybie ogłoszeniowym
 (`restore-backup.sh`, [BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
 
-## 7. Próg wieku kandydatów — zatwierdzenie właściciela (#639, migracja `0946`)
+## 7. Próg wieku kandydatów — zatwierdzenie właściciela (#639, migracja `0209`)
 
 Administrator zmienia próg konta kandydata (16/18) w `/admin/ustawienia`, z uzasadnieniem
 i kontrolą wersji (formularz otwarty przed zmianą innego administratora albo przed

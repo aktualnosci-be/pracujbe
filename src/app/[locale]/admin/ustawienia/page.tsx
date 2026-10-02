@@ -26,7 +26,7 @@ import {
  *
  * Pokazuje bieżący próg konta (16/18), status zatwierdzenia i ostatnią zmianę z dziennika
  * zdarzeń (`age_policy.updated`), oraz formularz zmiany (RPC `admin_set_candidate_min_age`,
- * migracje 0126 i 0946 — CAS i zatwierdzenie tylko przez właściciela, #1102/#639). Odczyt service-rolem po potwierdzeniu roli admina
+ * migracje 0126 i 0209 — CAS i zatwierdzenie tylko przez właściciela, #1102/#639). Odczyt service-rolem po potwierdzeniu roli admina
  * (`getAgePolicySettings` → `requireAdmin`). Tylko etykiety funkcji — bez treści prawnej
  * (`docs/legal-drafts/kandydaci-niepelnoletni.md` czeka na zatwierdzenie właściciela).
  */

@@ -10774,7 +10774,7 @@ select pg_temp.assert(public.set_candidate_searchable(true) is true,
 reset role; reset app.current_uid;
 -- Powrót do decyzji #576 (konto od 16) dla dalszych kroków.
 -- Powrót do decyzji #576 (konto od 16) dla dalszych kroków: zmiana administratora (wartość
--- robocza, 0946) i zatwierdzenie właściciela drogą operatorską (service_role).
+-- robocza, 0209) i zatwierdzenie właściciela drogą operatorską (service_role).
 select updated_at::text as agv from public.age_policy \gset
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
 select public.admin_set_candidate_min_age(16, 'Decyzja właściciela #576', :'agv');
@@ -10843,13 +10843,13 @@ select pg_temp.assert((select confirmed from public.age_policy), 'APC5b próg na
 -- APC6 (kontrola ujemna): definicja z 0126 — administrator sam ustawia „zatwierdzone przez
 -- właściciela” i nadpisuje próg nieaktualnym formularzem.
 begin;
-\ir ../rollback/0946_age_policy_cas_owner_confirmation.down.sql
+\ir ../rollback/0209_age_policy_cas_owner_confirmation.down.sql
 update public.age_policy set confirmed = false where id;
 set local app.current_uid = :'AGA'; set local role authenticated; select pg_temp.assert_client_role();
 select public.admin_set_candidate_min_age(16, true, 'Stary formularz bez kontroli');
 reset role;
 select pg_temp.assert((select confirmed from public.age_policy),
-  'APC6 kontrola ujemna: bez 0946 administrator oznacza zmianę jako zatwierdzoną przez właściciela');
+  'APC6 kontrola ujemna: bez 0209 administrator oznacza zmianę jako zatwierdzoną przez właściciela');
 rollback;
 select pg_temp.assert((select confirmed and updated_at::text = :'apc_v2' from public.age_policy),
   'APC6b po kontroli ujemnej stan wraca do zatwierdzonego progu');

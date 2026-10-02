@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0946_age_policy_cas_owner_confirmation.sql — #1102 (ADM-04) i #639: próg wieku kandydatów.
+-- 0209_age_policy_cas_owner_confirmation.sql — #1102 (ADM-04) i #639: próg wieku kandydatów.
 -- (numer tymczasowy — ostateczny nada integrator)
 --
 -- 1. Atomowa kontrola wersji (CAS, #1102). `admin_set_candidate_min_age` przyjmuje
@@ -20,7 +20,7 @@
 --    otwarty przed nim jest nieaktualny.
 --
 -- Stan istniejący bez zmian (próg 16 zatwierdzony decyzją właściciela 25.09.2026, #576).
--- Rollback: supabase/rollback/0946_age_policy_cas_owner_confirmation.down.sql
+-- Rollback: supabase/rollback/0209_age_policy_cas_owner_confirmation.down.sql
 -- (test: supabase/tests/age-policy-cas-rollback.sql w scripts/test-rls.sh).
 -- =============================================================================
 

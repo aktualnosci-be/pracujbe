@@ -30,7 +30,7 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
  *
  * Wybór 16/18 (jedyne dozwolone wartości, jak CHECK w bazie) i uzasadnienie (ZAWSZE wymagane,
  * limit jak w bazie). Formularz NIE ustala statusu „zatwierdzone przez właściciela” (#639,
- * migracja 0946): zmiana administratora zawsze zapisuje wartość roboczą, a zatwierdza ją tylko
+ * migracja 0209): zmiana administratora zawsze zapisuje wartość roboczą, a zatwierdza ją tylko
  * właściciel drogą operatorską — dialog pokazuje to jako „status po zapisie”. Kliknięcie „Zapisz” NIE zmienia
  * progu od razu: otwiera dialog potwierdzenia z przejściem „obecny → nowy próg” (jak zmiana
  * statusu firmy, #310) — dopiero potwierdzenie woła Server Action.

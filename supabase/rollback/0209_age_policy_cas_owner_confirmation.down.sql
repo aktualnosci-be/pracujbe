@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0946_age_policy_cas_owner_confirmation.sql (#1102, #639) — ręczny, NIE jest migracją.
+-- Rollback 0209_age_policy_cas_owner_confirmation.sql (#1102, #639) — ręczny, NIE jest migracją.
 -- Usuwa `owner_confirm_candidate_min_age` i nową sygnaturę `admin_set_candidate_min_age`
 -- (CAS, bez `p_confirmed`); przywraca definicję z 0126 (status zatwierdzenia z parametru).
 -- Dane `age_policy` bez zmian. Test: supabase/tests/age-policy-cas-rollback.sql.

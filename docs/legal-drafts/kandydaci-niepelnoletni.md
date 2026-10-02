@@ -24,7 +24,7 @@ Migracja `0126_candidate_age_policy.sql` i zmiany w aplikacji:
   kandydata od 16 lat; widoczność profilu dla firm tylko dla pełnoletnich; młodsi — bez konta.
 - **Próg konta jako dane.** Tabela `age_policy` (jeden wiersz): `candidate_min_age` = 16 albo
   18, ustawione **16** z `confirmed = true`. Zmiana progu tylko przez administratora
-  (`admin_set_candidate_min_age`, wymagane uzasadnienie, wpis w `audit_logs`); od 0946 zmiana
+  (`admin_set_candidate_min_age`, wymagane uzasadnienie, wpis w `audit_logs`); od 0209 zmiana
   administratora = wartość robocza, zatwierdza ją tylko właściciel (`scripts/db/confirm-age-policy.mjs`).
 - **Minimalizacja.** Kandydat wybiera przedział wieku: „16–17 lat” albo „18 lat lub więcej”.
   Nie zbieramy daty ani roku urodzenia ani dokumentu tożsamości. Zapisujemy: dolną granicę

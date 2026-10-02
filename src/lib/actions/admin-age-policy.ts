@@ -23,7 +23,7 @@ import { captureError } from '@/lib/error-report';
  *
  * Kontrola wersji (CAS, #1102): formularz przekazuje `expectedUpdatedAt` — znacznik zmiany progu,
  * który administrator widział (`age_policy.updated_at` jako tekst, `null` = brak wiersza). RPC
- * (migracja 0946) porównuje go z bieżącym po `FOR UPDATE` w tej samej transakcji co zapis —
+ * (migracja 0209) porównuje go z bieżącym po `FOR UPDATE` w tej samej transakcji co zapis —
  * zmiana innego administratora albo zatwierdzenie właściciela w międzyczasie → `STALE_STATE`
  * zamiast cichego nadpisania.
  *

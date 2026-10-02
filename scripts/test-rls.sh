@@ -128,7 +128,7 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
-echo ">> rollback 0946 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
+echo ">> rollback 0209 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/age-policy-cas-rollback.sql"
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"

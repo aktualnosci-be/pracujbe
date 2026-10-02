@@ -1,7 +1,7 @@
 -- =============================================================================
--- APC1102-R — rollback migracji 0946 (CAS progu wieku i zatwierdzenie właściciela, #1102/#639).
+-- APC1102-R — rollback migracji 0209 (CAS progu wieku i zatwierdzenie właściciela, #1102/#639).
 -- Uruchamiany przez scripts/test-rls.sh po rls.sql; rollback w transakcji cofanej, baza zostaje
--- po 0946.
+-- po 0209.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -15,10 +15,10 @@ select pg_temp.assert(
   to_regprocedure('public.admin_set_candidate_min_age(integer, text, timestamptz)') is not null
   and to_regprocedure('public.admin_set_candidate_min_age(integer, boolean, text)') is null
   and to_regprocedure('public.owner_confirm_candidate_min_age(integer, timestamptz, text)') is not null,
-  'APC1102-R0 baza w stanie po 0946');
+  'APC1102-R0 baza w stanie po 0209');
 
 begin;
-\ir ../rollback/0946_age_policy_cas_owner_confirmation.down.sql
+\ir ../rollback/0209_age_policy_cas_owner_confirmation.down.sql
 
 select pg_temp.assert(
   to_regprocedure('public.admin_set_candidate_min_age(integer, text, timestamptz)') is null
@@ -31,6 +31,6 @@ rollback;
 
 select pg_temp.assert(
   to_regprocedure('public.admin_set_candidate_min_age(integer, text, timestamptz)') is not null,
-  'APC1102-R2 po teście baza wraca do stanu po 0946');
+  'APC1102-R2 po teście baza wraca do stanu po 0209');
 
-\echo '--- APC1102-R rollback 0946 OK ---'
+\echo '--- APC1102-R rollback 0209 OK ---'
