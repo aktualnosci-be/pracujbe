@@ -25016,6 +25016,70 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- SD1112. Termin digestu zapisanych wyszukiwań bez dryfu (#1112, TIME21-04, migracja 0211).
+--   * `saved_search_next_run_at`: poprzedni termin + pełne okresy w czasie ściennym
+--     Europe/Brussels, pierwszy termin po chwili przebiegu (zaległe okresy pominięte), pora
+--     stała także przy zmianie czasu (jesień i wiosna);
+--   * worker: spóźniony przebieg nie przesuwa pory kolejnego digestu;
+--   * kontrola ujemna: definicja z 0138 (rollback) liczy termin od chwili przebiegu (dryf).
+-- ============================================================================
+\echo '--- SD1112 termin digestu zapisanych wyszukiwań ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-01 06:00Z', 'daily', '2026-10-01 06:20Z') = '2026-10-02 06:00Z'::timestamptz,
+  'SD1112-1 dzienny: kolejny termin = ta sama pora następnego dnia, nie chwila przebiegu + 1 dzień');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-01 06:00Z', 'daily', '2026-10-04 07:00Z') = '2026-10-05 06:00Z'::timestamptz,
+  'SD1112-2 zaległe dni pominięte: pierwszy termin po przebiegu, ta sama pora');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-24 06:00Z', 'daily', '2026-10-24 06:10Z') = '2026-10-25 07:00Z'::timestamptz,
+  'SD1112-3 jesienna zmiana czasu: 08:00 CEST → 08:00 CET (bez przesunięcia o godzinę)');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-03-28 07:00Z', 'daily', '2026-03-28 07:30Z') = '2026-03-29 06:00Z'::timestamptz,
+  'SD1112-4 wiosenna zmiana czasu: 08:00 CET → 08:00 CEST');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-01 06:00Z', 'weekly', '2026-10-01 06:30Z') = '2026-10-08 06:00Z'::timestamptz
+  and public.saved_search_next_run_at('2026-10-01 06:00Z', 'weekly', '2026-10-20 06:30Z') = '2026-10-22 06:00Z'::timestamptz,
+  'SD1112-5 tygodniowy: stały dzień i pora, zaległe tygodnie pominięte');
+select pg_temp.assert(
+  public.saved_search_next_run_at(null, 'daily', '2026-10-01 06:20Z') = '2026-10-02 06:20Z'::timestamptz
+  and public.saved_search_next_run_at('2026-10-01 06:00Z', 'daily', '2026-10-01 06:00Z') = '2026-10-02 06:00Z'::timestamptz,
+  'SD1112-6 brak poprzedniego terminu = okres od przebiegu; termin równy przebiegowi → następny okres');
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.saved_search_next_run_at(timestamptz, text, timestamptz)', 'execute')
+  and not has_function_privilege('authenticated', 'public.saved_search_next_run_at(timestamptz, text, timestamptz)', 'execute'),
+  'SD1112-7 funkcja pomocnicza tylko dla service_role');
+
+-- SD1112-8: worker — przebieg 20 min po terminie ustawia kolejny termin na tę samą porę.
+begin;
+update public.saved_searches set alerts_enabled = true, frequency = 'daily',
+  next_run_at = now() - interval '20 minutes' where id = :'sx2';
+select next_run_at as sd_prev from public.saved_searches where id = :'sx2' \gset
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select next_run_at from public.saved_searches where id = :'sx2')
+    = public.saved_search_next_run_at(:'sd_prev'::timestamptz, 'daily', now())
+  and (select next_run_at from public.saved_searches where id = :'sx2') < now() + interval '1 day'
+  and (select next_run_at from public.saved_searches where id = :'sx2') > now(),
+  'SD1112-8 worker: kolejny termin od poprzedniego terminu, nie od chwili przebiegu');
+rollback;
+
+-- SD1112-N (kontrola ujemna): definicja z 0138 dryfuje — termin = chwila przebiegu + 1 dzień.
+begin;
+\ir ../rollback/0211_saved_search_digest_schedule.down.sql
+update public.saved_searches set alerts_enabled = true, frequency = 'daily',
+  next_run_at = now() - interval '20 minutes' where id = :'sx2';
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select next_run_at from public.saved_searches where id = :'sx2') = now() + interval '1 day',
+  'SD1112-N kontrola ujemna: bez 0211 termin przesuwa się o spóźnienie przebiegu');
+rollback;
+
+-- ============================================================================
 -- P2C994 (0210, numer tymczasowy): współbieżność paczek kampanii (#906), synchronizacji
 --        tłumaczeń oferty przy zawieszeniu firmy (#802) i tokenu zaproszenia przy limicie
 --        e-maili (#793). Sesje równoległe przez dblink; fixture'y zatwierdzane osobną sesją.

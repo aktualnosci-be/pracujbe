@@ -1863,6 +1863,7 @@
     "successNoReview": "Vérifiez toutes les étapes avant de publier.",
     "successDraftSaved": "Nous l’avons enregistré comme brouillon. Rien n’a été publié.",
     "successDraftPending": "Le brouillon sera enregistré quand vous cliquerez sur « Suivant ». Rien n’a été publié.",
+    "detectedLanguage": "Langue de l’annonce détectée : {language}. Vous pouvez la modifier à l’étape 1 (« Langue de l'annonce »).",
     "suspiciousWarning": "L’annonce contenait un texte qui ressemblait à des instructions pour l’IA. Nous ne les avons pas suivies, mais vérifiez bien tous les champs, surtout la description.",
     "reviewStepTitle": "Vérifiez les champs remplis à partir de l’annonce :",
     "errorFileMissing": "Choisissez un fichier de capture d’écran.",

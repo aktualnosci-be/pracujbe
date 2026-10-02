@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TeamInvite, type TeamInvitationView } from '@/components/employer/team/TeamInvite';
-import { renewTeamInvitation, revokeTeamInvitation } from '@/lib/actions/team';
+import { inviteTeamMember, renewTeamInvitation, revokeTeamInvitation } from '@/lib/actions/team';
 import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
@@ -56,6 +56,8 @@ function renderInvite(actorRole: string, locale: keyof typeof messages = 'pl') {
   );
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 const rowOf = (email: string) => screen.getByText(email).closest('li') as HTMLElement;
 
 beforeEach(() => {
@@ -83,7 +85,9 @@ describe('oczekujące zaproszenia (0187)', () => {
         name: t.renewLabel.replace('{email}', 'rita@firma.be'),
       }),
     );
-    await waitFor(() => expect(renewTeamInvitation).toHaveBeenCalledExactlyOnceWith('inv-rec', 'c-1'));
+    await waitFor(() =>
+      expect(renewTeamInvitation).toHaveBeenCalledExactlyOnceWith('inv-rec', 'c-1', expect.stringMatching(UUID)),
+    );
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent(t.renewed);
     await waitFor(() => expect(status).toHaveFocus());
@@ -152,5 +156,47 @@ describe('oczekujące zaproszenia (0187)', () => {
       }),
     ).toBeVisible();
     expect(within(rowOf('adam@firma.be')).getByText(new RegExp(tl.invitationLanguageUnknown))).toBeVisible();
+  });
+
+  it('#1113: ponowienie odnowienia po błędzie sieci wysyła ten sam klucz operacji, kolejne odnowienie — nowy', async () => {
+    vi.mocked(renewTeamInvitation).mockRejectedValueOnce(new Error('network'));
+    renderInvite('owner');
+    const renew = () =>
+      fireEvent.click(
+        within(rowOf('rita@firma.be')).getByRole('button', {
+          name: t.renewLabel.replace('{email}', 'rita@firma.be'),
+        }),
+      );
+    renew();
+    await screen.findByRole('alert');
+    renew();
+    await screen.findByRole('status');
+    renew();
+    await waitFor(() => expect(renewTeamInvitation).toHaveBeenCalledTimes(3));
+    const keys = vi.mocked(renewTeamInvitation).mock.calls.map((c) => c[2]);
+    expect(keys[1]).toBe(keys[0]);
+    // Kontrola ujemna: po sukcesie nowa operacja = nowy klucz.
+    expect(keys[2]).not.toBe(keys[1]);
+  });
+
+  it('#1113: ponowienie zaproszenia po błędzie sieci = ten sam klucz; zmiana adresu = nowy', async () => {
+    vi.mocked(inviteTeamMember).mockRejectedValueOnce(new Error('network')).mockResolvedValue({ ok: true });
+    renderInvite('owner');
+    const email = screen.getByLabelText(t.emailLabel);
+    const submit = () => fireEvent.click(screen.getByRole('button', { name: t.inviteSubmit }));
+    fireEvent.change(email, { target: { value: 'nowy@firma.be' } });
+    submit();
+    await waitFor(() => expect(inviteTeamMember).toHaveBeenCalledTimes(1));
+    await screen.findByRole('alert');
+    submit();
+    await waitFor(() => expect(inviteTeamMember).toHaveBeenCalledTimes(2));
+    await screen.findByRole('status');
+    fireEvent.change(email, { target: { value: 'inny@firma.be' } });
+    submit();
+    await waitFor(() => expect(inviteTeamMember).toHaveBeenCalledTimes(3));
+    const keys = vi.mocked(inviteTeamMember).mock.calls.map((c) => c[2]);
+    expect(keys[0]).toMatch(UUID);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
   });
 });

@@ -66,6 +66,8 @@ echo ">> rollback 0198 (opis firmy z zatwierdzaniem, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
+echo ">> rollback 0211 (termin digestu zapisanych wyszukiwań, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-search-schedule-rollback.sql"
 echo ">> rollback 0207 (eksport pracodawcy: odwołania i zgłoszenia, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/employer-export-0207-rollback.sql"
 echo ">> rollback 0206 (indeksy usuwania konta i znaki sterujące w nazwach, w transakcji cofanej)"

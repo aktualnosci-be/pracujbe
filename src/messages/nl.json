@@ -1863,6 +1863,7 @@
     "successNoReview": "Controleer alle stappen voordat je publiceert.",
     "successDraftSaved": "We hebben het als concept opgeslagen. Er is niets gepubliceerd.",
     "successDraftPending": "Het concept wordt opgeslagen wanneer je op „Volgende” klikt. Er is niets gepubliceerd.",
+    "detectedLanguage": "Gedetecteerde taal van de vacature: {language}. Je kunt die wijzigen in stap 1 („Taal van de vacature”).",
     "suspiciousWarning": "De vacature bevatte tekst die op instructies voor AI leek. We hebben die niet uitgevoerd, maar controleer alle velden goed, vooral de beschrijving.",
     "reviewStepTitle": "Controleer de velden die uit de vacature zijn ingevuld:",
     "errorFileMissing": "Kies een screenshotbestand.",

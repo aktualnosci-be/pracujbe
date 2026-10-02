@@ -1863,6 +1863,7 @@
     "successNoReview": "Review every step before publishing.",
     "successDraftSaved": "We saved it as a draft. Nothing has been published.",
     "successDraftPending": "The draft is saved when you click “Next”. Nothing has been published.",
+    "detectedLanguage": "Detected listing language: {language}. You can change it in step 1 (“Listing language”).",
     "suspiciousWarning": "The ad contained text that looked like instructions for AI. We did not follow them, but check every field carefully, especially the description.",
     "reviewStepTitle": "Check the fields filled from the ad:",
     "errorFileMissing": "Choose a screenshot file.",
