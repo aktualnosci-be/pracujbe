@@ -26574,11 +26574,11 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- AIX773. „Wyjaśnij ofertę” (#773, 0977): funkcja `job_offer_explain` w budżecie AI —
+-- AIX773. „Wyjaśnij ofertę” (#773, 0220): funkcja `job_offer_explain` w budżecie AI —
 --         rezerwacja i rozliczenie działają, limit wspólny z innymi funkcjami, klient bez
 --         dostępu, CHECK rejestru zna funkcję. Kontrole ujemne: nazwa spoza listy odrzucona
---         (RPC i CHECK); rollback 0977 = odmowa (supabase/tests/ai-job-explain-rollback.sql).
---         Transakcja cofana — rejestr bez wierszy tej funkcji (rollback 0176/0977 przywraca CHECK).
+--         (RPC i CHECK); rollback 0220 = odmowa (supabase/tests/ai-job-explain-rollback.sql).
+--         Transakcja cofana — rejestr bez wierszy tej funkcji (rollback 0176/0220 przywraca CHECK).
 -- ============================================================================
 reset role; reset app.current_uid;
 begin;

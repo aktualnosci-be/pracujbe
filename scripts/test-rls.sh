@@ -117,7 +117,7 @@ echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji c
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
-echo ">> rollback 0977 (funkcja AI „Wyjaśnij ofertę” w budżecie, w transakcji cofanej)"
+echo ">> rollback 0220 (funkcja AI „Wyjaśnij ofertę” w budżecie, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/ai-job-explain-rollback.sql"
 echo ">> rollback 0203 (tytuł oferty bez heurystyki zaślepki, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-title-completeness-rollback.sql"
