@@ -52,6 +52,8 @@ echo ">> #1140 (0171): świeża baza = tryb ogłoszeniowy (CL1128-0)"
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 
+echo ">> rollback 0210 (współbieżność kampanii, tłumaczeń i zaproszeń; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/p2-concurrency-rollback.sql"
 echo ">> rollback 0194 (filtry listy ofert, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-filters-rollback.sql"
 
@@ -130,6 +132,8 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
+echo ">> rollback 0209 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/age-policy-cas-rollback.sql"
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"
 echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"
