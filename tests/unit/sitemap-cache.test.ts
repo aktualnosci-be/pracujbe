@@ -8,29 +8,39 @@ import { SITEMAP_CACHE_TTL_MS, clearSitemapCaches } from '@/lib/cache/sitemap-ca
  * równoległych obliczeń. Powtarzane anonimowe żądania nie liczą ofert za każdym razem.
  */
 const jobs = vi.hoisted(() => ({
-  getJobs: vi.fn(),
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
-  getJobsAvailableLocales: vi.fn(),
-  getJobsCount: vi.fn(),
+}));
+// Krok 2 (0208): katalog ofert z kursorowych RPC, języki tłumaczeń w tym samym wierszu.
+const catalog = vi.hoisted(() => ({
+  getSitemapJobShardStarts: vi.fn(),
+  getSitemapJobsShard: vi.fn(),
+  getSitemapCompanySlugs: vi.fn(),
 }));
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' }, isProductionDeployment: () => true }));
 vi.mock('@/lib/jobs', () => jobs);
+vi.mock('@/lib/sitemap-jobs', () => catalog);
 vi.mock('@/lib/guides/guides', () => ({ getAllGuideSlugs: () => [] }));
 
 const { default: sitemap, generateSitemaps } = await import('@/app/sitemap');
 const sitemapModule = await import('@/app/sitemap');
 
-const job = { id: 'a', slug: 'oferta-a', publishedAt: '2026-09-01T00:00:00.000Z' };
+const job = {
+  id: 'a',
+  slug: 'oferta-a',
+  publishedAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  locales: ['pl', 'nl', 'fr', 'en'],
+};
 
 beforeEach(() => {
   clearSitemapCaches();
-  for (const fn of Object.values(jobs)) fn.mockReset();
+  for (const fn of [...Object.values(jobs), ...Object.values(catalog)]) fn.mockReset();
   jobs.getCategoryCounts.mockResolvedValue({});
   jobs.getCityCounts.mockResolvedValue({});
-  jobs.getJobs.mockResolvedValue({ jobs: [job], total: 1, page: 1, pageSize: 100 });
-  jobs.getJobsCount.mockResolvedValue(1);
-  jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['pl', 'nl', 'fr', 'en'] });
+  catalog.getSitemapJobShardStarts.mockResolvedValue([{ shardIndex: 1, after: null }]);
+  catalog.getSitemapJobsShard.mockResolvedValue([job]);
+  catalog.getSitemapCompanySlugs.mockResolvedValue([]);
 });
 
 describe('cache sitemap (#1042)', () => {
@@ -41,31 +51,31 @@ describe('cache sitemap (#1042)', () => {
 
   it('powtórzone żądania tego samego pliku nie odpytują bazy ponownie', async () => {
     const first = await sitemap({ id: 1 });
-    const callsAfterFirst = jobs.getJobs.mock.calls.length;
+    const callsAfterFirst = catalog.getSitemapJobsShard.mock.calls.length;
     const second = await sitemap({ id: 1 });
     await sitemap({ id: '1' });
     expect(second).toEqual(first);
-    expect(jobs.getJobs.mock.calls.length).toBe(callsAfterFirst);
-    expect(jobs.getJobsAvailableLocales).toHaveBeenCalledTimes(1);
+    expect(catalog.getSitemapJobsShard.mock.calls.length).toBe(callsAfterFirst);
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledTimes(1);
   });
 
   it('kontrola ujemna: po wyczyszczeniu cache (lub innym pliku) baza jest odpytywana', async () => {
     await sitemap({ id: 1 });
-    const before = jobs.getJobs.mock.calls.length;
+    const before = catalog.getSitemapJobsShard.mock.calls.length;
     clearSitemapCaches();
     await sitemap({ id: 1 });
-    expect(jobs.getJobs.mock.calls.length).toBeGreaterThan(before);
+    expect(catalog.getSitemapJobsShard.mock.calls.length).toBeGreaterThan(before);
     await sitemap({ id: 0 });
     expect(jobs.getCategoryCounts).toHaveBeenCalledTimes(1);
   });
 
   it('równoległe żądania czekają na jedno obliczenie (single-flight)', async () => {
     await Promise.all(Array.from({ length: 8 }, () => sitemap({ id: 1 })));
-    expect(jobs.getJobsAvailableLocales).toHaveBeenCalledTimes(1);
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledTimes(1);
     await Promise.all(Array.from({ length: 8 }, () => generateSitemaps()));
     await Promise.all(Array.from({ length: 8 }, () => generateSitemaps()));
-    // Jedno zapytanie licznikowe na listę partii, niezależnie od liczby żądań (także robots.txt).
-    expect(jobs.getJobsCount).toHaveBeenCalledTimes(1);
+    // Jedno zapytanie o granice partii na listę plików, niezależnie od liczby żądań (także robots.txt).
+    expect(catalog.getSitemapJobShardStarts).toHaveBeenCalledTimes(1);
   });
 
   it('błąd odczytu nie jest cache’owany — kolejne żądanie próbuje ponownie', async () => {
@@ -73,14 +83,11 @@ describe('cache sitemap (#1042)', () => {
     await expect(sitemap({ id: 0 })).rejects.toThrow('brak liczników kategorii');
     await expect(sitemap({ id: 0 })).resolves.toBeInstanceOf(Array);
     expect(jobs.getCategoryCounts).toHaveBeenCalledTimes(2);
-  });
 
-  it('wynik zdegradowany (nieznane języki tłumaczeń) nie zostaje w cache', async () => {
-    jobs.getJobsAvailableLocales.mockResolvedValueOnce(null);
-    const degraded = await sitemap({ id: 1 });
-    expect(degraded.filter((entry) => entry.url.includes('/oferta-a'))).toHaveLength(4);
-    jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['nl'] });
+    catalog.getSitemapJobsShard.mockRejectedValueOnce(new Error('db down'));
+    await expect(sitemap({ id: 1 })).rejects.toThrow('db down');
     const recovered = await sitemap({ id: 1 });
-    expect(recovered.filter((entry) => entry.url.includes('/oferta-a'))).toHaveLength(1);
+    expect(recovered.filter((entry) => entry.url.includes('/oferta-a'))).toHaveLength(4);
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledTimes(2);
   });
 });
