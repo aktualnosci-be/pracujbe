@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0956_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0194),
+-- Rollback 0956_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0216),
 -- job_edit_audit_snapshot (0200) i update_published_job (0203), get_public_job (0194), a potem usuwa
 -- triggery, ograniczenia, kolumny `jobs.work_mode` / `jobs.remote_applicant_countries`
 -- i funkcje pomocnicze. Dawny boolean `jobs.remote` zostaje z wartością liczoną z trybu.
@@ -20,6 +20,7 @@ declare
   j jsonb := coalesce(p_content->'job', '{}'::jsonb);
   tr jsonb := coalesce(p_content->'translation', '{}'::jsonb);
   v_bad text;
+  v_step smallint;
 begin
   if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
   if p_content is null or jsonb_typeof(p_content) <> 'object'
@@ -51,6 +52,15 @@ begin
   end if;
   if v_bad is not null then
     raise exception 'VALIDATION_FAILED: nieznane pole %', v_bad using errcode = '42501';
+  end if;
+  -- 0216 (#834): numer kroku kreatora (1–9), którego zapis jest tą treścią. Brak klucza = zapis
+  -- spoza kreatora (import) — postęp bez zmian. Wartość spoza zakresu = odrzucenie całego kroku.
+  if p_content ? 'draft_step' then
+    if jsonb_typeof(p_content->'draft_step') <> 'number'
+       or (p_content->>'draft_step') !~ '^[1-9]$' then
+      raise exception 'VALIDATION_FAILED: nieprawidłowy krok kreatora' using errcode = '42501';
+    end if;
+    v_step := (p_content->>'draft_step')::smallint;
   end if;
 
   select j0.company_id, j0.status::text, j0.default_locale, j0.updated_at
@@ -172,6 +182,13 @@ begin
   -- #101: pytania screeningowe w tej samej transakcji co reszta kroku.
   if p_content ? 'screening_questions' then
     perform public.set_job_screening_questions(p_job_id, p_content->'screening_questions');
+  end if;
+
+  -- 0216 (#834): postęp kreatora = najdalszy krok z udanym zapisem. Ta sama transakcja co treść
+  -- kroku (błąd dowolnej części cofa też postęp); powrót do wcześniejszego kroku go nie cofa.
+  if v_step is not null then
+    update public.jobs set draft_step = greatest(coalesce(draft_step, 0), v_step)
+      where id = p_job_id and draft_step is distinct from greatest(coalesce(draft_step, 0), v_step);
   end if;
 
   -- #1070: nowa wersja szkicu. Każdy zapis kroku ją podbija — także krok, który zmienia tylko

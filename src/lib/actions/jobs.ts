@@ -526,6 +526,8 @@ export async function updateJobDraft(
       const content = buildDraftStepContent(step, parsed);
       if (!content) return 'VALIDATION_FAILED';
       if (screeningOff) delete content['screening_questions'];
+      // #834: postęp kreatora — RPC podnosi `jobs.draft_step` w tej samej transakcji co treść.
+      content['draft_step'] = step;
       // #1048 (I18N-01): krok 1 niesie jawny język ogłoszenia — zmiana PRZED zapisem treści,
       // żeby tłumaczenie i wymagania trafiły do właściwego języka. Zmiana języka modyfikuje
       // `jobs` (nowa wersja szkicu), więc token wersji (#1070) sprawdzamy tu PRZED zmianą

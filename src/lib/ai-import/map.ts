@@ -13,6 +13,7 @@ import {
 import { LANGUAGE_LEVELS } from '@/lib/validation/candidate';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { findSensitiveData, IDENTIFIER_KINDS } from '@/lib/privacy/sensitive-data';
+import { isLocale, type Locale } from '@/i18n/routing';
 import {
   IMPORTABLE_FIELDS,
   rawExtractionSchema,
@@ -79,6 +80,11 @@ export interface MappedImport {
   /** #495: odpowiedź zawiera numer identyfikacyjny osoby/dokumentu — import odrzucany. */
   sensitiveIdentifier: boolean;
   sourceLanguage: string | null;
+  /**
+   * #1048: język treści szkicu wykryty w źródle — `sourceLanguage` sprowadzony do języka
+   * serwisu (pl/nl/fr/en). `null` = brak albo język spoza serwisu (wtedy język panelu).
+   */
+  contentLocale: Locale | null;
   values: ImportedWizardValues;
   review: ImportableField[];
   /** Dane kroków (1–9), które przeszły walidację w całości — do zapisu w szkicu. */
@@ -139,6 +145,7 @@ export function mapExtraction(raw: unknown): MappedImport {
       suspicious: false,
       sensitiveIdentifier: false,
       sourceLanguage: null,
+      contentLocale: null,
       values: {},
       review: [],
       validSteps: [],
@@ -286,12 +293,25 @@ export function mapExtraction(raw: unknown): MappedImport {
     suspicious: r.suspiciousInstructions,
     sensitiveIdentifier,
     sourceLanguage: cleanText(r.sourceLanguage)?.slice(0, 8) ?? null,
+    contentLocale: importContentLocale(r.sourceLanguage),
     values,
     review: IMPORTABLE_FIELDS.filter((f) => review.has(f)),
     // Podejrzenie prompt injection: nic nie trafia do bazy bez przejrzenia przez człowieka —
     // formularz jest wypełniony, ale szkic zapisze dopiero „Dalej" po sprawdzeniu pól.
     validSteps: r.suspiciousInstructions || sensitiveIdentifier ? [] : validSteps,
   };
+}
+
+/**
+ * #1048: kod języka zwrócony przez model (`nl`, `NL`, `nl-BE`, `fr_BE`) → język serwisu albo
+ * `null`. Bierzemy wyłącznie podstawowy podznacznik z dokładnie dwóch liter — nazwa języka
+ * („Nederlands”), kod spoza serwisu (`de`) czy dowolny tekst nie wybierają języka treści.
+ */
+export function importContentLocale(value: string | null | undefined): Locale | null {
+  if (typeof value !== 'string') return null;
+  const match = /^\s*([a-z]{2})(?:[-_][a-z0-9]{2,8})*\s*$/i.exec(value);
+  const primary = match?.[1]?.toLowerCase();
+  return isLocale(primary) ? primary : null;
 }
 
 /** '' / brak → undefined (pole opcjonalne), jak `buildStepData` w kreatorze. */

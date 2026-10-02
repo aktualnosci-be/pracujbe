@@ -16,7 +16,7 @@
 -- 2. `jobs.remote` zostaje (filtr promienia 0194, matching) i przy ustawionym
 --    trybie liczy go trigger BEFORE: `remote = (work_mode = 'remote')` — praca hybrydowa nie
 --    omija filtra promienia ani punktów lokalizacji w dopasowaniu. Tryb nieznany = bez zmian.
--- 3. `save_job_draft` (stan 0194) i `update_published_job` (stan 0203) + dwa nowe klucze;
+-- 3. `save_job_draft` (stan 0216: 0194 + postęp kreatora `draft_step`) i `update_published_job` (stan 0203) + dwa nowe klucze;
 --    migawka audytu edycji (`job_edit_audit_snapshot`, 0200) + tryb i kraje.
 -- 4. `get_public_job` (stan 0194, drop + create) + `work_mode`, `remote_applicant_countries`
 --    na końcu listy (bramki oferty publicznej bez zmian).
@@ -91,7 +91,7 @@ create trigger trg_jobs_sync_remote_from_work_mode
   before insert or update on public.jobs
   for each row execute function public.jobs_sync_remote_from_work_mode();
 
--- --- 3a. Kreator: save_job_draft (stan 0194) + tryb pracy -------------------------------------
+-- --- 3a. Kreator: save_job_draft (stan 0216) + tryb pracy -------------------------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -101,6 +101,7 @@ declare
   j jsonb := coalesce(p_content->'job', '{}'::jsonb);
   tr jsonb := coalesce(p_content->'translation', '{}'::jsonb);
   v_bad text;
+  v_step smallint;
 begin
   if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
   if p_content is null or jsonb_typeof(p_content) <> 'object'
@@ -134,6 +135,15 @@ begin
   end if;
   if v_bad is not null then
     raise exception 'VALIDATION_FAILED: nieznane pole %', v_bad using errcode = '42501';
+  end if;
+  -- 0216 (#834): numer kroku kreatora (1–9), którego zapis jest tą treścią. Brak klucza = zapis
+  -- spoza kreatora (import) — postęp bez zmian. Wartość spoza zakresu = odrzucenie całego kroku.
+  if p_content ? 'draft_step' then
+    if jsonb_typeof(p_content->'draft_step') <> 'number'
+       or (p_content->>'draft_step') !~ '^[1-9]$' then
+      raise exception 'VALIDATION_FAILED: nieprawidłowy krok kreatora' using errcode = '42501';
+    end if;
+    v_step := (p_content->>'draft_step')::smallint;
   end if;
 
   select j0.company_id, j0.status::text, j0.default_locale, j0.updated_at
@@ -262,6 +272,13 @@ begin
   -- #101: pytania screeningowe w tej samej transakcji co reszta kroku.
   if p_content ? 'screening_questions' then
     perform public.set_job_screening_questions(p_job_id, p_content->'screening_questions');
+  end if;
+
+  -- 0216 (#834): postęp kreatora = najdalszy krok z udanym zapisem. Ta sama transakcja co treść
+  -- kroku (błąd dowolnej części cofa też postęp); powrót do wcześniejszego kroku go nie cofa.
+  if v_step is not null then
+    update public.jobs set draft_step = greatest(coalesce(draft_step, 0), v_step)
+      where id = p_job_id and draft_step is distinct from greatest(coalesce(draft_step, 0), v_step);
   end if;
 
   -- #1070: nowa wersja szkicu. Każdy zapis kroku ją podbija — także krok, który zmienia tylko

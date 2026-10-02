@@ -156,7 +156,7 @@ pilnuje dalej `check-next-build.mjs`.
 | zasób | stan main 2026-09-24 | budżet |
 |---|---|---|
 | JS `/[locale]/(public)/page` (home) | 164,5 KB | 173 KB |
-| JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 175 KB |
+| JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 176 KB² |
 | JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 243 KB¹ |
 | JS `/[locale]/(public)/poradniki/[slug]/page` | 154,0 KB | 162 KB |
 | JS `/[locale]/(auth)/logowanie/page` | 184,8 KB | 194 KB |
@@ -166,6 +166,10 @@ pilnuje dalej `check-next-build.mjs`.
 analitycznej (odczyt cookie tuż przed wysyłką, kolejka zdarzeń do decyzji) — ok. 1 KB JS na
 stronie oferty, wymóg decyzji właściciela (ePrivacy). Odczyt zgody bez Server Action i store'u
 banera (`src/lib/consent-cookie.ts`), więc nie ciągnie dodatkowych modułów.
+
+² 175 → 176 KB (#855, 2026-10-02): main doszedł do 174,5 KB, a wyspa obserwowania firmy na profilu
+firmy zmieniła podział wspólnych chunków webpacka (kod zgody/lejka trafia do chunku strony listy
+zamiast do chunku współdzielonego) — +0,6 KB na liście bez nowego kodu na tej stronie.
 
 Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa biblioteka kliencka
 w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).

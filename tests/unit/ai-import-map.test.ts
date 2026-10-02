@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildImportDraftContent, mapExtraction } from '@/lib/ai-import/map';
+import { buildImportDraftContent, importContentLocale, mapExtraction } from '@/lib/ai-import/map';
 import { IMPORTABLE_FIELDS } from '@/lib/ai-import/schema';
 
 /** Najnowsza migracja definiująca `save_job_draft` (numer tymczasowy nie psuje testu). */
@@ -70,6 +70,7 @@ describe('mapExtraction', () => {
     const m = mapExtraction(extraction());
     expect(m.isJobListing).toBe(true);
     expect(m.sourceLanguage).toBe('fr');
+    expect(m.contentLocale).toBe('fr');
     expect(m.values.title).toBe('Préparateur de commandes (H/F)');
     expect(m.values.city).toBe('Liège');
     expect(m.values.salaryMin).toBe('2200');
@@ -254,5 +255,28 @@ describe('mapExtraction — dane osób w odpowiedzi modelu (#500, #495)', () => 
     expect(m.values.conditions).toEqual(['Contrat de 6 mois', 'Prime de 150 €']);
     expect(m.sensitiveIdentifier).toBe(false);
     expect(m.review).toEqual([]);
+  });
+});
+
+describe('importContentLocale (#1048)', () => {
+  it.each([
+    ['nl', 'nl'],
+    ['NL', 'nl'],
+    [' fr-BE ', 'fr'],
+    ['pl_PL', 'pl'],
+    ['en', 'en'],
+  ])('%j → %s', (value, expected) => {
+    expect(importContentLocale(value)).toBe(expected);
+  });
+
+  it.each([['de'], ['Nederlands'], ['français'], [''], ['nl fr'], ['xx-nl'], [null], [undefined]])(
+    'kontrola ujemna: %j → null (język panelu)',
+    (value) => {
+      expect(importContentLocale(value as string | null | undefined)).toBeNull();
+    },
+  );
+
+  it('mapExtraction: język spoza serwisu nie wybiera języka treści', () => {
+    expect(mapExtraction(extraction({ sourceLanguage: 'de' })).contentLocale).toBeNull();
   });
 });
