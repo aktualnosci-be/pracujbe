@@ -1,7 +1,7 @@
 -- =============================================================================
--- 0957_keyword_job_qualifications.sql — słowo kluczowe listy ofert szuka też w kwalifikacjach
--- oferty (#866). NUMER TYMCZASOWY — ostateczny nada integrator. Musi być zastosowana PO 0960
--- (#1215, PR #1275): nadpisuje cztery funkcje w wersji z 0960 (plpgsql, force_custom_plan).
+-- 0214_keyword_job_qualifications.sql — słowo kluczowe listy ofert szuka też w kwalifikacjach
+-- oferty (#866). Musi być zastosowana PO 0213
+-- (#1215, PR #1275): nadpisuje cztery funkcje w wersji z 0213 (plpgsql, force_custom_plan).
 --
 -- Problem: pole „Stanowisko lub słowo kluczowe” dopasowywało wpis wyłącznie do wyświetlanego
 --   tytułu oferty. Oferta „Magazynier” z wymogiem certyfikatu VCA nie pojawiała się po wpisaniu
@@ -21,11 +21,11 @@
 --   Ta sama reguła składania (`search_fold`, literał LIKE `search_like_pattern`) co tytuł.
 --   Opis oferty świadomie poza zakresem (długi tekst, wymaga rankingu — osobny krok).
 --
--- Sygnatury, typy wyników, granty, SECURITY DEFINER i ustawienia planu z 0960 bez zmian.
+-- Sygnatury, typy wyników, granty, SECURITY DEFINER i ustawienia planu z 0213 bez zmian.
 -- `search_title_candidates` zostaje (nieużywana przez te funkcje; rollback ją przywraca).
--- Dowód: supabase/tests/rls.sql sekcja KQ866 (kontrole ujemne: definicje z 0960 nie znajdują
+-- Dowód: supabase/tests/rls.sql sekcja KQ866 (kontrole ujemne: definicje z 0213 nie znajdują
 -- oferty po kwalifikacji; wymaganie w innym języku nie daje trafienia).
--- Rollback: supabase/rollback/0957_keyword_job_qualifications.down.sql.
+-- Rollback: supabase/rollback/0214_keyword_job_qualifications.down.sql.
 -- =============================================================================
 
 -- --- 1. Indeksy trigramowe kwalifikacji ---------------------------------------------------------
@@ -86,7 +86,7 @@ set search_path = public, pg_temp as $$
 $$;
 revoke all on function public.job_keyword_qualification_match(uuid, text, text, text) from public;
 
--- --- 3. get_public_jobs (stan 0960 + kwalifikacje, #866) ----------------------------------------
+-- --- 3. get_public_jobs (stan 0213 + kwalifikacje, #866) ----------------------------------------
 create or replace function public.get_public_jobs(
   p_locale         text        default 'pl',
   p_keyword        text        default null,
@@ -120,7 +120,7 @@ returns table (
 )
 language plpgsql stable security definer
 set search_path = public, pg_temp
--- 0960 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
 -- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
 set plan_cache_mode = force_custom_plan
 set jit = off
@@ -144,7 +144,7 @@ begin
     j.accommodation, j.immediate, j.no_language_required,
     c.slug as company_slug
   from (
-    -- 0960 (#1215): najpierw strona identyfikatorów (indeks published_at albo klucza
+    -- 0213 (#1215): najpierw strona identyfikatorów (indeks published_at albo klucza
     -- wynagrodzenia + LIMIT), dopiero potem tłumaczenie tytułu dla wierszy strony.
     select j.id, j.published_at,
       (case when p_sort = 'salary' then public.job_salary_sort_key(
@@ -165,10 +165,10 @@ begin
       and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
       and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
       -- Prefiltr po indeksach (tytuł oferty, któregokolwiek tłumaczenia albo kwalifikacji —
-      -- 0957, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
+      -- 0214, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
       and (p_keyword is null or j.id in (
         select public.search_keyword_candidates(left(p_keyword, 100))))
-      -- 0960 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
+      -- 0213 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
       -- język oferty, en), ale jako podzapytanie liczone TYLKO przy słowie kluczowym.
       and (p_keyword is null or public.search_fold(coalesce((
             select jt.title from public.job_translations jt
@@ -176,10 +176,10 @@ begin
             order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
             limit 1), j.title))
         like public.search_like_pattern(left(p_keyword, 100)) escape '\'
-      -- 0957 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
+      -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
       or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword, 100)))
       -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
-      -- 0960 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+      -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
       and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
         j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit))
       and (p_accommodation is null or j.accommodation = p_accommodation)
@@ -232,7 +232,7 @@ grant execute on function public.get_public_jobs(
   boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer
 ) to anon, authenticated;
 
--- --- 4. get_public_jobs_count (stan 0960 + kwalifikacje, #866) ---------------------------------
+-- --- 4. get_public_jobs_count (stan 0213 + kwalifikacje, #866) ---------------------------------
 create or replace function public.get_public_jobs_count(
   p_locale         text      default 'pl',
   p_keyword        text      default null,
@@ -256,7 +256,7 @@ create or replace function public.get_public_jobs_count(
   p_radius_km      integer     default null
 ) returns bigint language plpgsql stable security definer
 set search_path = public, pg_temp
--- 0960 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
 -- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
 set plan_cache_mode = force_custom_plan
 set jit = off
@@ -283,10 +283,10 @@ begin
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
     and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
     -- Prefiltr po indeksach (tytuł oferty, któregokolwiek tłumaczenia albo kwalifikacji —
-    -- 0957, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
+    -- 0214, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
     and (p_keyword is null or j.id in (
       select public.search_keyword_candidates(left(p_keyword, 100))))
-    -- 0960 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
+    -- 0213 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
     -- język oferty, en), ale jako podzapytanie liczone TYLKO przy słowie kluczowym.
     and (p_keyword is null or public.search_fold(coalesce((
           select jt.title from public.job_translations jt
@@ -294,10 +294,10 @@ begin
           order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
           limit 1), j.title))
       like public.search_like_pattern(left(p_keyword, 100)) escape '\'
-      -- 0957 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
+      -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
       or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword, 100)))
     -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
-    -- 0960 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+    -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
     and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
       j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit))
     and (p_accommodation is null or j.accommodation = p_accommodation)
@@ -332,7 +332,7 @@ grant execute on function public.get_public_jobs_count(
   boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer
 ) to anon, authenticated;
 
--- --- 5. Facety (stan 0960 + kwalifikacje, #866) ------------------------------------------------
+-- --- 5. Facety (stan 0213 + kwalifikacje, #866) ------------------------------------------------
 create or replace function public.get_public_job_filter_facets(
   p_locale text default 'pl', p_keyword text default null, p_city text default null,
   p_categories text[] default null, p_locations text[] default null,
@@ -348,7 +348,7 @@ create or replace function public.get_public_job_filter_facets(
 ) returns table (dimension text, key text, total bigint)
 language plpgsql stable security definer
 set search_path = public, pg_temp
--- 0960 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
 -- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
 set plan_cache_mode = force_custom_plan
 set jit = off
@@ -370,7 +370,7 @@ begin
     select j.id, j.category::text category, j.city, j.location_id,
       -- SRCH-01 (#1076): część gminy (dzielnica) liczy się w pozycji swojej gminy nadrzędnej —
       -- tak samo jak filtr `location_filter_ids` (gmina obejmuje swoje części).
-      -- 0960 (#1215): nazwa jako podzapytanie po kluczu głównym (to samo co dawne złączenia
+      -- 0213 (#1215): nazwa jako podzapytanie po kluczu głównym (to samo co dawne złączenia
       -- `left join locations l … left join locations pl …`): przy małej liczbie ofert po filtrze
       -- słowa kluczowego planer wybierał pętlę z pełnym skanem słownika na każdą ofertę.
       coalesce((
@@ -391,19 +391,19 @@ begin
     )
       and (nullif(left(p_keyword,100),'') is null or j.id in (
         select public.search_keyword_candidates(left(p_keyword,100))))
-      -- 0960 (#1215): wyświetlany tytuł jak lateral z 0194, ale liczony tylko przy słowie kluczowym;
+      -- 0213 (#1215): wyświetlany tytuł jak lateral z 0194, ale liczony tylko przy słowie kluczowym;
       -- warunki na parametrach (nie na kolumnach CTE `input`), żeby planer znał je jako stałe.
       and (nullif(left(p_keyword,100),'') is null or public.search_fold(coalesce((
             select jt.title from public.job_translations jt where jt.job_id=j.id
             order by (jt.locale=v_locale) desc, (jt.locale=j.default_locale) desc,
               (jt.locale='en') desc limit 1),j.title))
         like public.search_like_pattern(left(p_keyword,100)) escape '\'
-        -- 0957 (#866): albo umiejętność, certyfikat lub wymaganie oferty.
+        -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty.
         or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword,100)))
       and (nullif(left(p_city,100),'') is null or j.id in (
         select public.search_city_candidates(left(p_city,100))))
       -- 0194 (#787): widełki w EUR — inna waluta nieporównywalna.
-      -- 0960 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+      -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
       and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
         j.salary_min,j.salary_max,j.salary_period,j.currency,p_salary_min,p_salary_max,p_salary_unit))
       -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
@@ -521,7 +521,7 @@ create or replace function public.saved_search_jobs_after(
 returns table (id uuid, published_at timestamptz)
 language plpgsql stable security definer
 set search_path = public, pg_temp
--- 0960 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
 -- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
 set plan_cache_mode = force_custom_plan
 set jit = off
@@ -549,10 +549,10 @@ begin
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
     and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
     -- Prefiltr po indeksach (tytuł oferty, któregokolwiek tłumaczenia albo kwalifikacji —
-    -- 0957, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
+    -- 0214, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
     and (p_keyword is null or j.id in (
       select public.search_keyword_candidates(left(p_keyword, 100))))
-    -- 0960 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
+    -- 0213 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
     -- język oferty, en), ale jako podzapytanie liczone TYLKO przy słowie kluczowym.
     and (p_keyword is null or public.search_fold(coalesce((
           select jt.title from public.job_translations jt
@@ -560,10 +560,10 @@ begin
           order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
           limit 1), j.title))
       like public.search_like_pattern(left(p_keyword, 100)) escape '\'
-      -- 0957 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
+      -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
       or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword, 100)))
     -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
-    -- 0960 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+    -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
     and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
       j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit))
     and (p_accommodation is null or j.accommodation = p_accommodation)

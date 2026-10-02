@@ -25265,15 +25265,15 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- KQ866. Słowo kluczowe listy ofert szuka też w kwalifikacjach oferty (0957, #866).
+-- KQ866. Słowo kluczowe listy ofert szuka też w kwalifikacjach oferty (0214, #866).
 -- Oferty o tytułach bez szukanego słowa: certyfikat VCA, umiejętność „wózek widłowy”,
 -- wymaganie w języku oferty (pl) i wymaganie tylko w innym języku (en). KQ866-1..6: lista,
 -- licznik, facety i kopia dla alertów znajdują ofertę po kwalifikacji, bez wielkości liter
 -- i diakrytyków; wymaganie w innym języku niż wyświetlany nie daje trafienia; oferta firmy
 -- niezweryfikowanej nadal ukryta; tytuł działa jak dotąd. KQ866-N: KONTROLA UJEMNA — po
--- rollbacku 0957 (definicje z 0213) oferta po samej kwalifikacji nie jest znajdowana.
+-- rollbacku 0214 (definicje z 0213) oferta po samej kwalifikacji nie jest znajdowana.
 -- ============================================================================
-\echo '--- KQ866 słowo kluczowe w kwalifikacjach oferty (0957) ---'
+\echo '--- KQ866 słowo kluczowe w kwalifikacjach oferty (0214) ---'
 begin;
 \set KQC 'e9c30866-0000-0000-0000-0000000000c1'
 \set KQU 'e9c30866-0000-0000-0000-0000000000c2'
@@ -25345,7 +25345,7 @@ select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_
   'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
 
 savepoint kq866_old;
-\ir ../rollback/0957_keyword_job_qualifications.down.sql
+\ir ../rollback/0214_keyword_job_qualifications.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
   and public.get_public_jobs_count('pl', 'wozek widlowy kq866') = 0
@@ -25354,7 +25354,7 @@ select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
 reset role;
 rollback to savepoint kq866_old;
 select pg_temp.assert(to_regprocedure('public.search_keyword_candidates(text)') is not null,
-  'KQ866-8 po cofnięciu savepointu stan 0957 zostaje');
+  'KQ866-8 po cofnięciu savepointu stan 0214 zostaje');
 rollback;
 reset role; reset app.current_uid;
 

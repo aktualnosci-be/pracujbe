@@ -147,7 +147,7 @@ echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 echo ">> rollback 0213 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/public-jobs-plan-rollback.sql"
 
-echo ">> rollback 0957 (słowo kluczowe w kwalifikacjach oferty, w transakcji cofanej)"
+echo ">> rollback 0214 (słowo kluczowe w kwalifikacjach oferty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/keyword-qualifications-rollback.sql"
 
 echo ">> sprzątanie"

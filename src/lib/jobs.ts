@@ -388,7 +388,7 @@ function getJobsFromDemo(
   if (params.keyword) {
     const q = searchFold(params.keyword.trim());
     if (q) {
-      // Jak SQL (0110/0153, 0957): słowo kluczowe szuka w tytule oferty i w jej kwalifikacjach
+      // Jak SQL (0110/0153, 0214): słowo kluczowe szuka w tytule oferty i w jej kwalifikacjach
       // (#866: wymagania w wyświetlanym języku; umiejętności i certyfikaty — demo ich nie ma),
       // nie w nazwie firmy, opisie ani wyróżnikach (#1119, lustro demo nie szuka szerzej niż baza).
       jobs = jobs.filter(

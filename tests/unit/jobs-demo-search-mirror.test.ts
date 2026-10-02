@@ -4,7 +4,7 @@ import { getJobs, type JobDetail } from '@/lib/jobs';
 
 /**
  * #1119 — lustro demo (`getJobsFromDemo`) szuka tak samo jak SQL (0110/0153): słowo kluczowe
- * w tytule oferty (od 0957, #866, także w wymaganiach), miasto tylko w nazwie miasta. Dawniej demo szukało też w nazwie
+ * w tytule oferty (od 0214, #866, także w wymaganiach), miasto tylko w nazwie miasta. Dawniej demo szukało też w nazwie
  * firmy, opisie, wyróżnikach i slugu, więc wynik w demo rozjeżdżał się z produkcją.
  */
 const base = { locale: 'pl' as const, page: 1, pageSize: 100 };
@@ -25,7 +25,7 @@ describe('lustro demo wyszukiwania', () => {
   it('#866: słowo z wymagań oferty (np. VCA) znajduje ofertę bez tego słowa w tytule', async () => {
     const result = await getJobs({ ...base, keyword: 'vca' });
     expect(result.total).toBeGreaterThan(0);
-    // Żaden tytuł nie zawiera „VCA” — trafienie wynika wyłącznie z wymagań (jak SQL 0957).
+    // Żaden tytuł nie zawiera „VCA” — trafienie wynika wyłącznie z wymagań (jak SQL 0214).
     expect(result.jobs.some((job) => job.title.toLowerCase().includes('vca'))).toBe(false);
     for (const job of result.jobs) {
       // Lustro demo zwraca pełne oferty (JobDetail), lista typuje je jako JobListItem.
