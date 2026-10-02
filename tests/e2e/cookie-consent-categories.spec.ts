@@ -34,6 +34,14 @@ const MAX_AGE_DAYS = 180;
 const TRACKER_HOSTS = /^https:\/\/([a-z0-9.-]*\.)?cloudflareinsights\.com\//;
 const CF_BEACON_SCRIPT = 'script#cf-web-analytics';
 
+// Atrapa beacon.min.js (#642): własna referencja do `sendBeacon`, wysyłka przy `pagehide`.
+const FAKE_BEACON = `(function () {
+  var send = navigator.sendBeacon.bind(navigator);
+  var url = "https://cloudflareinsights.com/cdn-cgi/rum";
+  window.__fakeCfSend = function () { return send(url, "{}"); };
+  addEventListener("pagehide", function () { send(url, "{}"); });
+})();`;
+
 // Skrypty `afterInteractive` wstrzykiwane są po hydratacji — „brak żądania" sprawdzamy w oknie.
 const QUIET_WINDOW_MS = 3_000;
 
@@ -268,7 +276,7 @@ for (const locale of routing.locales) {
       await expectNoTrackers(page, seen);
     });
 
-    test("wycofanie zgody ze stopki: beacon przestaje się ładować, po odświeżeniu zero żądań", async ({
+    test("wycofanie zgody ze stopki: strona sama się przeładowuje, potem zero żądań", async ({
       page,
     }) => {
       const seen = await trackTrackerRequests(page);
@@ -295,10 +303,13 @@ for (const locale of routing.locales) {
       );
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-checked", "false");
+      // #642: beacon był już w karcie, więc zapis wycofania sam przeładowuje stronę.
+      const reloaded = page.waitForEvent("load");
       await dialog
         .getByRole("button", { name: m.cookies.save, exact: true })
         .click();
-      await expect(dialog).toBeHidden();
+      await reloaded;
+      seen.length = 0;
 
       await expect.poll(() => calls.length).toBe(2);
       expect(calls).toEqual([
@@ -309,11 +320,87 @@ for (const locale of routing.locales) {
         },
       ]);
 
-      seen.length = 0;
-      await page.reload();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(settings(page)).toBeHidden();
       await expect(banner(page)).toBeHidden();
       await expectNoTrackers(page, seen);
+    });
+
+    test("#642: wycofanie przy działającym beaconie odcina wysyłkę, przeładowuje stronę i mówi dlaczego", async ({
+      page,
+    }) => {
+      // Atrapa beaconu jak skrypt dostawcy: trzyma WŁASNĄ referencję do `sendBeacon`
+      // i wysyła pomiar przy `pagehide` oraz na żądanie (`__fakeCfSend`).
+      const rum: string[] = [];
+      page.on("request", (request) => {
+        if (/cloudflareinsights\.com\/cdn-cgi\/rum/.test(request.url()))
+          rum.push(request.url());
+      });
+      await page.route(TRACKER_HOSTS, async (route) => {
+        if (route.request().url().includes("beacon.min.js")) {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/javascript",
+            body: FAKE_BEACON,
+          });
+          return;
+        }
+        await route.fulfill({ status: 204, body: "" });
+      });
+
+      await page.goto(home);
+      await banner(page)
+        .getByRole("button", { name: m.cookies.acceptAll, exact: true })
+        .click();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => typeof (window as { __fakeCfSend?: unknown }).__fakeCfSend,
+          ),
+        )
+        .toBe("function");
+      // kontrola dodatnia: przy zgodzie atrapa realnie wysyła pomiar
+      await page.evaluate(() =>
+        (window as unknown as { __fakeCfSend: () => boolean }).__fakeCfSend(),
+      );
+      await expect.poll(() => rum.length).toBeGreaterThan(0);
+      rum.length = 0;
+
+      await page
+        .getByRole("contentinfo")
+        .getByRole("button", { name: m.footer.cookieSettings, exact: true })
+        .click();
+      const dialog = settings(page);
+      await dialog
+        .getByRole("switch", { name: m.cookies.analyticsName })
+        .click();
+      const reloaded = page.waitForEvent("load");
+      await dialog
+        .getByRole("button", { name: m.cookies.save, exact: true })
+        .click();
+      await reloaded;
+
+      // Po przeładowaniu: komunikat, brak skryptu i zero pomiarów (także z `pagehide`).
+      await expect(
+        page.getByText(m.cookies.analyticsWithdrawnNotice, { exact: true }),
+      ).toBeVisible();
+      await expect(page.locator(CF_BEACON_SCRIPT)).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () => typeof (window as { __fakeCfSend?: unknown }).__fakeCfSend,
+        ),
+      ).toBe("undefined");
+
+      // Nawigacja kliencka na inną stronę publiczną — nadal bez pomiarów.
+      await page
+        .getByRole("contentinfo")
+        .getByRole("link", { name: m.nav.guides, exact: true })
+        .click();
+      await expect(page).toHaveURL(new RegExp(`/${locale}/poradniki`));
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(QUIET_WINDOW_MS);
+      expect(rum, "pomiary wysłane po wycofaniu zgody").toEqual([]);
+      await expect(page.locator(CF_BEACON_SCRIPT)).toHaveCount(0);
     });
 
     test("ważna zgoda w bieżącej wersji: baner ukryty przed hydratacją, beacon wg kategorii analytics", async ({

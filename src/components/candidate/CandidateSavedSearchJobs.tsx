@@ -71,7 +71,12 @@ export async function CandidateSavedSearchJobs({
                       {initials(job.companyName)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h3 className={ROW_TITLE}>
+                      {/* #1223: tytuł w innym języku niż panel (język zapisu wyszukiwania albo
+                          tłumaczenie zastępcze) — `lang` fragmentu dla czytnika ekranu. */}
+                      <h3
+                        className={ROW_TITLE}
+                        lang={job.contentLocale && job.contentLocale !== locale ? job.contentLocale : undefined}
+                      >
                         <Link
                           href={`/oferty-pracy/${encodeURIComponent(job.slug)}`}
                           className="break-words hover:text-primary hover:underline"

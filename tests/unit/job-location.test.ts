@@ -153,9 +153,14 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     });
   });
 
-  it('gmina spoza 10 tłumaczonych miast: nazwa ze słownika', async () => {
+  it('gmina spoza tłumaczonych miast (katalog landingów #920): nazwa ze słownika', async () => {
+    dictionary({ exact: [{ slug: 'lokeren', name: 'Lokeren' }] });
+    expect(await jobCityAssist({ city: 'Lokeren', locale: 'fr' })).toMatchObject({ match: { slug: 'lokeren', name: 'Lokeren' } });
+  });
+
+  it('miasto z katalogu landingów (#920): nazwa w języku widoku', async () => {
     dictionary({ exact: [{ slug: 'aalst', name: 'Aalst' }] });
-    expect(await jobCityAssist({ city: 'Alost', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Aalst' } });
+    expect(await jobCityAssist({ city: 'Aalst', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Alost' } });
   });
 
   it('nieznana nazwa = brak dopasowania (nie błąd)', async () => {
