@@ -10,7 +10,7 @@ import type {
 } from '@/lib/db/sitemap-jobs';
 
 /**
- * Katalog ofert dla sitemapy (#1042, migracja 0965). Zamiast `getJobs` (licznik +
+ * Katalog ofert dla sitemapy (#1042, migracja 0208). Zamiast `getJobs` (licznik +
  * stronicowanie OFFSET po 100 ofert, sufit 10 000) czyta dwa lekkie RPC kursorowe
  * (`src/lib/db/sitemap-jobs.ts`): granice partii (jedno zapytanie, 1 wiersz na partię) i strony
  * po 1000 ofert kursorem (`published_at desc`, `id desc`) razem z językami tłumaczeń.

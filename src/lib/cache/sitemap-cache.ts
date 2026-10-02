@@ -12,7 +12,7 @@ import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
  * przechodzi dalej), a wynik zdegradowany (np. nieznane języki tłumaczeń) jest usuwany ze wpisu
  * przez wywołującego (`delete`).
  *
- * Krok 2 (migracja 0965): samo przeliczenie czyta lekkie RPC kursorowe bez licznika i OFFSET
+ * Krok 2 (migracja 0208): samo przeliczenie czyta lekkie RPC kursorowe bez licznika i OFFSET
  * (`src/lib/sitemap-jobs.ts`); języki tłumaczeń idą w tym samym zapytaniu, więc wynik
  * „zdegradowany” już nie występuje, a `delete` zostaje ogólną operacją cache.
  */

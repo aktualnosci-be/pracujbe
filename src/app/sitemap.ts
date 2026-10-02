@@ -29,7 +29,7 @@ import { CITY_LANDING_KEYS, cityLandingQualifies } from '@/lib/locations/city-la
  *
  * Dawny sztywny sufit `SITEMAP_MAX_JOBS = 5000` (jeden plik, bez dalszych partii) ucinał
  * katalog bezpowrotnie — starsze/dalsze oferty zostawały publiczne, ale poza sitemapem (#599).
- * Partii przybywa wraz z wolumenem. Od #1042 (migracja 0965) katalog czytają dwa lekkie RPC
+ * Partii przybywa wraz z wolumenem. Od #1042 (migracja 0208) katalog czytają dwa lekkie RPC
  * kursorowe (`src/lib/sitemap-jobs.ts`): granice partii (bez licznika) i strony po 1000 ofert
  * kursorem (`published_at`, `id`) razem z językami tłumaczeń — bez OFFSET, więc bez sufitu
  * offsetu publicznej listy (`MAX_JOB_LIST_OFFSET`, #593) i bez kosztu rosnącego z głębokością.

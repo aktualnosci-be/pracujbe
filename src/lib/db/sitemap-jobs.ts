@@ -7,7 +7,7 @@ import {
 } from './transaction';
 
 /**
- * Odczyt katalogu ofert dla sitemapy (#1042, migracja 0965) — dwa lekkie RPC pod rolą anon,
+ * Odczyt katalogu ofert dla sitemapy (#1042, migracja 0208) — dwa lekkie RPC pod rolą anon,
  * niezależne od `get_public_jobs`: bez licznika, bez OFFSET, stronicowanie kursorem
  * (`published_at desc`, `id desc`). Zapytania mają wyłącznie stałe nazwy funkcji, wartości
  * idą w parametrach.

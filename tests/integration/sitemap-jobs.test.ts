@@ -9,7 +9,7 @@ import {
 } from '../../src/lib/db/sitemap-jobs';
 
 /**
- * #1042 (migracja 0965) na PostgreSQL 16: kursorowe RPC sitemapy ofert pod loginem `web`
+ * #1042 (migracja 0208) na PostgreSQL 16: kursorowe RPC sitemapy ofert pod loginem `web`
  * (rola anon, jak w produkcji). 2600 ofert z JEDNYM published_at (remis przez każdą granicę
  * strony i partii) + oferty ukryte. Sitemap ma zwrócić dokładnie to samo, co publiczna lista
  * (`get_public_jobs`), w porządku (published_at, id) malejąco, bez dziur i dubli.

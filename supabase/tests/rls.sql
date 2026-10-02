@@ -22989,14 +22989,14 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 -- ============================================================================
--- SM1042. Kursorowe RPC sitemapy ofert (0965, #1042): bez licznika i OFFSET, stronicowanie
+-- SM1042. Kursorowe RPC sitemapy ofert (0208, #1042): bez licznika i OFFSET, stronicowanie
 -- (published_at desc, id desc). 130 aktywnych ofert z JEDNYM published_at (remis przez każdą
 -- granicę strony i partii) + 2 nowsze + 1 starsza + oferty ukryte (szkic, wygasła po terminie,
 -- usunięta, firma niezweryfikowana, firma usunięta). Sekcja w transakcji cofanej.
 -- Oczekiwania liczone względem publicznej listy (get_public_jobs): te same oferty, ta sama
 -- kolejność — rozjazd warunków „oferta publiczna” = czerwony test.
 -- ============================================================================
-\echo '--- SM1042 sitemap ofert: kursor zamiast licznika i offsetu (0965) ---'
+\echo '--- SM1042 sitemap ofert: kursor zamiast licznika i offsetu (0208) ---'
 begin;
 \set SMC 'e9c40000-0000-0000-0000-0000000000c1'
 \set SMU 'e9c40000-0000-0000-0000-0000000000c2'

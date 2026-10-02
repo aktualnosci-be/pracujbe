@@ -9,7 +9,7 @@ import {
 import type { TransactionPool } from '@/lib/db/transaction';
 
 /**
- * #1042 (0965): warstwa SQL sitemapy ofert — tylko RPC pod anon, kursor jako TEKST z
+ * #1042 (0208): warstwa SQL sitemapy ofert — tylko RPC pod anon, kursor jako TEKST z
  * mikrosekundami (nie `Date`), limit strony klampowany, brak konkatenacji wartości do SQL.
  */
 

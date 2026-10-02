@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * #1042 (migracja 0965): partie sitemapy ofert wyznaczają kursory (published_at, id), nie
+ * #1042 (migracja 0208): partie sitemapy ofert wyznaczają kursory (published_at, id), nie
  * pozycje. Atrapa poniżej odtwarza semantykę obu RPC (granice partii, strona kursorem z
  * górną granicą włącznie), a test sprawdza logikę `src/lib/sitemap-jobs.ts`: partie rozłączne,
  * bez dziur i dubli — także gdy WSZYSTKIE oferty mają ten sam `published_at` (remis przez każdą

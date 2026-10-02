@@ -1021,7 +1021,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
   kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
   #301) i `company-profile` (nazwy = widoczna ścieżka).
-  Sitemap ofert kursorem (#1042, migracja `0965` — numer tymczasowy): `sitemap.ts` nie używa już
+  Sitemap ofert kursorem (#1042, migracja `0208` — numer tymczasowy): `sitemap.ts` nie używa już
   `getJobs` (osobny licznik + OFFSET po 100 ofert, sufit offsetu 10 000). Dwa lekkie RPC niezależne
   od `get_public_jobs` (anon, SECURITY DEFINER): `get_public_jobs_sitemap_shard_starts(rozmiar)`
   (jeden wiersz na partię = kursor ostatniej oferty poprzedniej; liczba plików = liczba wierszy,
@@ -1035,7 +1035,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (partie, błąd = `AppError`, faza builda = pusto). Sufit partii `MAX_JOB_SITEMAP_SHARDS = 100`
   niezależny od bazy. Dowód: `rls.sql` sekcja SM1042 (wynik = publiczna lista, remis 130 ofert
   przez granice stron i partii, kontrole ujemne: kursor bez `id` gubi i dubluje, oferty
-  ukryte, niepełny kursor), rollback `supabase/rollback/0965_…down.sql`, integracja
+  ukryte, niepełny kursor), rollback `supabase/rollback/0208_…down.sql`, integracja
   `sitemap-jobs` (PG16, 2600 ofert z jednym `published_at`), unit `sitemap-jobs`,
   `sitemap-jobs-db`, `sitemap-robots`, `sitemap-seo`. Cache 3600 s: osobno (#1177). Profile
   firm (#1231) tylko w partii `0` — `getSitemapCompanySlugs` przechodzi cały katalog kursorem

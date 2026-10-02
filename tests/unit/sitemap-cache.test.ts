@@ -11,7 +11,7 @@ const jobs = vi.hoisted(() => ({
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
 }));
-// Krok 2 (0965): katalog ofert z kursorowych RPC, języki tłumaczeń w tym samym wierszu.
+// Krok 2 (0208): katalog ofert z kursorowych RPC, języki tłumaczeń w tym samym wierszu.
 const catalog = vi.hoisted(() => ({
   getSitemapJobShardStarts: vi.fn(),
   getSitemapJobsShard: vi.fn(),

@@ -1,4 +1,4 @@
--- 0965_public_jobs_sitemap_cursor.sql — numer tymczasowy (ostateczny nada integrator).
+-- 0208_public_jobs_sitemap_cursor.sql — numer tymczasowy (ostateczny nada integrator).
 --
 -- #1042 (PERF-04, reszta): sitemap ofert czytała katalog przez `get_public_jobs` — na każde
 -- żądanie osobny licznik (`get_public_jobs_count`) i stronicowanie OFFSET po 100 ofert,
@@ -31,7 +31,7 @@
 --
 -- Częściowy indeks pod kursor (published_at desc, id desc) dla ofert aktywnych.
 --
--- Rollback: supabase/rollback/0965_public_jobs_sitemap_cursor.down.sql
+-- Rollback: supabase/rollback/0208_public_jobs_sitemap_cursor.down.sql
 --   (test: supabase/tests/sitemap-cursor-rollback.sql).
 
 create index if not exists idx_jobs_sitemap_cursor
