@@ -170,6 +170,35 @@ describe('inviteTeamMember (#403)', () => {
     expect((db.calls[1]?.args as Record<string, string>).p_signup_nonce).not.toBe(args.p_signup_nonce);
   });
 
+  it('#1113: ponowienie z tym samym kluczem operacji = ten sam token (bez drugiego linku)', async () => {
+    const KEY = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const db = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
+    const input = { email: 'nowy@firma.be', role: 'member', locale: 'nl' } as const;
+    expect(await inviteTeamMember(input, COMPANY, KEY)).toEqual({ ok: true });
+    expect(await inviteTeamMember({ ...input, email: ' Nowy@Firma.be ' }, COMPANY, KEY.toUpperCase())).toEqual({ ok: true });
+    const [a, b] = db.calls.map((c) => c.args as Record<string, string>);
+    expect(b!.p_signup_nonce).toBe(a!.p_signup_nonce);
+    expect(b!.p_signup_token_hash).toBe(a!.p_signup_token_hash);
+    expect(a!.p_signup_nonce).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    expect(hashTeamInviteToken(teamInviteTokenFromNonce(a!.p_signup_nonce!)!)).toBe(a!.p_signup_token_hash);
+  });
+
+  it('KONTROLA UJEMNA #1113: inny klucz, inne dane operacji albo brak klucza = nowy token', async () => {
+    const KEY = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const OTHER_KEY = 'b1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const db = client({ data: [{ invitation_id: INVITE, created: true }], error: null });
+    const input = { email: 'nowy@firma.be', role: 'member', locale: 'nl' } as const;
+    await inviteTeamMember(input, COMPANY, KEY);
+    await inviteTeamMember(input, COMPANY, OTHER_KEY);
+    await inviteTeamMember({ ...input, locale: 'fr' }, COMPANY, KEY);
+    await inviteTeamMember({ ...input, role: 'recruiter' }, COMPANY, KEY);
+    await inviteTeamMember(input, COMPANY);
+    await inviteTeamMember(input, COMPANY, 'nie-uuid');
+    await inviteTeamMember(input, COMPANY, 'nie-uuid');
+    const nonces = db.calls.map((c) => (c.args as Record<string, string>).p_signup_nonce);
+    expect(new Set(nonces).size).toBe(nonces.length);
+  });
+
   it('KONTROLA UJEMNA: język spoza PL/NL/FR/EN albo brak języka nie dociera do bazy', async () => {
     const db = client({ data: null, error: null });
     expect(await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'de' as never }, COMPANY)).toEqual({
@@ -280,6 +309,31 @@ describe('hierarchia ról w UI = hierarchia w bazie (0086)', () => {
 
   it('migracja definiuje tę samą regułę dla admina', () => {
     const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/0086_company_team.sql'), 'utf8');
+    expect(sql).toMatch(/cm\.role = 'owner' or \(cm\.role = 'admin' and p_role in \('recruiter', 'member'\)\)/);
+  });
+
+  it('#867: odmowa przywrócenia wyłączonego członka — własne kody i komunikaty, nie ogólny błąd', async () => {
+    client({ data: null, error: { message: 'MEMBER_REACTIVATION_DENIED' } });
+    expect(await inviteTeamMember({ email: 'a@b.be', role: 'recruiter', locale: 'pl' }, COMPANY)).toEqual({
+      ok: false,
+      error: 'MEMBER_REACTIVATION_DENIED',
+    });
+    client({ data: null, error: { message: 'REACTIVATION_NOT_ALLOWED' } });
+    expect(await respondToTeamInvitation(INVITE, true)).toEqual({ ok: false, error: 'REACTIVATION_NOT_ALLOWED' });
+    expect(cookieSet).not.toHaveBeenCalled();
+    expect(teamErrorKey('MEMBER_REACTIVATION_DENIED', toUserMessageKey)).toBe('team.error.reactivationDenied');
+    expect(teamErrorKey('REACTIVATION_NOT_ALLOWED', toUserMessageKey)).toBe('team.error.reactivationNotAllowed');
+    // Kontrola ujemna: zwykła odmowa uprawnień nadal mapuje się na PERMISSION_DENIED.
+    expect(mapTeamError('PERMISSION_DENIED')).toBe('PERMISSION_DENIED');
+  });
+
+  it('#867: migracja 0217 sprawdza starą rolę przy zaproszeniu i przy przyjęciu', () => {
+    const sql = readFileSync(
+      resolve(process.cwd(), 'supabase/migrations/0217_team_member_reactivation_hierarchy.sql'),
+      'utf8',
+    );
+    expect(sql).toMatch(/company_role_manageable_by\(v_inv\.company_id, v_inv\.invited_by, v_member\.role\)/);
+    expect(sql).toMatch(/before insert or update on public\.company_invitations/);
     expect(sql).toMatch(/cm\.role = 'owner' or \(cm\.role = 'admin' and p_role in \('recruiter', 'member'\)\)/);
   });
 

@@ -73,7 +73,8 @@ export type CategoryKey =
   | 'logistics'
   | 'seasonal';
 
-export type LocationKey =
+/** Miasta z danymi demonstracyjnymi i pierwszą listą landingów (#920: rdzeń katalogu). */
+export type CoreLocationKey =
   | 'brussels'
   | 'antwerp'
   | 'ghent'
@@ -84,6 +85,27 @@ export type LocationKey =
   | 'charleroi'
   | 'bruges'
   | 'kortrijk';
+
+/**
+ * Klucz miasta z katalogu landingów `/praca/miasto/<klucz>` (#920) = klucz `locations.*`
+ * w `src/messages`. Klucz = slug miejscowości w słowniku `locations` (0112). Katalog i reguła
+ * kwalifikacji: `src/lib/locations/city-landings.ts`.
+ */
+export type LocationKey =
+  | CoreLocationKey
+  | 'namur'
+  | 'mons'
+  | 'aalst'
+  | 'ostend'
+  | 'genk'
+  | 'sint-niklaas'
+  | 'roeselare'
+  | 'la-louviere'
+  | 'tournai'
+  | 'turnhout'
+  | 'vilvoorde'
+  | 'zaventem'
+  | 'wavre';
 
 export interface JobListItem {
   id: string;
@@ -375,9 +397,16 @@ function getJobsFromDemo(
   if (params.keyword) {
     const q = searchFold(params.keyword.trim());
     if (q) {
-      // Jak SQL (0110/0153): słowo kluczowe szuka wyłącznie w tytule oferty — nie w nazwie
-      // firmy, opisie ani wyróżnikach (#1119, lustro demo nie może szukać szerzej niż baza).
-      jobs = jobs.filter((job) => searchFold(job.title).includes(q));
+      // Jak SQL (0110/0153, 0214): słowo kluczowe szuka w tytule oferty i w jej kwalifikacjach
+      // (#866: wymagania w wyświetlanym języku; umiejętności i certyfikaty — demo ich nie ma),
+      // nie w nazwie firmy, opisie ani wyróżnikach (#1119, lustro demo nie szuka szerzej niż baza).
+      jobs = jobs.filter(
+        (job) =>
+          searchFold(job.title).includes(q) ||
+          [...job.requirementsMandatory, ...job.requirementsOptional].some((line) =>
+            searchFold(line).includes(q),
+          ),
+      );
     }
   }
   // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0091): oferta bez

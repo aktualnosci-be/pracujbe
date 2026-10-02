@@ -6,7 +6,7 @@
 --
 -- Przywraca: get_public_jobs, get_public_jobs_count, get_public_job_filter_facets,
 -- saved_search_jobs_after, saved_search_canonical_filters, saved_search_keyset_page
--- i save_job_draft z 0194; update_published_job z 0203; job_edit_audit_snapshot z 0200.
+-- i save_job_draft z 0216 (lista, licznik, facety i kopia alertów z 0214); update_published_job z 0203; job_edit_audit_snapshot z 0200.
 -- Usuwa kolumnę jobs.benefit_codes (ZAZNACZONE ŚWIADCZENIA PRZEPADAJĄ; tekstowe benefity
 -- w job_translations zostają) i funkcje pomocnicze. Zapisane wyszukiwania z kluczem `benefits`
 -- trzeba przed rollbackiem usunąć albo oczyścić — stara kanonizacja go nie zna.
@@ -30,7 +30,7 @@ drop function if exists public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
   boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]);
 
--- --- Definicje z 0194 (listy, licznik, facety, kopia dla alertów, zapisane wyszukiwania, kreator)
+-- --- Definicje z 0214/0216 (listy, licznik, facety, kopia dla alertów, zapisane wyszukiwania, kreator)
 -- --- 5. get_public_jobs (stan 0167) + nowe filtry ------------------------------------------------
 drop function if exists public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
@@ -66,7 +66,18 @@ returns table (
   currency text, salary_period text, published_at timestamptz, highlights text[], category text,
   accommodation boolean, immediate boolean, no_language_required boolean, company_slug text
 )
-language sql stable security definer set search_path = public, pg_temp as $$
+language plpgsql stable security definer
+set search_path = public, pg_temp
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
+set plan_cache_mode = force_custom_plan
+set jit = off
+as $$
+#variable_conflict use_column
+declare
+  v_locale text := case when public.is_supported_locale(p_locale) then p_locale else 'pl' end;
+begin
+  return query
   select
     j.id, j.slug,
     coalesce(t.title, j.title) as title,
@@ -80,66 +91,85 @@ language sql stable security definer set search_path = public, pg_temp as $$
     j.category::text,
     j.accommodation, j.immediate, j.no_language_required,
     c.slug as company_slug
-  from public.jobs j
+  from (
+    -- 0213 (#1215): najpierw strona identyfikatorów (indeks published_at albo klucza
+    -- wynagrodzenia + LIMIT), dopiero potem tłumaczenie tytułu dla wierszy strony.
+    select j.id, j.published_at,
+      (case when p_sort = 'salary' then public.job_salary_sort_key(
+        j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_unit) end) as salary_key
+    from public.jobs j
+    join public.companies c on c.id = j.company_id
+    where j.status = 'active' and j.deleted_at is null
+      and (j.expires_at is null or j.expires_at > now())
+      and c.status = 'verified' and c.deleted_at is null
+      -- #97: zalogowany kandydat nie dostaje ofert firm, które zablokował (gość: bez zmian).
+      and not exists (
+        select 1 from public.candidate_company_blocks b
+        where b.candidate_id = auth.uid() and b.company_id = j.company_id
+      )
+      and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
+      and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations)
+           or j.location_id in (select unnest(public.location_filter_ids(p_locations))))
+      and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
+      and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
+      -- Prefiltr po indeksach (tytuł oferty, któregokolwiek tłumaczenia albo kwalifikacji —
+      -- 0214, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
+      and (p_keyword is null or j.id in (
+        select public.search_keyword_candidates(left(p_keyword, 100))))
+      -- 0213 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
+      -- język oferty, en), ale jako podzapytanie liczone TYLKO przy słowie kluczowym.
+      and (p_keyword is null or public.search_fold(coalesce((
+            select jt.title from public.job_translations jt
+            where jt.job_id = j.id
+            order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
+            limit 1), j.title))
+        like public.search_like_pattern(left(p_keyword, 100)) escape '\'
+      -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
+      or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword, 100)))
+      -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
+      -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+      and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
+        j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit))
+      and (p_accommodation is null or j.accommodation = p_accommodation)
+      and (coalesce(p_immediate, false) = false or j.immediate = true)
+      and (coalesce(p_no_language, false) = false or j.no_language_required = true)
+      and (p_since is null or j.published_at >= p_since)
+      -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
+      and (coalesce(p_direct_only, false) = false or not c.is_agency)
+      -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
+      -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
+      and (coalesce(btrim(p_language), '') = ''
+           or public.job_requires_language(j.id, btrim(p_language), p_language_level))
+      -- 0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
+      -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
+      and (coalesce(p_work_time, '') = ''
+           or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
+      -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
+      -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
+      -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
+      and (coalesce(btrim(p_near), '') = ''
+           or j.remote is true
+           or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
+    order by
+      (case when p_sort = 'salary' then public.job_salary_sort_key(
+        j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_unit) end) desc nulls last,
+      j.published_at desc,
+      -- #594 (0136): tie-breaker deterministyczny (PK, unikalny).
+      j.id desc
+    limit least(greatest(coalesce(p_limit, 20), 1), 100)
+    offset least(greatest(coalesce(p_offset, 0), 0), 10000)
+  ) page
+  join public.jobs j on j.id = page.id
   join public.companies c on c.id = j.company_id
   left join lateral (
     select jt.title, jt.highlights
     from public.job_translations jt
     where jt.job_id = j.id
-    order by (jt.locale = case when public.is_supported_locale(p_locale) then p_locale else 'pl' end) desc,
-             (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
+    order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
     limit 1
   ) t on true
-  where j.status = 'active' and j.deleted_at is null
-    and (j.expires_at is null or j.expires_at > now())
-    and c.status = 'verified' and c.deleted_at is null
-    -- #97: zalogowany kandydat nie dostaje ofert firm, które zablokował (gość: bez zmian).
-    and not exists (
-      select 1 from public.candidate_company_blocks b
-      where b.candidate_id = auth.uid() and b.company_id = j.company_id
-    )
-    and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
-    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations)
-         or j.location_id in (select unnest(public.location_filter_ids(p_locations))))
-    and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
-    and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
-    -- Prefiltr po indeksach (tytuł oferty albo któregokolwiek tłumaczenia); dokładny
-    -- warunek na wyświetlanym tytule niżej.
-    and (p_keyword is null or j.id in (
-      select public.search_title_candidates(left(p_keyword, 100))))
-    and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
-      like public.search_like_pattern(left(p_keyword, 100)) escape '\')
-    -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
-    and public.job_salary_in_range(
-      j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit)
-    and (p_accommodation is null or j.accommodation = p_accommodation)
-    and (coalesce(p_immediate, false) = false or j.immediate = true)
-    and (coalesce(p_no_language, false) = false or j.no_language_required = true)
-    and (p_since is null or j.published_at >= p_since)
-    -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
-    and (coalesce(p_direct_only, false) = false or not c.is_agency)
-    -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
-    -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
-    and (coalesce(btrim(p_language), '') = ''
-         or public.job_requires_language(j.id, btrim(p_language), p_language_level))
-    -- 0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
-    -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
-    and (coalesce(p_work_time, '') = ''
-         or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-    -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
-    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
-    -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
-    and (coalesce(btrim(p_near), '') = ''
-         or j.remote is true
-         or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
-  order by
-    (case when p_sort = 'salary' then public.job_salary_sort_key(
-      j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_unit) end) desc nulls last,
-    j.published_at desc,
-    -- #594 (0136): tie-breaker deterministyczny (PK, unikalny).
-    j.id desc
-  limit least(greatest(coalesce(p_limit, 20), 1), 100)
-  offset least(greatest(coalesce(p_offset, 0), 0), 10000);
+  order by page.salary_key desc nulls last, page.published_at desc, page.id desc;
+end;
 $$;
 revoke all on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
@@ -174,21 +204,25 @@ create or replace function public.get_public_jobs_count(
   p_work_time      text        default null,
   p_near           text        default null,
   p_radius_km      integer     default null
-) returns bigint language sql stable security definer set search_path = public, pg_temp as $$
+) returns bigint language plpgsql stable security definer
+set search_path = public, pg_temp
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
+set plan_cache_mode = force_custom_plan
+set jit = off
+as $$
+#variable_conflict use_column
+declare
+  v_locale text := case when public.is_supported_locale(p_locale) then p_locale else 'pl' end;
+begin
+  return (
   select count(*)::bigint
   from public.jobs j
   join public.companies c on c.id = j.company_id
-  left join lateral (
-    select jt.title
-    from public.job_translations jt
-    where jt.job_id = j.id
-    order by (jt.locale = case when public.is_supported_locale(p_locale) then p_locale else 'pl' end) desc,
-             (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
-    limit 1
-  ) t on true
   where j.status = 'active' and j.deleted_at is null
     and (j.expires_at is null or j.expires_at > now())
     and c.status = 'verified' and c.deleted_at is null
+    -- #97: zalogowany kandydat nie dostaje ofert firm, które zablokował (gość: bez zmian).
     and not exists (
       select 1 from public.candidate_company_blocks b
       where b.candidate_id = auth.uid() and b.company_id = j.company_id
@@ -198,17 +232,29 @@ create or replace function public.get_public_jobs_count(
          or j.location_id in (select unnest(public.location_filter_ids(p_locations))))
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
     and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
+    -- Prefiltr po indeksach (tytuł oferty, któregokolwiek tłumaczenia albo kwalifikacji —
+    -- 0214, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
     and (p_keyword is null or j.id in (
-      select public.search_title_candidates(left(p_keyword, 100))))
-    and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
-      like public.search_like_pattern(left(p_keyword, 100)) escape '\')
+      select public.search_keyword_candidates(left(p_keyword, 100))))
+    -- 0213 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
+    -- język oferty, en), ale jako podzapytanie liczone TYLKO przy słowie kluczowym.
+    and (p_keyword is null or public.search_fold(coalesce((
+          select jt.title from public.job_translations jt
+          where jt.job_id = j.id
+          order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
+          limit 1), j.title))
+      like public.search_like_pattern(left(p_keyword, 100)) escape '\'
+      -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
+      or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword, 100)))
     -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
-    and public.job_salary_in_range(
-      j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit)
+    -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+    and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
+      j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit))
     and (p_accommodation is null or j.accommodation = p_accommodation)
     and (coalesce(p_immediate, false) = false or j.immediate = true)
     and (coalesce(p_no_language, false) = false or j.no_language_required = true)
     and (p_since is null or j.published_at >= p_since)
+    -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
     and (coalesce(p_direct_only, false) = false or not c.is_agency)
     -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
     -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
@@ -223,7 +269,9 @@ create or replace function public.get_public_jobs_count(
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
          or j.remote is true
-         or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))));
+         or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
+  );
+end;
 $$;
 revoke all on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
@@ -251,7 +299,18 @@ create or replace function public.get_public_job_filter_facets(
   p_work_time text default null, p_near text default null,
   p_radius_km integer default null
 ) returns table (dimension text, key text, total bigint)
-language sql stable security definer set search_path = public, pg_temp as $$
+language plpgsql stable security definer
+set search_path = public, pg_temp
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
+set plan_cache_mode = force_custom_plan
+set jit = off
+as $$
+#variable_conflict use_column
+declare
+  v_locale text := case when public.is_supported_locale(p_locale) then p_locale else 'pl' end;
+begin
+  return query
   with input as (
     select
       case when public.is_supported_locale(p_locale) then p_locale else 'pl' end locale,
@@ -264,18 +323,18 @@ language sql stable security definer set search_path = public, pg_temp as $$
     select j.id, j.category::text category, j.city, j.location_id,
       -- SRCH-01 (#1076): część gminy (dzielnica) liczy się w pozycji swojej gminy nadrzędnej —
       -- tak samo jak filtr `location_filter_ids` (gmina obejmuje swoje części).
-      coalesce(pl.name, l.name, j.city) city_label, j.contract_type::text contract_type,
+      -- 0213 (#1215): nazwa jako podzapytanie po kluczu głównym (to samo co dawne złączenia
+      -- `left join locations l … left join locations pl …`): przy małej liczbie ofert po filtrze
+      -- słowa kluczowego planer wybierał pętlę z pełnym skanem słownika na każdą ofertę.
+      coalesce((
+        select coalesce(pl.name, l.name)
+        from public.locations l
+        left join public.locations pl on pl.id=l.parent_location_id and pl.is_active
+        where l.id=j.location_id and l.is_active
+      ), j.city) city_label, j.contract_type::text contract_type,
       j.accommodation, j.immediate, j.no_language_required, c.is_agency
     from public.jobs j
     join public.companies c on c.id=j.company_id
-    left join public.locations l on l.id=j.location_id and l.is_active
-    left join public.locations pl on pl.id=l.parent_location_id and pl.is_active
-    cross join input i
-    left join lateral (
-      select jt.title from public.job_translations jt where jt.job_id=j.id
-      order by (jt.locale=i.locale) desc, (jt.locale=j.default_locale) desc,
-        (jt.locale='en') desc limit 1
-    ) t on true
     where j.status='active' and j.deleted_at is null
       and (j.expires_at is null or j.expires_at>now())
       and c.status='verified' and c.deleted_at is null
@@ -284,14 +343,22 @@ language sql stable security definer set search_path = public, pg_temp as $$
       where b.candidate_id = auth.uid() and b.company_id = j.company_id
     )
       and (nullif(left(p_keyword,100),'') is null or j.id in (
-        select public.search_title_candidates(left(p_keyword,100))))
-      and (i.keyword is null or public.search_fold(coalesce(t.title,j.title))
-        like public.search_like_pattern(i.keyword) escape '\')
+        select public.search_keyword_candidates(left(p_keyword,100))))
+      -- 0213 (#1215): wyświetlany tytuł jak lateral z 0194, ale liczony tylko przy słowie kluczowym;
+      -- warunki na parametrach (nie na kolumnach CTE `input`), żeby planer znał je jako stałe.
+      and (nullif(left(p_keyword,100),'') is null or public.search_fold(coalesce((
+            select jt.title from public.job_translations jt where jt.job_id=j.id
+            order by (jt.locale=v_locale) desc, (jt.locale=j.default_locale) desc,
+              (jt.locale='en') desc limit 1),j.title))
+        like public.search_like_pattern(left(p_keyword,100)) escape '\'
+        -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty.
+        or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword,100)))
       and (nullif(left(p_city,100),'') is null or j.id in (
         select public.search_city_candidates(left(p_city,100))))
       -- 0194 (#787): widełki w EUR — inna waluta nieporównywalna.
-      and public.job_salary_in_range(
-        j.salary_min,j.salary_max,j.salary_period,j.currency,p_salary_min,p_salary_max,p_salary_unit)
+      -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+      and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
+        j.salary_min,j.salary_max,j.salary_period,j.currency,p_salary_min,p_salary_max,p_salary_unit))
       -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
       -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
       and (coalesce(btrim(p_language), '') = ''
@@ -374,6 +441,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     (p_accommodation is null or b.accommodation=p_accommodation) and
     (coalesce(p_immediate,false)=false or b.immediate) and
     (coalesce(p_no_language,false)=false or b.no_language_required) and not b.is_agency;
+end;
 $$;
 revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer) from public;
 grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer) to anon, authenticated;
@@ -407,22 +475,26 @@ create or replace function public.saved_search_jobs_after(
   p_radius_km           integer default null
 )
 returns table (id uuid, published_at timestamptz)
-language sql stable security definer set search_path = public, pg_temp as $$
+language plpgsql stable security definer
+set search_path = public, pg_temp
+-- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
+-- kompilacja (dziesiątki ms) jest dłuższa niż krótkie zapytanie strony.
+set plan_cache_mode = force_custom_plan
+set jit = off
+as $$
+#variable_conflict use_column
+declare
+  v_locale text := case when public.is_supported_locale(p_locale) then p_locale else 'pl' end;
+begin
+  return query
   select j.id, j.published_at
   -- BEGIN get_public_jobs filters (kopia 1:1 z najnowszej definicji get_public_jobs)
   from public.jobs j
   join public.companies c on c.id = j.company_id
-  left join lateral (
-    select jt.title, jt.highlights
-    from public.job_translations jt
-    where jt.job_id = j.id
-    order by (jt.locale = case when public.is_supported_locale(p_locale) then p_locale else 'pl' end) desc,
-             (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
-    limit 1
-  ) t on true
   where j.status = 'active' and j.deleted_at is null
     and (j.expires_at is null or j.expires_at > now())
     and c.status = 'verified' and c.deleted_at is null
+    -- #97: zalogowany kandydat nie dostaje ofert firm, które zablokował (gość: bez zmian).
     and not exists (
       select 1 from public.candidate_company_blocks b
       where b.candidate_id = auth.uid() and b.company_id = j.company_id
@@ -432,17 +504,29 @@ language sql stable security definer set search_path = public, pg_temp as $$
          or j.location_id in (select unnest(public.location_filter_ids(p_locations))))
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
     and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
+    -- Prefiltr po indeksach (tytuł oferty, któregokolwiek tłumaczenia albo kwalifikacji —
+    -- 0214, #866); dokładny warunek na wyświetlanym tytule i kwalifikacjach niżej.
     and (p_keyword is null or j.id in (
-      select public.search_title_candidates(left(p_keyword, 100))))
-    and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
-      like public.search_like_pattern(left(p_keyword, 100)) escape '\')
+      select public.search_keyword_candidates(left(p_keyword, 100))))
+    -- 0213 (#1215): wyświetlany tytuł = to samo tłumaczenie co lateral z 0194 (język strony,
+    -- język oferty, en), ale jako podzapytanie liczone TYLKO przy słowie kluczowym.
+    and (p_keyword is null or public.search_fold(coalesce((
+          select jt.title from public.job_translations jt
+          where jt.job_id = j.id
+          order by (jt.locale = v_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
+          limit 1), j.title))
+      like public.search_like_pattern(left(p_keyword, 100)) escape '\'
+      -- 0214 (#866): albo umiejętność, certyfikat lub wymaganie oferty (wymagania w wyświetlanym języku).
+      or public.job_keyword_qualification_match(j.id, j.default_locale, v_locale, left(p_keyword, 100)))
     -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
-    and public.job_salary_in_range(
-      j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit)
+    -- 0213 (#1215): bez widełek warunek znika z planu (pierwszy człon job_salary_in_range).
+    and ((p_salary_min is null and p_salary_max is null) or public.job_salary_in_range(
+      j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit))
     and (p_accommodation is null or j.accommodation = p_accommodation)
     and (coalesce(p_immediate, false) = false or j.immediate = true)
     and (coalesce(p_no_language, false) = false or j.no_language_required = true)
     and (p_since is null or j.published_at >= p_since)
+    -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
     and (coalesce(p_direct_only, false) = false or not c.is_agency)
     -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
     -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
@@ -464,6 +548,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
          or (j.published_at, j.id) < (p_after_published_at, p_after_id))
   order by j.published_at desc, j.id desc
   limit least(greatest(coalesce(p_limit, 1000), 1), 1000);
+end;
 $$;
 revoke all on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
@@ -693,6 +778,7 @@ declare
   j jsonb := coalesce(p_content->'job', '{}'::jsonb);
   tr jsonb := coalesce(p_content->'translation', '{}'::jsonb);
   v_bad text;
+  v_step smallint;
 begin
   if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
   if p_content is null or jsonb_typeof(p_content) <> 'object'
@@ -724,6 +810,15 @@ begin
   end if;
   if v_bad is not null then
     raise exception 'VALIDATION_FAILED: nieznane pole %', v_bad using errcode = '42501';
+  end if;
+  -- 0216 (#834): numer kroku kreatora (1–9), którego zapis jest tą treścią. Brak klucza = zapis
+  -- spoza kreatora (import) — postęp bez zmian. Wartość spoza zakresu = odrzucenie całego kroku.
+  if p_content ? 'draft_step' then
+    if jsonb_typeof(p_content->'draft_step') <> 'number'
+       or (p_content->>'draft_step') !~ '^[1-9]$' then
+      raise exception 'VALIDATION_FAILED: nieprawidłowy krok kreatora' using errcode = '42501';
+    end if;
+    v_step := (p_content->>'draft_step')::smallint;
   end if;
 
   select j0.company_id, j0.status::text, j0.default_locale, j0.updated_at
@@ -845,6 +940,13 @@ begin
   -- #101: pytania screeningowe w tej samej transakcji co reszta kroku.
   if p_content ? 'screening_questions' then
     perform public.set_job_screening_questions(p_job_id, p_content->'screening_questions');
+  end if;
+
+  -- 0216 (#834): postęp kreatora = najdalszy krok z udanym zapisem. Ta sama transakcja co treść
+  -- kroku (błąd dowolnej części cofa też postęp); powrót do wcześniejszego kroku go nie cofa.
+  if v_step is not null then
+    update public.jobs set draft_step = greatest(coalesce(draft_step, 0), v_step)
+      where id = p_job_id and draft_step is distinct from greatest(coalesce(draft_step, 0), v_step);
   end if;
 
   -- #1070: nowa wersja szkicu. Każdy zapis kroku ją podbija — także krok, który zmienia tylko

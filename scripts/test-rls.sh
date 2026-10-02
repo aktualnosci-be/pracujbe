@@ -55,6 +55,9 @@ echo ">> asercje RLS/triggery"
 echo ">> rollback 0976 (świadczenia oferty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-benefits-rollback.sql"
 
+echo ">> rollback 0210 (współbieżność kampanii, tłumaczeń i zaproszeń; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/p2-concurrency-rollback.sql"
+
 echo ">> rollback 0194 (filtry listy ofert, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-filters-rollback.sql"
 
@@ -67,20 +70,39 @@ echo ">> rollback 0198 (opis firmy z zatwierdzaniem, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
+echo ">> rollback 0211 (termin digestu zapisanych wyszukiwań, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-search-schedule-rollback.sql"
+echo ">> rollback 0207 (eksport pracodawcy: odwołania i zgłoszenia, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/employer-export-0207-rollback.sql"
+echo ">> rollback 0206 (indeksy usuwania konta i znaki sterujące w nazwach, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/db-perf-control-chars-rollback.sql"
+echo ">> rollback 0205 (potwierdzenie kontaktu w języku odbiorcy, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/contact-recipient-locale-rollback.sql"
 echo ">> rollback 0204 (tryb ogłoszeniowy: szablony odpowiedzi, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-message-templates-rollback.sql"
 
 echo ">> rollback 0192 (czujki poczty i requeue, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-ops-config-rollback.sql"
 
+echo ">> rollback 0212 (miasto z kodem pocztowym, nazwy miejscowości; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/location-postal-names-rollback.sql"
+
 echo ">> rollback 0183 (części gmin w filtrach, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/city-sections-filters-rollback.sql"
+
+echo ">> rollback 0208 (kursorowe RPC sitemapy ofert, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/sitemap-cursor-rollback.sql"
 
 echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-sections-rollback.sql"
 
 echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-rollback.sql"
+
+echo ">> rollback 0216 (postęp kreatora szkicu, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-draft-step-rollback.sql"
+echo ">> rollback 0215 (pauza alertów, obserwowanie firmy, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-search-pause-follow-rollback.sql"
 
 echo ">> rollback 0202 (reopen = nowa publikacja, zaproszenia usuwanego pracodawcy; w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-decisions-0202-rollback.sql"
@@ -122,12 +144,25 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
+echo ">> rollback 0218 (eksport kandydata: zgłoszenia treści i ostrzeżenia retencji, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/candidate-export-reports-rollback.sql"
+
+echo ">> rollback 0217 (przywrócenie członka przez zaproszenie, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/team-reactivation-rollback.sql"
+echo ">> rollback 0209 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/age-policy-cas-rollback.sql"
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"
 echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-jobs-alias-relink-rollback.sql"
 echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
+
+echo ">> rollback 0213 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/public-jobs-plan-rollback.sql"
+
+echo ">> rollback 0214 (słowo kluczowe w kwalifikacjach oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/keyword-qualifications-rollback.sql"
 
 echo ">> sprzątanie"
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null

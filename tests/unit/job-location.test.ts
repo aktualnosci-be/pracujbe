@@ -110,6 +110,10 @@ describe('podpowiedź miasta w kreatorze — logika', () => {
     expect(demoJobCityAssist('antwerpia').slug).toBe('antwerp');
     expect(demoJobCityAssist(' ANVERS ').slug).toBe('antwerp');
     expect(demoJobCityAssist('Nieznanowo')).toEqual({ slug: null, suggestions: [] });
+    // #1119: kod pocztowy i nazwa kraju przy mieście jak w `resolve_location_id` (0212).
+    expect(demoJobCityAssist('Bruxelles 1000').slug).toBe('brussels');
+    expect(demoJobCityAssist('B-9000 Gent, België').slug).toBe('ghent');
+    expect(demoJobCityAssist('1000').slug).toBeNull();
     expect(demoJobCityAssist('Br').suggestions).toEqual(expect.arrayContaining(['Brussel', 'Bruges']));
     // Kontrola ujemna: jeden znak = bez propozycji.
     expect(demoJobCityAssist('B').suggestions).toEqual([]);
@@ -137,7 +141,8 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     expect(await jobCityAssist({ city: '  ANTWERPEN ', locale: 'pl' })).toEqual({
       status: 'ok', match: { slug: 'antwerp', name: 'Antwerpia' }, suggestions: ['Antwerpen'],
     });
-    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['antwerpen']);
+    // Wpis trafia do `resolve_location_id` bez zmian (reguła klucza i kodu pocztowego w bazie, 0212).
+    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['  ANTWERPEN ', 'pl']);
     expect(fakeDb.callsTo('job-city.suggest')[0]?.values).toEqual(['antwerpen%']);
     // Odczyt pod sesją (RLS), nie service_role; akcja niczego nie zapisuje.
     expect(new Set(fakeDb.calls.map((c) => c.as))).toEqual(new Set([USER]));
@@ -153,9 +158,20 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     });
   });
 
-  it('gmina spoza 10 tłumaczonych miast: nazwa ze słownika', async () => {
+  it('gmina spoza tłumaczonych miast (katalog landingów #920): nazwa ze słownika', async () => {
+    dictionary({ exact: [{ slug: 'lokeren', name: 'Lokeren' }] });
+    expect(await jobCityAssist({ city: 'Lokeren', locale: 'fr' })).toMatchObject({ match: { slug: 'lokeren', name: 'Lokeren' } });
+  });
+
+  it('miasto z katalogu landingów (#920): nazwa w języku widoku', async () => {
     dictionary({ exact: [{ slug: 'aalst', name: 'Aalst' }] });
-    expect(await jobCityAssist({ city: 'Alost', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Aalst' } });
+    expect(await jobCityAssist({ city: 'Aalst', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Alost' } });
+  });
+
+  it('gmina spoza katalogu tłumaczonych miast: nazwa z bazy w języku strony (#1119)', async () => {
+    dictionary({ exact: [{ slug: 'ronse', name: 'Renaix' }] });
+    expect(await jobCityAssist({ city: 'Ronse 9600', locale: 'fr' })).toMatchObject({ match: { slug: 'ronse', name: 'Renaix' } });
+    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['Ronse 9600', 'fr']);
   });
 
   it('nieznana nazwa = brak dopasowania (nie błąd)', async () => {

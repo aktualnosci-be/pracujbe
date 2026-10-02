@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { openGraphLocales } from '@/lib/seo/locales';
 import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
@@ -44,6 +45,7 @@ import { minimumWagesUrl } from '@/lib/joint-committees';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { jobStartDateInstant, jobStartInfo } from '@/lib/job-start';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
+import type { TranslatableScalar } from '@/lib/job-machine-translation';
 import { getCandidateMinAge } from '@/lib/data/age-policy';
 import {
   brandShareImageUrl,
@@ -167,9 +169,15 @@ export function generateStaticParams(): Array<{ locale: string; slug: string }> 
   return [];
 }
 
+/**
+ * Jeden odczyt oferty na żądanie (#1096): `generateMetadata` i strona dzielą wynik przez
+ * `cache()` Reacta (zakres jednego renderu serwera), zamiast dwóch zapytań do bazy.
+ */
+const loadJobBySlug = cache(getJobBySlug);
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { locale, slug } = await params;
-  const job = await getJobBySlug(slug, locale);
+  const job = await loadJobBySlug(slug, locale);
   if (!job) {
     return { robots: { index: false, follow: false } };
   }
@@ -229,7 +237,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
 
-  const job = await getJobBySlug(slug, locale);
+  const job = await loadJobBySlug(slug, locale);
   if (!job) {
     notFound();
   }
@@ -339,6 +347,14 @@ export default async function JobDetailPage({ params }: PageProps) {
       ? translation.sourceLocale
       : undefined
     : contentLang;
+
+  // #896: przy częściowym przekładzie pole bez klucza w przekładzie zostaje w oryginale —
+  // oznaczamy je językiem źródła, a nie językiem dokumentu (WCAG 3.1.2).
+  const fieldLang = (field: TranslatableScalar): string | undefined =>
+    translation
+      ? (translation.untranslated?.includes(field) ? translation.sourceLocale : undefined)
+      : contentLang;
+
   // #866: wpis pracodawcy (umiejętność spoza słownika, certyfikat) jest w języku treści oferty —
   // także przy przekładzie (#33), który kwalifikacji nie tłumaczy; nazwa ze słownika = język strony.
   const qualificationLang = job.contentLocale && job.contentLocale !== pageLocale ? job.contentLocale : undefined;
@@ -596,7 +612,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           {/* Treść oferty w jednej karcie `.paper` (h2 23 px, h3 18 px, akapity 15 px / 1,7). */}
           <div className={cn(PAPER, 'mt-[25px] lg:space-y-8')}>
             <Section id="opis" title={t('aboutRole')}>
-              <p lang={contentLang} className={cn(P_EXTENDED, 'whitespace-pre-line')}>{job.description}</p>
+              <p lang={fieldLang('description')} className={cn(P_EXTENDED, 'whitespace-pre-line')}>{job.description}</p>
             </Section>
 
             {job.responsibilities.length > 0 ? (
@@ -819,7 +835,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                   </p>
                 </div>
               </div>
-              <p lang={contentLang} className={cn(P_EXTENDED, 'mt-3')}>{job.companyDescription}</p>
+              <p lang={fieldLang('companyDescription')} className={cn(P_EXTENDED, 'mt-3')}>{job.companyDescription}</p>
               {/* #591: CTA prowadzi do stabilnego profilu firmy; bez sluga (nie powinno się
                   zdarzyć dla zweryfikowanej firmy) — ukryte zamiast linkować donikąd. */}
               {job.companySlug ? (

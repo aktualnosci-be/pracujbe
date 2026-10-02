@@ -28,6 +28,23 @@ describe('docker/backup/Dockerfile', () => {
     expect(dockerfile).not.toMatch(/BACKUP_S3_(ACCESS|SECRET|READ)/);
   });
 
+  it('#751: obraz bazowy przypięty do digestu (tag@sha256), bez menedżerów pakietów w obrazie', () => {
+    const from = [...dockerfile.matchAll(/^FROM\s+(\S+)/gm)].map((match) => match[1]);
+    expect(from).toHaveLength(1);
+    expect(from[0]).toMatch(/^node:22-bookworm-slim@sha256:[0-9a-f]{64}$/);
+    // Kontrola ujemna: sam ruchomy tag nie spełnia reguły.
+    expect('node:22-bookworm-slim').not.toMatch(/@sha256:[0-9a-f]{64}$/);
+    expect(dockerfile).toMatch(/rm -rf \/usr\/local\/lib\/node_modules\/npm /);
+    expect(dockerfile).toContain('/usr/local/bin/npx');
+    expect(existsSync('scripts/db/backup-image-smoke.sh')).toBe(true);
+    expect(existsSync('docker/backup/vulnerability-exceptions.json')).toBe(true);
+  });
+
+  it('#751: Dependabot aktualizuje digest obrazu kopii', () => {
+    const dependabot = readFileSync('.github/dependabot.yml', 'utf8');
+    expect(dependabot).toMatch(/package-ecosystem: docker\s+directory: \/docker\/backup/);
+  });
+
   it('nie ma Dockerfile w katalogu głównym (usługa web buduje się Railpackiem)', () => {
     expect(existsSync('Dockerfile')).toBe(false);
   });

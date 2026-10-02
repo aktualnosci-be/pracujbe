@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
@@ -7,6 +8,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { JobCard } from '@/components/public/JobCard';
+import { FollowCompanyButton } from '@/components/candidate/FollowCompanyButton';
 import { Pagination } from '@/components/public/Pagination';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import { routing } from '@/i18n/routing';
@@ -31,6 +33,12 @@ import { isPublicHttpsUrl, sameOriginHost } from '@/lib/company-links';
  */
 
 const JOBS_PATH = '/oferty-pracy';
+
+/**
+ * Jeden odczyt profilu na żądanie (#1096): metadane i widok dzielą wynik przez `cache()`
+ * Reacta (zakres jednego renderu serwera), zamiast dwóch zapytań do bazy.
+ */
+const loadCompanyProfile = cache(getCompanyProfile);
 
 /** Jak w szczególe oferty (`oferty-pracy/[slug]/page.tsx`): jedna linia, granica słowa, wielokropek. */
 function truncate(text: string, max: number): string {
@@ -97,7 +105,7 @@ export function descriptionLanguageState(
 }
 
 export async function companyProfileMetadata(locale: string, slug: string, page: number): Promise<Metadata> {
-  const result = await getCompanyProfile(slug, locale, page);
+  const result = await loadCompanyProfile(slug, locale, page);
   if (!result) {
     return { robots: { index: false, follow: false } };
   }
@@ -161,7 +169,7 @@ export async function CompanyProfileView({
   slug: string;
   page: number;
 }): Promise<React.JSX.Element> {
-  const result = await getCompanyProfile(slug, locale, page);
+  const result = await loadCompanyProfile(slug, locale, page);
   if (!result) {
     notFound();
   }
@@ -300,6 +308,21 @@ export async function CompanyProfileView({
             ) : null}
           </div>
         )}
+
+        {/* #855: obserwowanie firmy — wyspa klienta (strona zostaje ISR, stan z sesji po załadowaniu). */}
+        <FollowCompanyButton
+          companyId={company.id}
+          companySlug={company.slug}
+          labels={{
+            follow: t('follow'),
+            following: t('following'),
+            followed: t('followed'),
+            unfollowed: t('unfollowed'),
+            login: t('followLogin'),
+            stateError: t('followStateError'),
+            networkError: t('followNetworkError'),
+          }}
+        />
 
         <section className="mt-8" aria-labelledby="company-jobs-heading">
           <h2 id="company-jobs-heading" className="text-lg font-semibold text-foreground">

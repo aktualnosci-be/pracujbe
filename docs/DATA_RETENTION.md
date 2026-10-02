@@ -162,7 +162,12 @@ screeningowymi, propozycje z historią, **zapisane** wyniki `matches` (bez licze
 rozmowy (treść obu stron, strona oznaczona `fromMe`, bez tożsamości rekrutera), zapisane
 oferty i wyszukiwania, blokady firm (nazwa firmy), preferencje i powiadomienia, zgody, dowody zgód e-mail
 (`email_consent_events`) i akceptacje dokumentów, e-maile (szablon, status, daty — bez treści), zgłoszenia bez konta
-przejęte przez to konto, historia wniosków.
+przejęte przez to konto, historia wniosków, zgłoszenia treści złożone przez kandydata
+(`contentReports`: numer sprawy, kategoria/powód, opis, dane podane w formularzu, stan i daty — bez
+zgłoszonej treści, identyfikatora celu i kodu dostępu) oraz wysłane ostrzeżenia przed usunięciem z powodu
+braku aktywności (`retentionWarnings`: kategoria, aktywność, data ostrzeżenia, termin; migracja 0218 —
+numer tymczasowy, #1091). Historii widoczności profilu dla firm eksport nie obejmuje (funkcja wyłączona
+w trybie ogłoszeniowym, #1128).
 
 Pomijane: identyfikatory innych osób (rekruter, inny kandydat), klucze idempotencji,
 klucze obiektów storage. Ograniczenie z art. 15(4) RODO wobec innych osób rozstrzyga się
@@ -213,7 +218,11 @@ konto, profil, profil pracodawcy, członkostwa (firma, rola, aktywność, daty),
 **wysłane** przez tę osobę (adres zaproszonego, rola, status, daty — bez hasha tokenu),
 zaproszenia otrzymane na jej adres, oferty utworzone przez nią (tytuł, status, firma, daty),
 akcje audytowe, w których jest aktorem, preferencje, powiadomienia, zgody, dowody zgód
-e-mail, akceptacje dokumentów, e-maile (bez treści), historia wniosków. **Bez danych
+e-mail, akceptacje dokumentów, e-maile (bez treści), historia wniosków, odwołania od
+decyzji moderacyjnych złożone przez tę osobę (`moderationAppeals`, kształt jak u kandydata) i jej
+zgłoszenia treści (`contentReports`: numer sprawy, rodzaj, kategoria, opis, podane dane
+kontaktowe, stan — bez identyfikatora i migawki zgłoszonej treści; migracja 0207, #1232).
+Wiadomości z formularza kontaktu — poza eksportem (decyzja otwarta). **Bez danych
 kandydatów:** z audytu tylko akcja, typ obiektu i czas — identyfikator wyłącznie dla
 obiektów firmowych (`company`/`job`/`company_member`/`company_invitation`), nigdy
 `before_data`/`after_data`; powiadomienia bez tytułu, treści i `data`. Limit i ślad jak

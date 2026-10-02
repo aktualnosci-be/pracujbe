@@ -75,10 +75,21 @@ const LOCAL_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 /**
  * Wartość pola `datetime-local` (`YYYY-MM-DDTHH:mm`, czas w Europe/Brussels) → ISO UTC.
  * Pusta albo zła wartość → null (#490: czas stwierdzenia naruszenia i zgłoszeń).
+ *
+ * `previousIso` (#1112): chwila, z której pole zostało wypełnione. Godzina jesiennej zmiany
+ * czasu (02:00–03:00 występuje dwa razy) jest niejednoznaczna — bez podpowiedzi zawsze
+ * wybieramy jedno z wystąpień, więc zapis NIEZMIENIONEGO pola mógłby przesunąć zapisaną chwilę
+ * o godzinę. Gdy wartość pola to dokładnie lokalny zapis `previousIso`, zwracamy tę chwilę.
  */
-export function appLocalInputToUtc(value: string | null | undefined): string | null {
+export function appLocalInputToUtc(
+  value: string | null | undefined,
+  previousIso?: string | null,
+): string | null {
   const m = value ? LOCAL_INPUT_RE.exec(value.trim()) : null;
   if (!m) return null;
+  if (previousIso && utcToAppLocalInput(previousIso) === value!.trim()) {
+    return new Date(Date.parse(previousIso)).toISOString();
+  }
   const [y, mo, d, h, mi] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5])];
   const naive = Date.UTC(y, mo - 1, d, h, mi);
   const check = new Date(naive);
@@ -106,4 +117,17 @@ export function utcToAppLocalInput(iso: string | null | undefined): string {
   return `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}T${pad(
     local.getUTCHours(),
   )}:${pad(local.getUTCMinutes())}`;
+}
+
+/**
+ * Najwcześniejszy i najpóźniejszy dzień wznowienia pauzy alertów (#810) jako `YYYY-MM-DD` w
+ * Europe/Brussels: jutro .. +366 dni — te same granice co `set_saved_search_alerts_pause` (0215).
+ */
+export function pauseDateRange(now: Date = new Date()): { min: string; max: string } {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number];
+  const at = (days: number): string => new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  return { min: at(1), max: at(366) };
 }

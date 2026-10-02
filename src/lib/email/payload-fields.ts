@@ -35,6 +35,7 @@ export const EMAIL_PAYLOAD_FIELDS = {
   companySuspended: ['companyName', 'reason'],
   teamInvitation: ['companyName', 'inviterName', 'panel'],
   jobMatch: ['searchName', 'count', 'jobs'],
+  followedCompanyJobs: ['companyName', 'count', 'jobs'],
   reportReceived: ['recipientName', 'caseNumber', 'accessCode', 'targetType'],
   reportDecisionActioned: ['recipientName', 'caseNumber', 'targetType'],
   reportDecisionNoAction: ['recipientName', 'caseNumber', 'targetType'],
