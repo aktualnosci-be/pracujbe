@@ -72,7 +72,8 @@ export type CategoryKey =
   | 'logistics'
   | 'seasonal';
 
-export type LocationKey =
+/** Miasta z danymi demonstracyjnymi i pierwszą listą landingów (#920: rdzeń katalogu). */
+export type CoreLocationKey =
   | 'brussels'
   | 'antwerp'
   | 'ghent'
@@ -83,6 +84,27 @@ export type LocationKey =
   | 'charleroi'
   | 'bruges'
   | 'kortrijk';
+
+/**
+ * Klucz miasta z katalogu landingów `/praca/miasto/<klucz>` (#920) = klucz `locations.*`
+ * w `src/messages`. Klucz = slug miejscowości w słowniku `locations` (0112). Katalog i reguła
+ * kwalifikacji: `src/lib/locations/city-landings.ts`.
+ */
+export type LocationKey =
+  | CoreLocationKey
+  | 'namur'
+  | 'mons'
+  | 'aalst'
+  | 'ostend'
+  | 'genk'
+  | 'sint-niklaas'
+  | 'roeselare'
+  | 'la-louviere'
+  | 'tournai'
+  | 'turnhout'
+  | 'vilvoorde'
+  | 'zaventem'
+  | 'wavre';
 
 export interface JobListItem {
   id: string;
