@@ -15,12 +15,19 @@ const jobs = vi.hoisted(() => ({
   getJobsAvailableLocales: vi.fn(),
   getJobsCount: vi.fn(),
 }));
+// #1042: sitemap ofert czyta granice partii i strony kursorem (`@/lib/sitemap-jobs`), nie `getJobs`.
+const sitemapJobs = vi.hoisted(() => ({
+  getSitemapJobShardStarts: vi.fn(),
+  getSitemapJobsShard: vi.fn(),
+  getSitemapCompanySlugs: vi.fn(),
+}));
 
 vi.mock('@/lib/env', () => ({
   env: { siteUrl: 'https://pracuj.be' },
   isProductionDeployment: () => state.production,
 }));
 vi.mock('@/lib/jobs', () => jobs);
+vi.mock('@/lib/sitemap-jobs', () => ({ SITEMAP_JOBS_PAGE: 1000, ...sitemapJobs }));
 
 const { default: sitemap, generateSitemaps } = await import('@/app/sitemap');
 const { default: robots } = await import('@/app/robots');
@@ -36,6 +43,14 @@ beforeEach(() => {
   jobs.getJobs.mockResolvedValue({ jobs: [], page: 1, pageSize: 100 });
   jobs.getJobsCount.mockResolvedValue(12_000);
   jobs.getJobsAvailableLocales.mockResolvedValue(null);
+  // 12 000 ofert po 5000 na partię = 3 granice partii.
+  sitemapJobs.getSitemapJobShardStarts.mockResolvedValue([
+    { shardIndex: 1, after: null },
+    { shardIndex: 2, after: { publishedAt: '2026-09-01T00:00:00.000000Z', id: 'b' } },
+    { shardIndex: 3, after: { publishedAt: '2026-08-01T00:00:00.000000Z', id: 'c' } },
+  ]);
+  sitemapJobs.getSitemapJobsShard.mockResolvedValue([]);
+  sitemapJobs.getSitemapCompanySlugs.mockResolvedValue([]);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -49,6 +64,8 @@ describe('indeksowanie przy bramce hasła (#1115)', () => {
     expect(await sitemap({ id: 1 })).toEqual([]);
     expect(jobs.getJobsCount).not.toHaveBeenCalled();
     expect(jobs.getJobs).not.toHaveBeenCalled();
+    expect(sitemapJobs.getSitemapJobShardStarts).not.toHaveBeenCalled();
+    expect(sitemapJobs.getSitemapJobsShard).not.toHaveBeenCalled();
   });
 
   it('hasło z samych białych znaków = bramka wyłączona (jak middleware)', () => {
