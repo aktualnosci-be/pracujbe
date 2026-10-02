@@ -100,16 +100,18 @@ export async function getAgePolicySettings(): Promise<AgePolicySettingsResult> {
       const policy = await queryOne(
         tx,
         'admin.age-policy',
-        'SELECT candidate_min_age, confirmed, reason, updated_at, updated_by FROM public.age_policy WHERE id',
+        // Znaczniki jako tekst Postgresa: driver zwraca timestamptz jako `Date` (bez mikrosekund),
+        // a znacznik wraca do RPC jako wersja do porównania (CAS, #1102).
+        'SELECT candidate_min_age, confirmed, reason, updated_at::text AS updated_at, updated_by FROM public.age_policy WHERE id',
       );
       const updater = await readProfileName(tx, asNullableString(policy?.['updated_by']));
       const change = await queryOne(
         tx,
         'admin.age-policy-last-change',
-        `SELECT actor_id, before_data, after_data, created_at
+        `SELECT actor_id, before_data, after_data, created_at::text AS created_at
            FROM public.audit_logs
           WHERE entity_type = 'age_policy' AND action = 'age_policy.updated'
-          ORDER BY created_at DESC, id DESC
+          ORDER BY audit_logs.created_at DESC, audit_logs.id DESC
           LIMIT 1`,
       );
       const actor = await readProfileName(tx, asNullableString(change?.['actor_id']));

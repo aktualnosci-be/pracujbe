@@ -23,6 +23,7 @@ export const QUEUED_EMAIL_TYPES = [
   'companySuspended', // admin_set_company_status → suspended (0084)
   'teamInvitation', // invite_company_member (0086)
   'jobMatch', // process_saved_search_alerts (0092) — digest zapisanego wyszukiwania
+  'followedCompanyJobs', // process_saved_search_alerts (0215) — digest obserwowanej firmy (#855)
   'reportReceived', // submit_content_report (0094) — enqueue_email_to_address
   'reportDecisionActioned', // admin_decide_report (0099) → ograniczenie treści — do zgłaszającego
   'reportDecisionNoAction', // admin_decide_report (0099) → brak działań — do zgłaszającego

@@ -25,6 +25,7 @@ export const EMAIL_TEMPLATE_CATEGORY: Readonly<Record<string, EmailPreferenceCat
   offerDeclined: 'offers',
   newMessage: 'messages',
   jobMatch: 'job_matches',
+  followedCompanyJobs: 'job_matches',
   newsletter: 'marketing',
 };
 
@@ -49,7 +50,7 @@ export const EMAIL_AUTH_TEMPLATES = [
   'emailChange',
   'invite',
 ] as const;
-export const EMAIL_MARKETING_TEMPLATES = ['newsletter', 'jobMatch'] as const;
+export const EMAIL_MARKETING_TEMPLATES = ['newsletter', 'jobMatch', 'followedCompanyJobs'] as const;
 
 export type EmailSendPool = 'auth' | 'transactional' | 'marketing';
 
