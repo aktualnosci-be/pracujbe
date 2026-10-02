@@ -156,7 +156,7 @@ pilnuje dalej `check-next-build.mjs`.
 | zasób | stan main 2026-09-24 | budżet |
 |---|---|---|
 | JS `/[locale]/(public)/page` (home) | 164,5 KB | 173 KB |
-| JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 176 KB² |
+| JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 178 KB² |
 | JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 243 KB¹ |
 | JS `/[locale]/(public)/poradniki/[slug]/page` | 154,0 KB | 162 KB |
 | JS `/[locale]/(auth)/logowanie/page` | 184,8 KB | 194 KB |
@@ -173,6 +173,9 @@ zamiast do chunku współdzielonego) — +0,6 KB na liście bez nowego kodu na t
 Lista ofert dostała też (#711, 2026-10-02) zwiniętą sekcję wyszukiwania opisem (AI, za flagą) —
 na trasie zostaje tylko `<details>` z `React.lazy` (ok. 0,4 KB, bez `next/dynamic`) i kody błędów;
 formularz to osobny chunk pobierany dopiero po rozwinięciu sekcji. Budżet bez zmian (176 KB).
+176 → 178 KB (#858, 2026-10-02, decyzja właściciela): filtr grafiku pracy w panelu filtrów
+(sekcja `FilterSidebar` i etykiety z `src/lib/job-shift-patterns.ts`) dał 176,1 KB w CI; zapas
+ok. 1,4 KB na kolejne filtry listy (świadczenia #1300).
 
 Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa biblioteka kliencka
 w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).
