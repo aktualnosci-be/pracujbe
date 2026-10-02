@@ -55,6 +55,9 @@ echo ">> asercje RLS/triggery"
 echo ">> rollback 0956 (tryb pracy oferty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-work-mode-rollback.sql"
 
+echo ">> rollback 0221 (wiadomości serwisowe a opt-out in-app, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/notification-inapp-service-rollback.sql"
+
 echo ">> rollback 0210 (współbieżność kampanii, tłumaczeń i zaproszeń; w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/p2-concurrency-rollback.sql"
 
@@ -121,6 +124,8 @@ echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji c
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
+echo ">> rollback 0220 (funkcja AI „Wyjaśnij ofertę” w budżecie, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/ai-job-explain-rollback.sql"
 echo ">> rollback 0203 (tytuł oferty bez heurystyki zaślepki, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-title-completeness-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
@@ -158,6 +163,10 @@ echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofane
 echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
 
+echo ">> rollback 0222 (budżet AI: wyszukiwanie opisem, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/ai-search-filters-rollback.sql"
+echo ">> rollback 0219 (Web Push alertów zapisanych wyszukiwań, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/web-push-rollback.sql"
 echo ">> rollback 0213 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/public-jobs-plan-rollback.sql"
 

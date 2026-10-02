@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { waitForHydrated } from "./fixtures/hydration";
 
 /**
  * Regresja #189 (tryb demo): zbiór ofert miasta nie zależy od języka strony.
@@ -42,7 +43,11 @@ test("zmiana języka z ?location=Bruksela nie zmienia zbioru ofert", async ({ pa
   const plIds = await jobIds(page);
   expect(plIds.length).toBeGreaterThan(0);
 
-  await page.locator("footer").getByRole("combobox", { name: "Język" }).click();
+  // Przycisk przełącznika jest w HTML z serwera, ale lista otwiera się dopiero po hydratacji
+  // (handler `onClick` z Reacta) — kliknięcie wcześniej ginie i opcja „Nederlands” nie pojawia się.
+  const switcher = page.locator("footer").getByRole("combobox", { name: "Język" });
+  await waitForHydrated(switcher);
+  await switcher.click();
   await page.getByRole("option", { name: "Nederlands" }).click();
   await expect(page).toHaveURL(new RegExp(`/nl/oferty-pracy\\?${query}$`));
 
