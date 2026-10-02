@@ -82,6 +82,9 @@ echo ">> rollback 0192 (czujki poczty i requeue, w transakcji cofanej)"
 echo ">> rollback 0183 (części gmin w filtrach, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/city-sections-filters-rollback.sql"
 
+echo ">> rollback 0208 (kursorowe RPC sitemapy ofert, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/sitemap-cursor-rollback.sql"
+
 echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-sections-rollback.sql"
 
