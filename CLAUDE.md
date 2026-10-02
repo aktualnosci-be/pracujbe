@@ -3405,9 +3405,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/analytics/route-policy.ts`). Dowód: `rls.sql` sekcja M2RD (kontrole ujemne: polityka 0033,
   strażnik 0084, bramki 0099, `is_admin` z 0019, brak triggerów), rollback `rls-data-hardening-rollback.sql`
   (w `scripts/test-rls.sh`), unit `analytics-route-policy`, `admin-retention`, `admin-jobs`, integracja
-  `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
-  kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
-  ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
+  `auth-actions` (dwa linki resetu). Eksport kandydata (#1091, migracja `0218` — numer tymczasowy):
+  `export_my_data` dopisuje `contentReports` (zgłoszenia treści złożone przez kandydata, bez zgłoszonej
+  treści, `target_id` i kodu dostępu; kształt jak w eksporcie pracodawcy) i `retentionWarnings`
+  (wysłane ostrzeżenia retencji z terminem); dowód `rls.sql` sekcja CX1091 (kontrole ujemne: bez filtra
+  właściciela, rollback 0218), rollback `candidate-export-reports-rollback.sql`. **Otwarte (#1091):**
+  historia widoczności profilu w eksporcie (funkcja wyłączona w trybie ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
 - [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0206` — numer
   tymczasowy, rollback `supabase/rollback/0206_…down.sql`): indeksy pod usuwanie konta i kaskady FK
   (`notifications`/`email_deliveries` po `entity_id`, `saved_search_alerts.profile_id`, kolumny aktora
