@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Rollback 0956_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0194),
--- job_edit_audit_snapshot i update_published_job (0200), get_public_job (0194), a potem usuwa
+-- job_edit_audit_snapshot (0200) i update_published_job (0203), get_public_job (0194), a potem usuwa
 -- triggery, ograniczenia, kolumny `jobs.work_mode` / `jobs.remote_applicant_countries`
 -- i funkcje pomocnicze. Dawny boolean `jobs.remote` zostaje z wartością liczoną z trybu.
 -- Test: supabase/tests/job-work-mode-rollback.sql (scripts/test-rls.sh).
@@ -339,8 +339,9 @@ begin
   delete from public.job_operation_context
    where tx = pg_current_xact_id() and job_id = p_job_id and kind = 'job_edit';
 
-  -- Kompletność jak w publish_job (0073) — po zapisie, więc błąd cofa całą rewizję.
-  if v_title = '' or v_title ilike 'draft%' or v_title ilike '%placeholder%'
+  -- Kompletność jak w publish_job — po zapisie, więc błąd cofa całą rewizję. Tytuł: tylko
+  -- niepusty (#1221, bez heurystyki, która odrzucała np. „Draftsman”).
+  if v_title = ''
      or btrim(coalesce(j->>'city', '')) = '' or btrim(coalesce(j->>'region', '')) = '' then
     raise exception 'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)' using errcode = '42501';
   end if;

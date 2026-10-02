@@ -14,7 +14,7 @@ import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
-import { resolveJobContentLocales } from '@/lib/job-content-locale';
+import { resolveJobContentLocales, resolveJobListContentLocale } from '@/lib/job-content-locale';
 import {
   applyJobListMachineTranslation,
   applyJobMachineTranslation,
@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
   isApplyPhone,
@@ -72,7 +73,8 @@ export type CategoryKey =
   | 'logistics'
   | 'seasonal';
 
-export type LocationKey =
+/** Miasta z danymi demonstracyjnymi i pierwszą listą landingów (#920: rdzeń katalogu). */
+export type CoreLocationKey =
   | 'brussels'
   | 'antwerp'
   | 'ghent'
@@ -83,6 +85,27 @@ export type LocationKey =
   | 'charleroi'
   | 'bruges'
   | 'kortrijk';
+
+/**
+ * Klucz miasta z katalogu landingów `/praca/miasto/<klucz>` (#920) = klucz `locations.*`
+ * w `src/messages`. Klucz = slug miejscowości w słowniku `locations` (0112). Katalog i reguła
+ * kwalifikacji: `src/lib/locations/city-landings.ts`.
+ */
+export type LocationKey =
+  | CoreLocationKey
+  | 'namur'
+  | 'mons'
+  | 'aalst'
+  | 'ostend'
+  | 'genk'
+  | 'sint-niklaas'
+  | 'roeselare'
+  | 'la-louviere'
+  | 'tournai'
+  | 'turnhout'
+  | 'vilvoorde'
+  | 'zaventem'
+  | 'wavre';
 
 export interface JobListItem {
   id: string;
@@ -121,6 +144,12 @@ export interface JobListItem {
    * oznacza przekład (szczegół: z linkiem do oryginału, karta: dyskretny znacznik).
    */
   machineTranslation?: JobMachineTranslation;
+  /**
+   * Język tytułu i wyróżników karty (#1223) — gdy różni się od języka strony, karta oznacza
+   * je atrybutem `lang`. Brak = język nieznany albo niepoliczony (lista bez kart).
+   * Przekład na język strony (`machineTranslation`) ustawia tu język strony.
+   */
+  contentLocale?: Locale;
   /**
    * 0167: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
    * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
@@ -182,6 +211,11 @@ export interface JobDetail extends JobListItem {
   screeningQuestions?: ScreeningQuestion[];
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
+  /**
+   * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
+   * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
+   */
+  qualifications?: JobQualifications;
   /**
    * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
    * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
@@ -556,6 +590,7 @@ async function getJobsFromDb(
   viewerId: string | null,
   translateCards: boolean,
   withTotal: boolean,
+  withContentLocale: boolean,
 ): Promise<GetJobsResult | JobsPage> {
   const [{ getDomainPool }, { getPublicJobs, getPublicJobsPage }] = await Promise.all([
     import('@/lib/db/runtime'),
@@ -566,7 +601,11 @@ async function getJobsFromDb(
   const counted = withTotal ? await getPublicJobs(pool, query, viewerId) : null;
   const result = counted ?? (await getPublicJobsPage(pool, query, viewerId));
   const listed = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
-  const jobs = translateCards ? await withListMachineTranslations(pool, listed, toLocale(params.locale)) : listed;
+  const jobs = translateCards
+    ? await withListMachineTranslations(pool, await withListContentLocales(pool, listed, toLocale(params.locale)), toLocale(params.locale))
+    : withContentLocale
+      ? await withListContentLocales(pool, listed, toLocale(params.locale))
+      : listed;
   if (!counted) return { jobs, page: result.page, pageSize: result.pageSize };
   return {
     jobs,
@@ -604,10 +643,20 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
+  let qualifications: JobQualifications | undefined;
+  try {
+    const { getPublicJobQualifications } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobQualifications(pool, job.id, locale);
+    qualifications = parseJobQualifications(rows.skills, rows.certificates);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobQualifications' });
+  }
   const requested = toLocale(locale);
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };
@@ -660,6 +709,32 @@ export async function withListMachineTranslations<T extends JobListItem>(
     return jobs.map((job) => applyJobListMachineTranslation(job, byId.get(job.id) ?? null, locale));
   } catch (error) {
     captureError(error, { area: 'jobs.readListMachineTranslations' });
+    return jobs;
+  }
+}
+
+/**
+ * Język tytułu i wyróżników kart (#1223) — JEDNO zapytanie o tłumaczenia ofert strony, bez zmiany
+ * RPC listy (`resolveJobListContentLocale`). Odczyt pomocniczy: awaria = karty bez `lang`
+ * + kod obszaru w logu.
+ */
+export async function withListContentLocales<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+  locale: Locale,
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { getPublicJobListTranslations } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobListTranslations(pool, jobs.map((job) => job.id));
+    const byJob = new Map<string, typeof rows>();
+    for (const row of rows) byJob.set(row.job_id, [...(byJob.get(row.job_id) ?? []), row]);
+    return jobs.map((job) => {
+      const contentLocale = resolveJobListContentLocale(locale, job, byJob.get(job.id) ?? []);
+      return contentLocale ? { ...job, contentLocale } : job;
+    });
+  } catch (error) {
+    captureError(error, { area: 'jobs.readListContentLocales' });
     return jobs;
   }
 }
@@ -729,6 +804,11 @@ export interface JobsViewer {
 export interface GetJobsOptions {
   translateCards?: boolean;
   withTotal?: boolean;
+  /**
+   * #1223: język treści każdej oferty (`contentLocale`) bez przekładu kart — dla list, które
+   * pokazują tytuły poza `JobCard` (pulpit kandydata). `translateCards` liczy go zawsze.
+   */
+  withContentLocale?: boolean;
 }
 
 /** Strona listy bez licznika (`getJobs(…, { withTotal: false })`). */
@@ -769,6 +849,7 @@ export async function getJobs(
         viewer?.candidateId ?? null,
         options.translateCards === true,
         withTotal,
+        options.withContentLocale === true,
       );
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych

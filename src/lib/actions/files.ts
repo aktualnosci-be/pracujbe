@@ -3,9 +3,9 @@
 import { headers } from 'next/headers';
 
 import { isProductionMode } from '@/lib/env';
-import { AppError, type ErrorCode } from '@/lib/errors';
-import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/error-report';
+import type { ErrorCode } from '@/lib/errors';
+import { checkAccountRateLimit } from '@/lib/rate-limit-account';
+import { captureActionError } from '@/lib/db/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
 
@@ -42,17 +42,15 @@ async function candidateContext(): Promise<Session> {
   return { ok: true, deps, userId: session.id };
 }
 
-function unexpected(area: string): { ok: false; error: 'INTERNAL' } {
-  captureError(new AppError('INTERNAL'), { area });
+function unexpected(area: string, error: unknown): { ok: false; error: 'INTERNAL' } {
+  // #1068: błąd bazy z SQLSTATE (bez komunikatu), inny wyjątek z samym obszarem.
+  captureActionError(error, area);
   return { ok: false, error: 'INTERNAL' };
 }
 
 /** Upload CV kandydata (PDF/DOC/DOCX, <=5MB). */
 export async function uploadCandidateCv(formData: FormData): Promise<UploadResult> {
   if (!isRecruitmentEnabled('cvAccess')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
-  if (!(await checkRateLimit('upload', { max: 20, windowSeconds: 3600 }))) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
   const file = formData.get('file');
   if (!(file instanceof File)) return { ok: false, error: 'VALIDATION_FAILED', reason: 'empty' };
   const problem = checkCvFile(file);
@@ -60,10 +58,15 @@ export async function uploadCandidateCv(formData: FormData): Promise<UploadResul
   try {
     const context = await candidateContext();
     if (!context.ok) return context;
+    // #1109: limit na konto PO sesji (+ szeroki próg na adres IP) — anonimowe wywołanie nie
+    // zużywa wspólnego budżetu biura/NAT, a konto nie omija limitu zmianą sieci.
+    if (!(await checkAccountRateLimit('upload', context.userId, { max: 20, windowSeconds: 3600 }))) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
     const { storeCandidateCv } = await import('@/lib/files/candidate-cv');
     return await storeCandidateCv(context.deps, context.userId, file);
-  } catch {
-    return unexpected('files.uploadCandidateCv');
+  } catch (error) {
+    return unexpected('files.uploadCandidateCv', error);
   }
 }
 
@@ -74,8 +77,8 @@ export async function prepareCvDownload(fileId: string): Promise<DownloadLinkRes
     if (!context.ok) return context;
     const { issueCvDownloadLink } = await import('@/lib/files/candidate-cv');
     return await issueCvDownloadLink(context.deps, context.userId, fileId);
-  } catch {
-    return unexpected('files.prepareCvDownload');
+  } catch (error) {
+    return unexpected('files.prepareCvDownload', error);
   }
 }
 
@@ -86,7 +89,7 @@ export async function deleteCandidateFile(fileId: string): Promise<SimpleResult>
     if (!context.ok) return context;
     const { removeCandidateCv } = await import('@/lib/files/candidate-cv');
     return await removeCandidateCv(context.deps, context.userId, fileId);
-  } catch {
-    return unexpected('files.deleteCandidateFile');
+  } catch (error) {
+    return unexpected('files.deleteCandidateFile', error);
   }
 }

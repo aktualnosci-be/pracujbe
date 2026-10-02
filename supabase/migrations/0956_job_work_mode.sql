@@ -16,7 +16,7 @@
 -- 2. `jobs.remote` zostaje (filtr promienia 0194, matching) i przy ustawionym
 --    trybie liczy go trigger BEFORE: `remote = (work_mode = 'remote')` — praca hybrydowa nie
 --    omija filtra promienia ani punktów lokalizacji w dopasowaniu. Tryb nieznany = bez zmian.
--- 3. `save_job_draft` (stan 0194) i `update_published_job` (stan 0200) + dwa nowe klucze;
+-- 3. `save_job_draft` (stan 0194) i `update_published_job` (stan 0203) + dwa nowe klucze;
 --    migawka audytu edycji (`job_edit_audit_snapshot`, 0200) + tryb i kraje.
 -- 4. `get_public_job` (stan 0194, drop + create) + `work_mode`, `remote_applicant_countries`
 --    na końcu listy (bramki oferty publicznej bez zmian).
@@ -298,7 +298,7 @@ $$;
 revoke all on function public.job_edit_audit_snapshot(public.jobs) from public, anon, authenticated;
 
 
--- --- 3c. update_published_job (stan 0200) + tryb pracy -------------------------------------
+-- --- 3c. update_published_job (stan 0203) + tryb pracy -------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -438,8 +438,9 @@ begin
   delete from public.job_operation_context
    where tx = pg_current_xact_id() and job_id = p_job_id and kind = 'job_edit';
 
-  -- Kompletność jak w publish_job (0073) — po zapisie, więc błąd cofa całą rewizję.
-  if v_title = '' or v_title ilike 'draft%' or v_title ilike '%placeholder%'
+  -- Kompletność jak w publish_job — po zapisie, więc błąd cofa całą rewizję. Tytuł: tylko
+  -- niepusty (#1221, bez heurystyki, która odrzucała np. „Draftsman”).
+  if v_title = ''
      or btrim(coalesce(j->>'city', '')) = '' or btrim(coalesce(j->>'region', '')) = '' then
     raise exception 'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)' using errcode = '42501';
   end if;

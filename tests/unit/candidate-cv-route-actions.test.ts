@@ -84,15 +84,35 @@ describe('akcje CV', () => {
     expect(removeCandidateCv).not.toHaveBeenCalled();
   });
 
-  it('limit i walidacja metadanych przed sesją', async () => {
-    vi.mocked(checkRateLimit).mockResolvedValueOnce(false);
-    await expect(uploadCandidateCv(form())).resolves.toEqual({ ok: false, error: 'RATE_LIMITED' });
+  it('walidacja metadanych przed sesją i limitem', async () => {
     await expect(uploadCandidateCv(form('text'))).resolves.toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
       reason: 'empty',
     });
     expect(readCandidateSession).not.toHaveBeenCalled();
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('#1109: limit liczony na konto PO sesji, potem szeroki próg na adres IP', async () => {
+    vi.mocked(checkRateLimit).mockResolvedValueOnce(false);
+    await expect(uploadCandidateCv(form())).resolves.toEqual({ ok: false, error: 'RATE_LIMITED' });
+    expect(readCandidateSession).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(checkRateLimit).mock.calls).toEqual([
+      ['upload', { identifier: SELF, perIp: false, max: 20, windowSeconds: 3600 }],
+    ]);
+    expect(storeCandidateCv).not.toHaveBeenCalled();
+
+    vi.mocked(checkRateLimit).mockClear();
+    vi.mocked(storeCandidateCv).mockResolvedValue({ ok: true, id: FILE_ID });
+    await expect(uploadCandidateCv(form())).resolves.toEqual({ ok: true, id: FILE_ID });
+    expect(vi.mocked(checkRateLimit).mock.calls.map(([action]) => action)).toEqual(['upload', 'upload-ip']);
+  });
+
+  it('#1109 kontrola ujemna: bez sesji kandydata limit nie jest zużywany', async () => {
+    vi.mocked(readCandidateSession).mockResolvedValue({ status: 'anonymous' } as never);
+    await expect(uploadCandidateCv(form())).resolves.toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(checkRateLimit).not.toHaveBeenCalled();
   });
 
   it('awaria sesji/bazy → INTERNAL, bez rzucania do UI', async () => {

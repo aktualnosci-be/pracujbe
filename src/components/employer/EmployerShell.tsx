@@ -134,7 +134,8 @@ export function EmployerShell({
       : []),
     // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
     ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
-    { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },
+    // #1211: szablony odpowiedzi = narzędzie wiadomości — tylko w trybie rekrutacyjnym.
+    ...(recruitmentEnabled ? [{ href: HREF.templates, label: td('navTemplates'), icon: <FileText /> }] : []),
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
     { href: HREF.team, label: td('navTeam'), icon: <UserPlus /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
