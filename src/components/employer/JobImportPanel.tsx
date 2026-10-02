@@ -168,6 +168,13 @@ export function JobImportPanel({
           </p>
           <p>{result.review.length > 0 ? t('successReview', { count: result.review.length }) : t('successNoReview')}</p>
           <p>{result.savedSteps.length > 0 ? t('successDraftSaved') : t('successDraftPending')}</p>
+          {result.contentLocaleDetected ? (
+            <p>
+              {t('detectedLanguage', {
+                language: tRoot(`job.contentLanguageNames.${result.contentLocale}`),
+              })}
+            </p>
+          ) : null}
           {result.suspicious ? (
             <p className="flex items-start gap-2 font-medium text-warning-text">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />

@@ -15,6 +15,7 @@ import { buildImportDraftContent, type ImportedWizardValues } from '@/lib/ai-imp
 import { precheckSource, runJobImport, type ImportSource } from '@/lib/ai-import/run-import';
 import type { ImportableField } from '@/lib/ai-import/schema';
 import { createJobDraft } from '@/lib/actions/jobs';
+import { isLocale, routing, type Locale } from '@/i18n/routing';
 
 /**
  * Import ogłoszenia przez AI (#465) — zrzut ekranu albo link → WSTĘPNIE wypełniony szkic.
@@ -41,6 +42,13 @@ export type JobImportResult =
       review: ImportableField[];
       suspicious: boolean;
       sourceLanguage: string | null;
+      /**
+       * #1048: język treści szkicu — wykryty w źródle (gdy to język serwisu), inaczej język
+       * panelu. Kreator startuje z nim w polu „Język ogłoszenia”.
+       */
+      contentLocale: Locale;
+      /** true = `contentLocale` pochodzi z wykrycia w źródle, nie z języka panelu. */
+      contentLocaleDetected: boolean;
       savedSteps: number[];
     }
   | { ok: false; error: ErrorCode; reason?: ImportImageProblem };
@@ -138,12 +146,15 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
       review: mapped.review,
       suspicious: mapped.suspicious,
       sourceLanguage: mapped.sourceLanguage,
+      // #1048: język treści = język wykryty w źródle, a nie język panelu (fallback).
+      contentLocale: mapped.contentLocale ?? (isLocale(locale) ? locale : routing.defaultLocale),
+      contentLocaleDetected: mapped.contentLocale !== null,
     };
 
     const content = buildImportDraftContent(mapped.validSteps);
     if (!content) return { ...base, jobId: null, savedSteps: [] };
 
-    const created = await createJobDraft(locale, expectedCompanyId);
+    const created = await createJobDraft(base.contentLocale, expectedCompanyId);
     if (!created.ok) return { ...base, jobId: null, savedSteps: [] };
     if (created.demo) {
       return { ...base, jobId: created.id, demo: true, savedSteps: mapped.validSteps.map((s) => s.step) };
