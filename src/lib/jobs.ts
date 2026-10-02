@@ -161,7 +161,7 @@ export interface JobListItem {
    */
   isAgency?: true;
   /**
-   * Praca zdalna (`jobs.remote`; od 0956 liczona z trybu pracy `work_mode = 'remote'`) — tylko zestaw demonstracyjny
+   * Praca zdalna (`jobs.remote`; od 0228 liczona z trybu pracy `work_mode = 'remote'`) — tylko zestaw demonstracyjny
    * niesie to pole na liście (lustro filtra promienia 0194: zdalna pasuje do każdego promienia).
    */
   remote?: boolean;
@@ -235,7 +235,7 @@ export interface JobDetail extends JobListItem {
    * #792: POTWIERDZONY tryb pracy. `remote` = 100% zdalnie (tylko wtedy JSON-LD może dostać
    * `jobLocationType: TELECOMMUTE`). Brak pola = tryb nieznany: dawny boolean `jobs.remote` NIE
    * gwarantuje pełnej zdalności i nie jest tu mapowany. Źródło (trójstanowy wybór w kreatorze +
-   * odczyt w `get_public_job`): migracja 0956.
+   * odczyt w `get_public_job`): migracja 0228.
    */
   workMode?: 'onsite' | 'hybrid' | 'remote';
   /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
@@ -597,7 +597,7 @@ function rowToJobDetail(row: unknown): JobDetail {
       return applyChannel ? { applyChannel } : {};
     })(),
     ...(isWorkTime(r['work_time']) ? { workTime: r['work_time'] } : {}),
-    // #792 (0956): tryb pracy i kraje kandydata (null = tryb nieznany — JSON-LD bez TELECOMMUTE).
+    // #792 (0228): tryb pracy i kraje kandydata (null = tryb nieznany — JSON-LD bez TELECOMMUTE).
     ...(isWorkMode(r['work_mode']) ? { workMode: r['work_mode'] } : {}),
     ...(() => {
       const countries = normalizeApplicantCountries(asStringArray(r['remote_applicant_countries']));

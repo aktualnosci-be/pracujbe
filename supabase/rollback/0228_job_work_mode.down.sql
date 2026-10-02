@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0956_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0227),
+-- Rollback 0228_job_work_mode.sql — przywraca definicje sprzed migracji: save_job_draft (0227),
 -- job_edit_audit_snapshot (0200) i update_published_job (0227), get_public_job (0194), a potem usuwa
 -- triggery, ograniczenia, kolumny `jobs.work_mode` / `jobs.remote_applicant_countries`
 -- i funkcje pomocnicze. Dawny boolean `jobs.remote` zostaje z wartością liczoną z trybu.

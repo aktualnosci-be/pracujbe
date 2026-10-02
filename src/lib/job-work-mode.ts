@@ -1,16 +1,16 @@
 /**
- * #792 (migracja 0956 — numer tymczasowy): tryb pracy oferty i kraje kandydata przy pracy
+ * #792 (migracja 0228 — numer tymczasowy): tryb pracy oferty i kraje kandydata przy pracy
  * w 100% zdalnej. Jedno źródło dla kreatora, walidacji, zapisu (`save_job_draft`,
  * `update_published_job`), odczytu (`get_public_job`) i JobPosting (`jobLocationType`).
  *
  * - `onsite` — praca na miejscu, `hybrid` — część czasu na miejscu, `remote` — 100% zdalnie.
- * - Brak trybu (`null` w bazie) = oferta sprzed 0956: dawny boolean `jobs.remote` nie mówi, czy
+ * - Brak trybu (`null` w bazie) = oferta sprzed 0228: dawny boolean `jobs.remote` nie mówi, czy
  *   praca jest w pełni zdalna, więc nie zgadujemy (JSON-LD bez TELECOMMUTE).
  * - `jobs.remote` zostaje (filtr promienia, matching) i przy ustawionym trybie
  *   jest z niego liczony w bazie: `remote = (work_mode = 'remote')` — praca hybrydowa nie omija
  *   filtra promienia.
  *
- * Lista krajów = lustro `public.job_applicant_country_allowed` (0956); test porównuje 1:1.
+ * Lista krajów = lustro `public.job_applicant_country_allowed` (0228); test porównuje 1:1.
  */
 
 export const WORK_MODES = ['onsite', 'hybrid', 'remote'] as const;

@@ -127,7 +127,7 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 3: lokalizacja.
   await page.getByLabel(t('cityLabel'), { exact: true }).fill('Antwerpen');
   await page.getByLabel(t('regionLabel'), { exact: true }).fill('Vlaanderen');
-  // #792 (0956): praca w pełni zdalna wymaga kraju kandydata — błąd przy liście, krok bez zmian.
+  // #792 (0228): praca w pełni zdalna wymaga kraju kandydata — błąd przy liście, krok bez zmian.
   await chooseOption(page, page.getByRole('combobox', { name: t('workModeLabel') }), t('workMode.remote'));
   const countries = page.getByRole('group', { name: t('remoteCountriesLegend') });
   await next().click();
@@ -241,7 +241,7 @@ test('publikacja: odmowa przy firmie niezweryfikowanej, po weryfikacji — ofert
     const view = await guest.newPage();
     await view.goto(`/${LOCALE}/oferty-pracy/${String(published.slug)}`);
     await expect(view.getByRole('heading', { level: 1, name: TITLE })).toBeVisible();
-    // #792 (0956): praca w pełni zdalna z krajem kandydata → JobPosting TELECOMMUTE (bez jobLocation).
+    // #792 (0228): praca w pełni zdalna z krajem kandydata → JobPosting TELECOMMUTE (bez jobLocation).
     const postings = (await view.locator('script[type="application/ld+json"]').allTextContents())
       .map((text) => JSON.parse(text) as Record<string, unknown>)
       .filter((data) => data['@type'] === 'JobPosting');

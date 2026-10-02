@@ -1,5 +1,5 @@
 -- =============================================================================
--- WD792-R — rollback migracji 0956 (#792, tryb pracy oferty). Uruchamiany przez
+-- WD792-R — rollback migracji 0228 (#792, tryb pracy oferty). Uruchamiany przez
 -- scripts/test-rls.sh po rls.sql, na tej samej bazie (dane WD792 z rls.sql). Rollback wykonuje
 -- się w transakcji i jest cofany.
 -- =============================================================================
@@ -16,10 +16,10 @@ select pg_temp.assert(
   and position('work_mode' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) > 0
   and position('work_mode' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) > 0
   and exists (select 1 from public.jobs where work_mode is not null),
-  'WD792-R0 stan wyjściowy: migracja 0956 zastosowana, są oferty z trybem');
+  'WD792-R0 stan wyjściowy: migracja 0228 zastosowana, są oferty z trybem');
 
 begin;
-\ir ../rollback/0956_job_work_mode.down.sql
+\ir ../rollback/0228_job_work_mode.down.sql
 select pg_temp.assert(
   not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'jobs'
                 and column_name in ('work_mode', 'remote_applicant_countries'))
@@ -27,7 +27,7 @@ select pg_temp.assert(
   and to_regprocedure('public.job_applicant_countries_ok(text[])') is null
   and to_regprocedure('public.jobs_sync_remote_from_work_mode()') is null
   and to_regprocedure('public.job_duplications_copy_work_mode()') is null,
-  'WD792-R1 kolumny, triggery i funkcje 0956 usunięte');
+  'WD792-R1 kolumny, triggery i funkcje 0228 usunięte');
 select pg_temp.assert(
   position('work_mode' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) = 0
   and position('work_time' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) > 0
@@ -46,4 +46,4 @@ rollback;
 select pg_temp.assert(
   exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'jobs' and column_name = 'work_mode'),
   'WD792-R3 rollback testu cofnięty');
-\echo 'WD792-R rollback 0956: PASS'
+\echo 'WD792-R rollback 0228: PASS'

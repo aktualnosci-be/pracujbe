@@ -131,12 +131,12 @@ const step3Base = z.object({
   address: z.string().trim().max(160, 'job.error.addressTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   /** Dawny boolean (#792): przy wybranym `workMode` liczony z trybu, bez trybu — bez zmian. */
   remote: z.boolean().default(false),
-  /** #792 (0956): tryb pracy; brak = oferta sprzed wyboru (tryb nieznany). */
+  /** #792 (0228): tryb pracy; brak = oferta sprzed wyboru (tryb nieznany). */
   workMode: z.enum(WORK_MODES).optional(),
-  /** #792 (0956): kraje kandydata przy pracy w 100% zdalnej (JobPosting `applicantLocationRequirements`). */
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej (JobPosting `applicantLocationRequirements`). */
   remoteApplicantCountries: z.array(z.enum(APPLICANT_COUNTRIES)).max(APPLICANT_COUNTRIES.length).default([]),
 });
-/** #792: praca w 100% zdalna wymaga co najmniej jednego kraju kandydata (lustro CHECK z 0956). */
+/** #792: praca w 100% zdalna wymaga co najmniej jednego kraju kandydata (lustro CHECK z 0228). */
 function refineRemoteCountries(
   data: { workMode?: string; remoteApplicantCountries?: readonly string[] },
   ctx: z.RefinementCtx,

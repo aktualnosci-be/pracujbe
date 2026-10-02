@@ -234,7 +234,7 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
       expect(camel).not.toHaveProperty('validThrough');
     });
 
-    // #792 (0956): tryb pracy z get_public_job → JobPosting.
+    // #792 (0228): tryb pracy z get_public_job → JobPosting.
     it('#792: praca w 100% zdalna z krajami = TELECOMMUTE bez fizycznego jobLocation', async () => {
       const data = await jsonLd({ ...row, work_mode: 'remote', remote_applicant_countries: ['BE', 'NL'], remote: true });
       expect(data.jobLocationType).toBe('TELECOMMUTE');

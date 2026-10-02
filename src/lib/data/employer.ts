@@ -609,9 +609,9 @@ export interface JobDraftValues {
   region: string;
   address: string;
   remote: boolean;
-  /** #792 (0956): `jobs.work_mode`; pusty = tryb nieznany (oferta sprzed wyboru). */
+  /** #792 (0228): `jobs.work_mode`; pusty = tryb nieznany (oferta sprzed wyboru). */
   workMode: string;
-  /** #792 (0956): kraje kandydata przy pracy w 100% zdalnej. */
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej. */
   remoteApplicantCountries: string[];
   salaryMin: string;
   salaryMax: string;

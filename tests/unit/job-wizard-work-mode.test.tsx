@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JobWizard, type JobWizardInitialValues } from "@/components/employer/JobWizard";
 
 /**
- * #792 (0956): krok 3 kreatora — tryb pracy (na miejscu / hybrydowa / w pełni zdalna) zamiast
+ * #792 (0228): krok 3 kreatora — tryb pracy (na miejscu / hybrydowa / w pełni zdalna) zamiast
  * pola „Praca zdalna”; przy pracy w pełni zdalnej lista krajów kandydata (co najmniej jeden).
  */
 

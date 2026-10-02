@@ -218,7 +218,7 @@ export function mapExtraction(raw: unknown): MappedImport {
   setText('region', r.region);
   setText('address', r.address);
   setBool('remote', r.remote);
-  // #792 (0956): ogłoszenie „zdalne” nie mówi, czy praca jest w 100% zdalna — tryb do wyboru
+  // #792 (0228): ogłoszenie „zdalne” nie mówi, czy praca jest w 100% zdalna — tryb do wyboru
   // przez pracodawcę (kreator pokazuje tryb nieznany, pole na liście „do sprawdzenia”).
   if (r.remote === true) review.add('remote');
   setInt('salaryMin', r.salaryMin);

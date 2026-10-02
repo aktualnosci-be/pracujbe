@@ -25944,7 +25944,7 @@ select pg_temp.assert((select shift_patterns from public.jobs where id = :'SPJ4'
 rollback;
 -- N4: kreator bez klucza na liście dozwolonych odrzuca grafik — SP858-3a wykrywa regresję.
 begin;
--- Po 0956 (#792) wpis listy dozwolonych ma postać `'shift_patterns',` (dalej klucze trybu pracy).
+-- Po 0228 (#792) wpis listy dozwolonych ma postać `'shift_patterns',` (dalej klucze trybu pracy).
 select pg_temp.sp_patch('public.save_job_draft(uuid,jsonb,timestamptz)', '''shift_patterns'',', '');
 set local role authenticated; set local app.current_uid = :'SPE'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"shift_patterns":["day"]}}'::jsonb)$q$, :'SPJD'),
@@ -27813,7 +27813,7 @@ reset role; reset app.current_uid;
 \echo 'WP724 Web Push: PASS'
 
 -- ============================================================================
--- WD792. Tryb pracy oferty i kraje kandydata (#792, migracja 0956 — numer tymczasowy).
+-- WD792. Tryb pracy oferty i kraje kandydata (#792, migracja 0228 — numer tymczasowy).
 --   * CHECK: tryb z listy, praca w 100% zdalna = co najmniej jeden kraj z listy dozwolonej,
 --     inny tryb = bez krajów, bez powtórzeń.
 --   * `remote` liczy trigger z trybu (hybryda = false); tryb nieznany zostawia dawny boolean.
@@ -27951,7 +27951,7 @@ select pg_temp.assert((select work_mode = 'remote' and remote_applicant_countrie
   'WD-N2 kontrola ujemna: bez CHECK praca zdalna bez kraju przechodzi (WD2b wykrywa regresję)');
 rollback;
 begin;
-\ir ../rollback/0956_job_work_mode.down.sql
+\ir ../rollback/0228_job_work_mode.down.sql
 set local role authenticated; set local app.current_uid = :'WDE'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJC',
     '{"job": {"work_mode": "onsite"}}'),

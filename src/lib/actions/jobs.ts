@@ -589,7 +589,7 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       city: s3.city,
       region: s3.region,
       address: nullIfEmpty(s3.address),
-      // #792 (0956): tryb pracy + kraje kandydata (`remote` z trybu).
+      // #792 (0228): tryb pracy + kraje kandydata (`remote` z trybu).
       ...workModePatch(s3),
       salary_min: s4.salaryMin ?? null,
       salary_max: s4.salaryMax ?? null,

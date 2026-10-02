@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0956_job_work_mode.sql — tryb pracy oferty i kraje kandydata dla pracy w 100% zdalnej (#792).
+-- 0228_job_work_mode.sql — tryb pracy oferty i kraje kandydata dla pracy w 100% zdalnej (#792).
 -- NUMER TYMCZASOWY — ostateczny nada integrator.
 --
 -- Kreator zapisywał tryb pracy jako jeden boolean `jobs.remote` („Praca zdalna”), bez
@@ -25,7 +25,7 @@
 -- `publish_job` bez zmian: tryb nie jest wymagany do publikacji (oferta bez trybu = zwykłe
 -- `jobLocation`, jak dotąd). Listy, licznik i facety (`get_public_jobs*`) bez zmian.
 --
--- Rollback: supabase/rollback/0956_job_work_mode.down.sql (test
+-- Rollback: supabase/rollback/0228_job_work_mode.down.sql (test
 -- supabase/tests/job-work-mode-rollback.sql w scripts/test-rls.sh).
 -- =============================================================================
 
@@ -71,9 +71,9 @@ alter table public.jobs
            and (case when work_mode = 'remote' then cardinality(remote_applicant_countries) >= 1
                      else cardinality(remote_applicant_countries) = 0 end));
 comment on column public.jobs.work_mode is
-  'Tryb pracy (#792, 0956): onsite / hybrid / remote (100% zdalnie); null = nieznany (oferta sprzed wyboru).';
+  'Tryb pracy (#792, 0228): onsite / hybrid / remote (100% zdalnie); null = nieznany (oferta sprzed wyboru).';
 comment on column public.jobs.remote_applicant_countries is
-  'Kraje kandydata (ISO 3166-1 alfa-2) dla pracy w 100% zdalnej (#792, 0956); pusta lista dla innych trybów.';
+  'Kraje kandydata (ISO 3166-1 alfa-2) dla pracy w 100% zdalnej (#792, 0228); pusta lista dla innych trybów.';
 
 -- --- 2. `remote` liczony z trybu --------------------------------------------------------------
 create or replace function public.jobs_sync_remote_from_work_mode()
@@ -126,7 +126,7 @@ begin
                     'work_time',
                     -- 0227, #858: typy grafiku pracy
                     'shift_patterns',
-                    -- 0956, #792: tryb pracy i kraje kandydata przy pracy w 100% zdalnej
+                    -- 0228, #792: tryb pracy i kraje kandydata przy pracy w 100% zdalnej
                     'work_mode', 'remote_applicant_countries')
     limit 1;
   if v_bad is null then
@@ -310,7 +310,7 @@ returns jsonb language sql stable set search_path = public, pg_temp as $$
     'accommodation_kind', j.accommodation_kind, 'accommodation_cost', j.accommodation_cost,
     'accommodation_cost_period', j.accommodation_cost_period,
     'accommodation_deducted', j.accommodation_deducted,
-    -- 0956 (#792): tryb pracy i kraje kandydata.
+    -- 0228 (#792): tryb pracy i kraje kandydata.
     'work_mode', j.work_mode, 'remote_applicant_countries', to_jsonb(j.remote_applicant_countries),
     -- Ten sam zakres co powiadomienie kandydata (0144/0169).
     'terms', public.job_material_terms(j))
@@ -406,7 +406,7 @@ begin
     work_time                = nullif(j->>'work_time', ''),
     -- 0227 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
     shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
-    -- 0956 (#792): tryb pracy i kraje kandydata (brak klucza = tryb nieznany, bez krajów).
+    -- 0228 (#792): tryb pracy i kraje kandydata (brak klucza = tryb nieznany, bez krajów).
     work_mode                = nullif(j->>'work_mode', ''),
     remote_applicant_countries = case when coalesce(j->>'work_mode', '') = 'remote'
                                       then public.job_country_codes(j->'remote_applicant_countries')
@@ -558,7 +558,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     j.apply_url, j.apply_email, j.apply_phone,
     -- 0194 (#811): wymiar czasu pracy (null = pracodawca nie podał).
     j.work_time,
-    -- 0956 (#792): tryb pracy (null = nieznany) i kraje kandydata przy pracy w 100% zdalnej.
+    -- 0228 (#792): tryb pracy (null = nieznany) i kraje kandydata przy pracy w 100% zdalnej.
     j.work_mode, j.remote_applicant_countries
   from public.jobs j
   join public.companies c on c.id = j.company_id

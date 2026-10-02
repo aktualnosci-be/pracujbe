@@ -16,7 +16,7 @@ import fr from '@/messages/fr.json';
 import en from '@/messages/en.json';
 
 /**
- * #792 (migracja 0956 — numer tymczasowy): tryb pracy oferty zamiast niejednoznacznego
+ * #792 (migracja 0228 — numer tymczasowy): tryb pracy oferty zamiast niejednoznacznego
  * „Praca zdalna”. JSON-LD (TELECOMMUTE) — `structured-data.test.ts` i `jobs-postgres.test.ts`;
  * baza (CHECK, trigger `remote`, RPC) — `rls.sql` sekcja WD792.
  */

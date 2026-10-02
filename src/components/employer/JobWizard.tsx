@@ -194,9 +194,9 @@ interface FormValues {
   address: string;
   /** Dawny boolean (#792): przy wybranym trybie liczony z trybu, bez trybu — wartość z bazy. */
   remote: boolean;
-  /** #792 (0956): tryb pracy; '' = oferta sprzed wyboru (tryb nieznany). */
+  /** #792 (0228): tryb pracy; '' = oferta sprzed wyboru (tryb nieznany). */
   workMode: '' | WorkMode;
-  /** #792 (0956): kraje kandydata przy pracy w 100% zdalnej. */
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej. */
   remoteApplicantCountries: ApplicantCountry[];
   // krok 4 — wynagrodzenie
   salaryMin: string;
@@ -1704,7 +1704,7 @@ export function JobWizard({
                   />
                   <FieldError name="address" />
                 </div>
-              {/* #792 (0956): tryb pracy zamiast niejednoznacznego „Praca zdalna” — tylko „w pełni
+              {/* #792 (0228): tryb pracy zamiast niejednoznacznego „Praca zdalna” — tylko „w pełni
                   zdalna” z krajami kandydata daje w JobPosting `jobLocationType: TELECOMMUTE`. */}
               {renderCostSelect({
                 field: 'workMode',

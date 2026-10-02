@@ -54,7 +54,7 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
     case 3: {
       const v = parsed as JobStep3;
       return {
-        // #792 (0956): tryb pracy + kraje kandydata; `remote` liczony z trybu (tryb nieznany = bez zmian).
+        // #792 (0228): tryb pracy + kraje kandydata; `remote` liczony z trybu (tryb nieznany = bez zmian).
         job: { city: v.city, region: v.region, address: nullIfEmpty(v.address), ...workModePatch(v) },
       };
     }
