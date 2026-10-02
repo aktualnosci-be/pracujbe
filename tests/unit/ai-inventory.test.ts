@@ -91,8 +91,9 @@ describe('inwentarz AI (#489)', () => {
     const violations = (features: readonly AiFeature[]) =>
       features.filter((f) => f.allowedInClassifieds && !inputsAllowedInClassifieds(f.inputs)).map((f) => f.id);
 
-    it('dozwolone wejścia = wyłącznie treść ogłoszenia', () => {
-      expect([...CLASSIFIEDS_ALLOWED_INPUTS].sort()).toEqual(['job_offer_text', 'third_party_listing']);
+    it('dozwolone wejścia = treść ogłoszenia i zapytanie wyszukiwania ofert (#711), bez profilu i CV', () => {
+      expect([...CLASSIFIEDS_ALLOWED_INPUTS].sort()).toEqual(['job_offer_text', 'job_search_query', 'third_party_listing']);
+      expect(CLASSIFIEDS_ALLOWED_INPUTS.some((input) => input.startsWith('candidate_'))).toBe(false);
     });
 
     it('funkcja z wejściem kandydata ma allowedInClassifieds: false', () => {
@@ -102,9 +103,17 @@ describe('inwentarz AI (#489)', () => {
           expect(feature.allowedInClassifieds, feature.id).toBe(false);
         }
       }
-      // Oczekiwany podział: import ogłoszeń, asystent, tłumaczenie ofert i kontrola treści działają.
+      // Oczekiwany podział: import ogłoszeń, asystent, tłumaczenie ofert, kontrola treści
+      // i „Wyjaśnij ofertę” (#773) działają.
       expect(AI_FEATURES.filter((f) => f.allowedInClassifieds).map((f) => f.id).sort()).toEqual(
-        ['content_translation', 'job_fraud_check', 'job_listing_import', 'job_offer_assist'],
+        [
+          'content_translation',
+          'job_fraud_check',
+          'job_listing_import',
+          'job_offer_assist',
+          'job_offer_explain',
+          'job_search_filters',
+        ],
       );
     });
 
@@ -194,6 +203,25 @@ describe('inwentarz AI (#489)', () => {
     }
     // Kontrola ujemna reguły.
     expect("await rpc(tx, 'save_job_draft', { p_job_id: id })").toMatch(WRITE);
+  });
+
+  it('wyszukiwanie opisem (#711) niczego nie zapisuje i nie czyta sesji ani profilu', () => {
+    const FORBIDDEN = /\brpc(?:Rows)?\(|\bsql\(|getPortalIdentity|withPortalTransaction|readCandidateViewerId|candidate_profiles|saved_search/;
+    const files = [
+      'src/lib/actions/job-search-assist.ts',
+      'src/lib/ai-search/run.ts',
+      'src/lib/ai-search/interpret.ts',
+      'src/lib/ai-search/guard.ts',
+    ];
+    for (const path of files) {
+      expect(readFileSync(join(ROOT, path), 'utf8'), path).not.toMatch(FORBIDDEN);
+    }
+    // Płatny dostawca zawsze przez budżet; wyjątek tylko dla atrapy bez bazy zadań serwerowych.
+    const action = readFileSync(join(ROOT, 'src/lib/actions/job-search-assist.ts'), 'utf8');
+    expect(action).toMatch(/budgetStore: provider === 'fixture' && !serviceDb \? null : databaseBudgetStore/);
+    expect(readFileSync(join(ROOT, 'src/lib/ai-search/run.ts'), 'utf8')).toMatch(/withAiBudget\(/);
+    // Kontrola ujemna reguły.
+    expect("const me = await getPortalIdentity();").toMatch(FORBIDDEN);
   });
 
   it('kod funkcji AI nie dotyka statusu, widoczności ani kolejności kandydatów', () => {

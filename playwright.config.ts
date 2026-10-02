@@ -58,6 +58,15 @@ const JOB_IMPORT_ENV = {
 const JOB_ASSIST_ENV = {
   AI_JOB_ASSIST_ENABLED: '1',
   AI_JOB_ASSIST_PROVIDER: 'fixture',
+  // Wyszukiwanie opisem (#711) — ta sama zasada atrapy.
+  AI_JOB_SEARCH_ENABLED: '1',
+  AI_JOB_SEARCH_PROVIDER: 'fixture',
+};
+
+/** „Wyjaśnij ofertę” (#773) — atrapa w runtime, nigdy w produkcji; bez sieci i kosztów. */
+const JOB_EXPLAIN_ENV = {
+  AI_JOB_EXPLAIN_ENABLED: '1',
+  AI_JOB_EXPLAIN_PROVIDER: 'fixture',
 };
 
 /** Czy gotowy build (.next) ma wklejony testowy token Cloudflare Web Analytics. */
@@ -306,6 +315,7 @@ const CLASSIFIEDS_SHARED_SPECS = [
   '**/jobs-list-facets-failure.spec.ts',
   '**/jobs-list-filter-navigation.spec.ts',
   '**/jobs-list-header.spec.ts',
+  '**/jobs-list-search-assist.spec.ts',
   '**/jobs-list-results-focus.spec.ts',
   '**/jobs-list-salary-unit.spec.ts',
   '**/jobs-list-sidebar-reach.spec.ts',
@@ -451,6 +461,7 @@ export default defineConfig({
       ...TRACKER_ENV,
       ...JOB_IMPORT_ENV,
       ...JOB_ASSIST_ENV,
+      ...JOB_EXPLAIN_ENV,
       EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET,
       PORTAL_LEGAL_MODE: E2E_PORTAL_LEGAL_MODE,
     },

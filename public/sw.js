@@ -9,6 +9,12 @@
  * NIE cache'ujemy dynamicznego/uwierzytelnionego HTML (ryzyko podania nieaktualnej,
  * cudzej treści panelu) ani żądań POST/API. Bez trackingu.
  *
+ * #724: Web Push — `push` pokazuje powiadomienie o alercie zapisanego wyszukiwania (payload
+ * zaszyfrowany przez serwer: tytuł, ogólna treść, ścieżka panelu, znacznik); `notificationclick`
+ * otwiera/aktywuje kartę z tą ścieżką. Adres tylko w tym samym serwisie (ścieżka względna od
+ * `/`, bez `//` i schematu) — obcy albo zepsuty adres = strona główna serwisu. Payload bez
+ * tytułu = brak powiadomienia. Bez zapisu czegokolwiek na urządzeniu.
+ *
  * #1088: nazwy cache zależą od identyfikatora builda przekazanego w adresie rejestracji
  * (`/sw.js?v=<NEXT_PUBLIC_APP_VERSION>`, `ServiceWorkerRegister`). Każde wdrożenie ma inny adres
  * skryptu, więc przeglądarka instaluje nowego workera, a `activate` usuwa cache poprzedniego
@@ -85,4 +91,69 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(request).catch(() => caches.match('/offline.html')));
     return;
   }
+});
+
+// --- Web Push (#724) ---------------------------------------------------------
+const PUSH_FALLBACK_URL = '/';
+const PUSH_MAX_TEXT = 200;
+
+function safePushPath(value) {
+  if (typeof value !== 'string' || value.length > 512) return PUSH_FALLBACK_URL;
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return PUSH_FALLBACK_URL;
+  try {
+    const url = new URL(value, self.location.origin);
+    return url.origin === self.location.origin ? url.pathname + url.search : PUSH_FALLBACK_URL;
+  } catch {
+    return PUSH_FALLBACK_URL;
+  }
+}
+
+function pushText(value) {
+  return typeof value === 'string' ? value.slice(0, PUSH_MAX_TEXT) : '';
+}
+
+function parsePushMessage(event) {
+  let data = null;
+  try {
+    data = event.data ? event.data.json() : null;
+  } catch {
+    data = null;
+  }
+  if (!data || typeof data !== 'object') return null;
+  const title = pushText(data.title);
+  if (!title) return null;
+  return {
+    title,
+    body: pushText(data.body),
+    url: safePushPath(data.url),
+    tag: typeof data.tag === 'string' && /^[a-z0-9-]{1,40}$/.test(data.tag) ? data.tag : undefined,
+  };
+}
+
+self.addEventListener('push', (event) => {
+  const message = parsePushMessage(event);
+  if (!message) return;
+  event.waitUntil(
+    self.registration.showNotification(message.title, {
+      body: message.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: message.tag,
+      data: { url: message.url },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = safePushPath(event.notification.data && event.notification.data.url);
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const absolute = new URL(target, self.location.origin).href;
+      for (const client of clients) {
+        if (client.url === absolute && 'focus' in client) return client.focus();
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
 });

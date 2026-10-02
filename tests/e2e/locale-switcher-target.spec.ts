@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
+import { waitForHydrated } from "./fixtures/hydration";
 
 /**
  * Cel dotykowy przełącznika języka: min. 44 × 44 px (WCAG 2.5.5, zalecenie przy 2.5.8).
@@ -26,7 +27,10 @@ for (const [locale, label] of Object.entries(labels)) {
   test(`${locale}: przełącznik języka ma cel ≥ 44 px w menu mobilnym`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/${locale}`);
-    await page.locator("header").getByRole("button", { name: "Menu" }).click();
+    // Panel menu otwiera się dopiero po hydratacji (handler `onClick` z Reacta).
+    const menu = page.locator("header").getByRole("button", { name: "Menu" });
+    await waitForHydrated(menu);
+    await menu.click();
     await expectTouchTarget(page.getByRole("dialog").getByRole("combobox", { name: label }));
   });
 }

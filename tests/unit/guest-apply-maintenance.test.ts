@@ -24,6 +24,7 @@ const MAINTENANCE_RPCS = [
   'purge_stale_message_attachments',
   'rate_limit_gc',
   'processed_webhooks_gc',
+  'purge_push_data',
   'claim_storage_deletions',
   'claim_company_vies_auto_checks',
   'record_ops_job_run',

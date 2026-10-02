@@ -34,6 +34,9 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'home',
   'job',
   'jobAssist',
+  // #773: panel „Wyjaśnij ofertę” na szczególe oferty.
+  'jobExplain',
+  'jobSearchAssist',
   'jobImport',
   'jobWizard',
   'jobs',
@@ -47,6 +50,8 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'offerStatus',
   'onboarding',
   'profileVisibility',
+  // #724: sekcja powiadomień push w ustawieniach kandydata.
+  'pushSettings',
   'savedSearches',
   'applicationJournal',
   'screeningReview',
