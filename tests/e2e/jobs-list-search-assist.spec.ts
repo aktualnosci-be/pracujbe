@@ -27,9 +27,10 @@ const CASES = [
   ['en', en, 'Looking for warehouse work near Ghent, full-time, no Dutch required, immediately', 'Ghent'],
 ] as const;
 
-async function openAssist(page: Page, locale: string, m: Messages): Promise<void> {
+async function openAssist(page: Page, locale: string, m: Messages, dismissBanner = true): Promise<void> {
   await page.goto(`/${locale}/oferty-pracy`);
-  await page.getByRole('button', { name: m.cookies.rejectOptional }).click();
+  // Baner zgód tylko przy pierwszej wizycie w kontekście (decyzja zapisana w cookie).
+  if (dismissBanner) await page.getByRole('button', { name: m.cookies.rejectOptional }).click();
   await page.getByText(m.jobSearchAssist.title, { exact: true }).click();
   await expect(page.getByText(m.jobSearchAssist.aiNotice)).toBeVisible();
 }
@@ -90,9 +91,9 @@ test('kontrola ujemna: odmowa dostawcy — droga do zwykłego wyszukiwania', asy
 });
 
 test('sekcja z propozycją bez blokujących naruszeń axe (320 i 1280 px)', async ({ page }) => {
-  for (const width of [320, 1280]) {
+  for (const [index, width] of [320, 1280].entries()) {
     await page.setViewportSize({ width, height: 900 });
-    await openAssist(page, 'pl', pl);
+    await openAssist(page, 'pl', pl, index === 0);
     await page.getByLabel(pl.jobSearchAssist.textLabel).fill('magazyn w okolicach Puurs, od zaraz');
     await page.getByRole('button', { name: pl.jobSearchAssist.suggest }).click();
     await expect(page.getByRole('heading', { name: pl.jobSearchAssist.resultTitle })).toBeVisible();

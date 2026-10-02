@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
 
 /**
  * Wyszukiwanie opisem (#711) jako zwinięta sekcja. Strona renderuje ją wyłącznie przy włączonej
@@ -11,9 +10,10 @@ import dynamic from 'next/dynamic';
  * przesuwa układu (CLS). Bez JavaScriptu sekcja pokazuje tylko informację, że wymaga JS — zostaje
  * zwykła wyszukiwarka i filtry listy.
  */
-const JobSearchAssist = dynamic(
-  () => import('@/components/public/JobSearchAssist').then((m) => m.JobSearchAssist),
-  { ssr: false },
+// `React.lazy` zamiast `next/dynamic` — bez kodu obsługi SSR/bailout w bundlu listy. Komponent
+// renderuje się wyłącznie po rozwinięciu (`open` startuje jako false), więc nigdy na serwerze.
+const JobSearchAssist = React.lazy(() =>
+  import('@/components/public/JobSearchAssist').then((m) => ({ default: m.JobSearchAssist })),
 );
 
 export interface JobSearchAssistDisclosureProps {
@@ -37,7 +37,11 @@ export function JobSearchAssistDisclosure({ locale, title, noScriptText }: JobSe
       <noscript>
         <p className="mt-2 text-sm text-muted-foreground">{noScriptText}</p>
       </noscript>
-      {open ? <JobSearchAssist locale={locale} /> : null}
+      {open ? (
+        <React.Suspense fallback={null}>
+          <JobSearchAssist locale={locale} />
+        </React.Suspense>
+      ) : null}
     </details>
   );
 }
