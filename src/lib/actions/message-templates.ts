@@ -3,11 +3,12 @@
 import { z } from 'zod';
 
 import { getExpectedActiveCompany } from '@/lib/company-context';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkRateLimit } from '@/lib/rate-limit';
 import {
   findSensitiveVariant,
@@ -20,7 +21,12 @@ import {
  * Server Actions szablonów odpowiedzi firmy (0170). Firma = firma WIDOKU (`expectedCompanyId`),
  * sprawdzana względem bieżącej aktywnej firmy (ACTIVE_COMPANY_CHANGED — nic nie zapisujemy).
  * Uprawnienie recruiter+, limit 50 szablonów i CAS po `updated_at` egzekwuje baza.
+ * Tryb ogłoszeniowy (#1211): `RECRUITMENT_DISABLED` jako PIERWSZY krok (przed walidacją,
+ * sesją, limiterem i bazą) — szablony należą do wyłączonych wiadomości (#1134).
  */
+
+const DISABLED = { ok: false, error: 'RECRUITMENT_DISABLED' } as const;
+const templatesOff = () => !isRecruitmentEnabled('messaging');
 
 export type TemplateError = ErrorCode | 'TEMPLATE_LIMIT';
 
@@ -29,6 +35,7 @@ export type TemplateActionResult =
   | { ok: false; error: TemplateError; reason?: 'sensitiveId' };
 
 function mapTemplateError(message: string): TemplateError {
+  if (message.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (message.includes('TEMPLATE_LIMIT')) return 'TEMPLATE_LIMIT';
   if (message.includes('STALE_STATE')) return 'STALE_STATE';
   if (message.includes('NOT_FOUND')) return 'NOT_FOUND';
@@ -45,6 +52,7 @@ export async function saveMessageTemplate(
   input: MessageTemplateInput,
   expectedCompanyId: string,
 ): Promise<TemplateActionResult> {
+  if (templatesOff()) return DISABLED;
   const parsed = messageTemplateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   // #495: numer rejestru narodowego/dokumentu nie trafia do szablonu (jak do wiadomości).
@@ -73,7 +81,9 @@ export async function saveMessageTemplate(
     );
     return saved;
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapTemplateError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'templates.save', mapTemplateError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'templates.save' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -83,6 +93,7 @@ export async function deleteMessageTemplate(
   templateId: string,
   expectedCompanyId: string,
 ): Promise<TemplateActionResult> {
+  if (templatesOff()) return DISABLED;
   if (!z.string().uuid().safeParse(templateId).success) return { ok: false, error: 'VALIDATION_FAILED' };
   if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
   try {
@@ -99,7 +110,9 @@ export async function deleteMessageTemplate(
       return { ok: true };
     });
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapTemplateError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'templates.delete', mapTemplateError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'templates.delete' });
     return { ok: false, error: 'INTERNAL' };
   }

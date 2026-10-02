@@ -59,6 +59,23 @@ describe('getCompanyProfile', () => {
     });
   });
 
+  it('#708: język opisu z bazy — tylko obsługiwany kod przy niepustym opisie', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.companyJobs.mockResolvedValue({ rows: [] });
+    const base = { id: 'c1', slug: 'firma-x', name: 'Firma X', description: 'Opis', active_jobs_count: 0 };
+    adapters.company.mockResolvedValue({ ...base, description_locale: 'nl' });
+    expect((await getCompanyProfile('firma-x', 'pl'))?.company.descriptionLocale).toBe('nl');
+    // Kontrole ujemne: kod spoza języków serwisu, brak wartości, pusty opis → brak języka.
+    for (const row of [
+      { ...base, description_locale: 'de' },
+      { ...base, description_locale: null },
+      { ...base, description: '', description_locale: 'nl' },
+    ]) {
+      adapters.company.mockResolvedValue(row);
+      expect((await getCompanyProfile('firma-x', 'pl'))?.company).not.toHaveProperty('descriptionLocale');
+    }
+  });
+
   it('zły slug / firma niezweryfikowana → null (strona 404), bez błędu', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.company.mockResolvedValue(null);

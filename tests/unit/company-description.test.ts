@@ -52,7 +52,23 @@ describe('parseCompanyDescriptionReview', () => {
         description_pending_at: '2026-09-29 10:00:00.123+00',
         description_review_reason: null,
       }),
-    ).toEqual({ status: 'pending', text: 'Nowy opis', submittedAt: '2026-09-29 10:00:00.123+00', reason: null });
+    ).toEqual({
+      status: 'pending',
+      text: 'Nowy opis',
+      submittedAt: '2026-09-29 10:00:00.123+00',
+      reason: null,
+      locale: null,
+    });
+  });
+
+  it('carries the proposal language (0201); a value outside the site languages is ignored', () => {
+    const row = {
+      description_review_status: 'pending',
+      description_pending: 'Nowy opis',
+      description_pending_at: '2026-09-29 10:00:00+00',
+    };
+    expect(parseCompanyDescriptionReview({ ...row, description_locale_pending: 'fr' })?.locale).toBe('fr');
+    expect(parseCompanyDescriptionReview({ ...row, description_locale_pending: 'de' })?.locale).toBeNull();
   });
 
   it('shows the reason only for a rejected proposal', () => {

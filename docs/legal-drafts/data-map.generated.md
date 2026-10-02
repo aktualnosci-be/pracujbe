@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 111; z danymi osobowymi: 77; bez danych osobowych: 34.
+Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -500,6 +500,7 @@ Tabele w migracjach: 111; z danymi osobowymi: 77; bez danych osobowych: 34.
 - **Migracja:** `supabase/migrations/0002_core_tables.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm
+- **Uwaga:** Każda kolumna tabeli ma wpis w columns albo notPersonal (strażnik tests/unit/privacy-data-map.test.ts, #729). Propozycje strony WWW/logo i opisu (`*_pending`) oraz uzasadnienia odrzucenia (`links_review_reason`, `description_review_reason`) są czyszczone po wycofaniu propozycji albo zastępowane kolejną decyzją (0156, 0198); do czasu decyzji widzi je tylko owner/admin firmy i admin portalu. Retencja firm: DO USTALENIA (#486).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -517,6 +518,37 @@ Tabele w migracjach: 111; z danymi osobowymi: 77; bez danych osobowych: 34.
 | `agency_recognition_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0167_offer_trust.sql` |
 | `agency_checked_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
 | `agency_check_note` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
+| `slug` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `description` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `logo_url` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `region` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `website_pending` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0156_company_links_review.sql` |
+| `logo_url_pending` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0156_company_links_review.sql` |
+| `links_review_status` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `links_pending_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `links_review_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `links_reviewed_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `description_pending` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0198_company_description_review.sql` |
+| `description_review_status` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0198_company_description_review.sql` |
+| `description_pending_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0198_company_description_review.sql` |
+| `description_review_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0198_company_description_review.sql` |
+| `description_reviewed_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0198_company_description_review.sql` |
+| `verified_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0002_core_tables.sql` |
+| `id` | nie dotyczy: Identyfikator techniczny firmy. | — |
+| `status` | nie dotyczy: Status weryfikacji firmy (słownik). | — |
+| `country` | nie dotyczy: Kod kraju siedziby. | — |
+| `size_label` | nie dotyczy: Przedział wielkości firmy (słownik). | — |
+| `industry` | nie dotyczy: Branża (słownik). | — |
+| `is_demo` | nie dotyczy: Znacznik danych demonstracyjnych. | — |
+| `created_at` | nie dotyczy: Czas utworzenia wiersza. | — |
+| `updated_at` | nie dotyczy: Czas ostatniej zmiany wiersza. | — |
+| `deleted_at` | nie dotyczy: Znacznik miękkiego usunięcia. | — |
+| `moderation_decision_id` | nie dotyczy: Powiązanie z decyzją moderacyjną (public.moderation_decisions), nie z osobą. | — |
+| `is_agency` | nie dotyczy: Deklaracja agencji pracy tymczasowej (0167). | — |
+| `agency_check_status` | nie dotyczy: Wynik ręcznego sprawdzenia numeru uznania (słownik, 0167). | — |
+| `agency_checked_at` | nie dotyczy: Czas ręcznego sprawdzenia numeru uznania (0167). | — |
+| `description_locale` | nie dotyczy: Język opisu firmy zadeklarowany przez firmę (#708, 0201) — kod języka serwisu. | — |
+| `description_locale_pending` | nie dotyczy: Język propozycji opisu firmy (0201) — kod języka serwisu; przy akceptacji przechodzi do description_locale. | — |
 
 ### `public.company_invitations`
 
@@ -1347,6 +1379,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.job_funnel_daily` | Liczniki per oferta i dzień — bez IP, cookies i identyfikatora osoby. |
 | `public.job_funnel_receipts` | Losowy nonce jednego załadowania strony — nie identyfikuje osoby. |
 | `public.job_languages` | Treść ogłoszenia (dane firmy). |
+| `public.job_operation_context` | Kontekst zaufanej edycji opublikowanej oferty (0200): identyfikator transakcji, oferty i rodzaj operacji — wiersz istnieje tylko w trakcie update_published_job. Bez danych osobowych. |
 | `public.job_requirements` | Treść ogłoszenia (dane firmy). |
 | `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0173) nowe pytania nie są zapisywane, a zapisane nie są pokazywane. |
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
