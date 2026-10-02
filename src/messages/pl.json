@@ -3227,6 +3227,7 @@
     "pushEnabledDescription": "Powiadomienia na urządzeniu, gdy dzieje się coś ważnego.",
     "inAppEnabledLabel": "Powiadomienia w aplikacji",
     "inAppEnabledDescription": "Powiadomienia widoczne po zalogowaniu w panelu.",
+    "employerInAppEnabledDescription": "Powiadomienia widoczne po zalogowaniu w panelu. Decyzje administratora o stronie WWW, logo i opisie firmy oraz o treści ofert pokazujemy w panelu zawsze, bo nie wysyłamy ich e-mailem.",
     "save": "Zapisz preferencje",
     "saving": "Zapisywanie...",
     "savedSuccess": "Preferencje powiadomień zostały zapisane.",

@@ -3227,6 +3227,7 @@
     "pushEnabledDescription": "Notifications on your device when something important happens.",
     "inAppEnabledLabel": "In-app notifications",
     "inAppEnabledDescription": "Notifications you see while signed in.",
+    "employerInAppEnabledDescription": "Notifications you see while signed in. Administrator decisions about your company's website, logo and description and about job ad content always appear in the panel, because we don't send them by email.",
     "save": "Save preferences",
     "saving": "Saving...",
     "savedSuccess": "Your notification preferences have been saved.",

@@ -3227,6 +3227,7 @@
     "pushEnabledDescription": "Meldingen op je apparaat wanneer er iets belangrijks gebeurt.",
     "inAppEnabledLabel": "Meldingen in de app",
     "inAppEnabledDescription": "Meldingen die je ziet wanneer je bent ingelogd.",
+    "employerInAppEnabledDescription": "Meldingen die je ziet wanneer je bent ingelogd. Beslissingen van de beheerder over de website, het logo en de beschrijving van je bedrijf en over de inhoud van vacatures tonen we altijd in het paneel, omdat we ze niet per e-mail versturen.",
     "save": "Voorkeuren opslaan",
     "saving": "Opslaan...",
     "savedSuccess": "Je meldingsvoorkeuren zijn opgeslagen.",

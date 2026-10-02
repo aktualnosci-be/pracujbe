@@ -3227,6 +3227,7 @@
     "pushEnabledDescription": "Notifications sur votre appareil en cas d'événement important.",
     "inAppEnabledLabel": "Notifications dans l'application",
     "inAppEnabledDescription": "Notifications visibles lorsque vous êtes connecté.",
+    "employerInAppEnabledDescription": "Notifications visibles lorsque vous êtes connecté. Les décisions de l'administrateur concernant le site web, le logo et la description de votre entreprise ainsi que le contenu des offres s'affichent toujours dans l'espace, car nous ne les envoyons pas par e-mail.",
     "save": "Enregistrer les préférences",
     "saving": "Enregistrement...",
     "savedSuccess": "Vos préférences de notification ont été enregistrées.",
