@@ -24768,7 +24768,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- EX1232. Eksport pracodawcy: odwołania i zgłoszenia treści (#1232, migracja 0992)
+-- EX1232. Eksport pracodawcy: odwołania i zgłoszenia treści (#1232, migracja 0207)
 -- ============================================================================
 \echo '--- EX1232 eksport pracodawcy: odwołania i zgłoszenia ---'
 \set XE1 'e1232000-0000-4000-8000-000000000001'
@@ -24839,8 +24839,8 @@ select pg_temp.assert(
   and jsonb_array_length((:'xexp2')::jsonb -> 'contentReports') = 0
   and position(:'XGROUNDS' in :'xexp2') = 0,
   'EX1232-4 eksport innego pracodawcy bez cudzych odwołań i zgłoszeń');
--- Kontrola ujemna: definicja z 0161 (rollback 0992) gubi obie pozycje.
-\ir ../rollback/0992_employer_export_appeals_reports.down.sql
+-- Kontrola ujemna: definicja z 0161 (rollback 0207) gubi obie pozycje.
+\ir ../rollback/0207_employer_export_appeals_reports.down.sql
 set local role authenticated; set local app.current_uid = :'XE1'; select pg_temp.assert_client_role();
 select public.export_my_employer_data()::text as xexpn \gset
 reset role;

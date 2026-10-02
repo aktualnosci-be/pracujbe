@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0992 (numer tymczasowy — ostateczny nada integrator) — eksport danych pracodawcy (#1232).
+-- 0207 (numer tymczasowy — ostateczny nada integrator) — eksport danych pracodawcy (#1232).
 --
 -- `export_my_employer_data` (0161) pomijał dane, które osoba z kontem pracodawcy sama podała
 -- poza firmą: odwołania od decyzji moderacyjnych (`moderation_appeals.appellant_id`, pole
@@ -12,7 +12,7 @@
 -- Wiadomości z formularza kontaktu (`contact_messages`) — poza zakresem (decyzja otwarta).
 -- Sygnatura, uprawnienia, limit 10 eksportów na dobę i ślad w audycie bez zmian.
 --
--- Rollback: supabase/rollback/0992_employer_export_appeals_reports.down.sql.
+-- Rollback: supabase/rollback/0207_employer_export_appeals_reports.down.sql.
 -- =============================================================================
 
 create or replace function public.export_my_employer_data()

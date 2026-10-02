@@ -1,8 +1,8 @@
 -- =============================================================================
--- Rollback 0992 — eksport danych pracodawcy bez odwołań i zgłoszeń (#1232).
+-- Rollback 0207 — eksport danych pracodawcy bez odwołań i zgłoszeń (#1232).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
--- (supabase/tests/employer-export-0992-rollback.sql wykonuje go w transakcji i cofa).
+-- (supabase/tests/employer-export-0207-rollback.sql wykonuje go w transakcji i cofa).
 --
 -- Przywraca `export_my_employer_data` z 0161 (treść 1:1). Danych nie zmienia.
 -- =============================================================================

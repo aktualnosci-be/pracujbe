@@ -1,7 +1,7 @@
 -- =============================================================================
--- EX1232-R — rollback migracji 0992 (eksport pracodawcy: odwołania i zgłoszenia, #1232).
+-- EX1232-R — rollback migracji 0207 (eksport pracodawcy: odwołania i zgłoszenia, #1232).
 -- Uruchamiany przez scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się
--- w transakcji i jest cofany, więc baza po teście nadal ma stan po 0992.
+-- w transakcji i jest cofany, więc baza po teście nadal ma stan po 0207.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -14,10 +14,10 @@ end $$;
 select pg_temp.assert(
   position('moderationAppeals' in pg_get_functiondef('public.export_my_employer_data()'::regprocedure)) > 0
   and position('contentReports' in pg_get_functiondef('public.export_my_employer_data()'::regprocedure)) > 0,
-  'EX1232-R0 baza w stanie po 0992');
+  'EX1232-R0 baza w stanie po 0207');
 
 begin;
-\ir ../rollback/0992_employer_export_appeals_reports.down.sql
+\ir ../rollback/0207_employer_export_appeals_reports.down.sql
 select pg_temp.assert(
   position('moderationAppeals' in pg_get_functiondef('public.export_my_employer_data()'::regprocedure)) = 0
   and position('contentReports' in pg_get_functiondef('public.export_my_employer_data()'::regprocedure)) = 0
@@ -29,4 +29,4 @@ rollback;
 
 select pg_temp.assert(
   position('contentReports' in pg_get_functiondef('public.export_my_employer_data()'::regprocedure)) > 0,
-  'EX1232-R2 po cofnięciu transakcji baza wraca do stanu po 0992');
+  'EX1232-R2 po cofnięciu transakcji baza wraca do stanu po 0207');

@@ -3091,12 +3091,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   tych zaproszeń usunięte z kolejki; wiersz = ślad zdarzenia. Dowód: `rls.sql` OD981 (kontrola ujemna).
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
-  `account-data`. Odwołania i zgłoszenia w eksporcie (#1232, migracja `0992` — numer
+  `account-data`. Odwołania i zgłoszenia w eksporcie (#1232, migracja `0207` — numer
   tymczasowy): `export_my_employer_data` = 0161 + `moderationAppeals` (kształt jak u kandydata)
   i `contentReports` (zgłoszenia treści złożone przez osobę: numer, rodzaj, kategoria, opis,
   podane dane kontaktowe, stan — bez `target_id`/`target_snapshot` i kodu dostępu); dowód
   `rls.sql` sekcja EX1232 (kontrola ujemna: definicja z 0161), rollback
-  `0992_…down.sql` (`employer-export-0992-rollback.sql`); `contact_messages` poza eksportem
+  `0207_…down.sql` (`employer-export-0207-rollback.sql`); `contact_messages` poza eksportem
   (decyzja otwarta). **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
   samoobsługowe zamknięcie firmy, retencja nieaktywnych kont pracodawców.
   Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w

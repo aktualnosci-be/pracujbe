@@ -216,7 +216,7 @@ akcje audytowe, w których jest aktorem, preferencje, powiadomienia, zgody, dowo
 e-mail, akceptacje dokumentów, e-maile (bez treści), historia wniosków, odwołania od
 decyzji moderacyjnych złożone przez tę osobę (`moderationAppeals`, kształt jak u kandydata) i jej
 zgłoszenia treści (`contentReports`: numer sprawy, rodzaj, kategoria, opis, podane dane
-kontaktowe, stan — bez identyfikatora i migawki zgłoszonej treści; migracja 0992, #1232).
+kontaktowe, stan — bez identyfikatora i migawki zgłoszonej treści; migracja 0207, #1232).
 Wiadomości z formularza kontaktu — poza eksportem (decyzja otwarta). **Bez danych
 kandydatów:** z audytu tylko akcja, typ obiektu i czas — identyfikator wyłącznie dla
 obiektów firmowych (`company`/`job`/`company_member`/`company_invitation`), nigdy
