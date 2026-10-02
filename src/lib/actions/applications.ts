@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import { z } from 'zod';
@@ -152,7 +152,7 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
     const message = databaseErrorMessage(error);
     // RPC rzuca 'UNAUTHENTICATED' tylko przy braku sesji; konto innej roli dostaje PERMISSION_DENIED.
     if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
-    const code = mapPgError(message);
+    const code = reportUnmappedDbError(error, 'applications.applyToJob', mapPgError(message));
     const questionId = SCREENING_REQUIRED_RE.exec(message)?.[1];
     return questionId ? { ok: false, error: code, questionId } : { ok: false, error: code };
   }
@@ -187,7 +187,9 @@ export async function transitionApplication(
     }));
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'applications.transitionApplication', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'applications.transitionApplication' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -258,7 +260,12 @@ export async function bulkTransitionApplications(
     });
     return { ok: true, results };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return {
+        ok: false,
+        error: reportUnmappedDbError(error, 'applications.bulkTransitionApplications', mapPgError(databaseErrorMessage(error))),
+      };
+    }
     captureError(error, { area: 'applications.bulkTransitionApplications' });
     return { ok: false, error: 'INTERNAL' };
   }

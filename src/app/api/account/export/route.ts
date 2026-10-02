@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { env } from '@/lib/env';
-import { captureError } from '@/lib/error-report';
 
 /**
  * Eksport danych konta (#486, prawo dostępu) — plik JSON do pobrania: kandydat
@@ -80,7 +79,7 @@ export async function POST(request: Request): Promise<Response> {
     if (isDatabaseError(error) && (message.includes('PERMISSION_DENIED') || message.includes('UNAUTHENTICATED'))) {
       return failure('unauthorized', 401);
     }
-    captureError(error, { area: 'account.export' });
+    captureActionError(error, 'account.export');
     return failure('unavailable', 503);
   }
 }
