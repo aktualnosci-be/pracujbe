@@ -3,6 +3,7 @@ import { resolve } from 'path';
 import { expect, test } from '@playwright/test';
 
 import { localeNames } from '../../src/i18n/routing';
+import { waitForHydrated } from './fixtures/hydration';
 import { messages, rejectOptionalCookies } from './fixtures/messages';
 
 /**
@@ -48,10 +49,12 @@ for (const { from, to } of LOCALE_SWITCHES) {
     await page.goto(`/${from}/oferty-pracy?${query}#wyniki`);
     await rejectOptionalCookies(page, from);
 
-    await page
+    const switcher = page
       .getByRole('contentinfo')
-      .getByRole('combobox', { name: messages(from).footer.langLabel, exact: true })
-      .click();
+      .getByRole('combobox', { name: messages(from).footer.langLabel, exact: true });
+    // Lista otwiera się dopiero po hydratacji (handler `onClick` z Reacta).
+    await waitForHydrated(switcher);
+    await switcher.click();
     await page.getByRole('option', { name: localeNames[to], exact: true }).click();
 
     await expect(page).toHaveURL(new RegExp(`/${to}/oferty-pracy\\?${query}#wyniki$`));
