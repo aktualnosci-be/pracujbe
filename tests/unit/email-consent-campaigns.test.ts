@@ -228,7 +228,9 @@ describe('ustawienia: zapis z dowodem zgody', () => {
   };
 
   it('RPC set_notification_preferences z językiem strony i wersją pokazanej treści', async () => {
-    resetFakeDb({ id: PROFILE, role: 'employer' }).rpc('set_notification_preferences', null);
+    resetFakeDb({ id: PROFILE, role: 'employer' })
+      .rows('notification-preferences.server-columns', [])
+      .rpc('set_notification_preferences', null);
     const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
     const { emailConsentWordingVersion } = await import('@/lib/email/consent-wording');
     expect(await updateNotificationPreferences({ ...values, locale: 'nl', role: 'employer' })).toEqual({ ok: true });
@@ -252,7 +254,9 @@ describe('ustawienia: zapis z dowodem zgody', () => {
 
   it('kontrola ujemna (#605): rola z formularza jest ignorowana, liczy się rola profilu sesji', async () => {
     // Sesja kandydata, ale formularz podszywa się pod pracodawcę — dowód MUSI użyć roli sesji.
-    resetFakeDb({ id: PROFILE, role: 'candidate' }).rpc('set_notification_preferences', null);
+    resetFakeDb({ id: PROFILE, role: 'candidate' })
+      .rows('notification-preferences.server-columns', [])
+      .rpc('set_notification_preferences', null);
     const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
     const { emailConsentWordingVersion } = await import('@/lib/email/consent-wording');
     expect(
@@ -278,7 +282,9 @@ describe('ustawienia: zapis z dowodem zgody', () => {
     resetFakeDb(null);
     expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     expect(fakeDb.calls).toHaveLength(0);
-    resetFakeDb({ id: PROFILE, role: 'candidate' }).rpc('set_notification_preferences', () => {
+    resetFakeDb({ id: PROFILE, role: 'candidate' })
+      .rows('notification-preferences.server-columns', [])
+      .rpc('set_notification_preferences', () => {
       throw pgError('42501', 'UNAUTHENTICATED');
     });
     expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });

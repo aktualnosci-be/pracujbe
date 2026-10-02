@@ -4177,5 +4177,39 @@
     "remindDue": "Time to follow up",
     "openSource": "Open listing",
     "listLabel": "Application journal entries"
+  },
+  "push": {
+    "savedSearchTitle": "New jobs from your saved search",
+    "savedSearchBody": "New jobs: {count}. See them in your account.",
+    "savedSearchBodyNoCount": "There are new jobs matching your search."
+  },
+  "pushSettings": {
+    "sectionTitle": "Push notifications",
+    "intro": "Notifications on this device about new jobs from your saved searches. We do not send push notifications about anything else.",
+    "inAppNote": "A push notification comes with the notification in your account — if you turn off account notifications, no push notification is sent either.",
+    "unsupported": "This browser does not support push notifications.",
+    "statusOn": "Notifications are on for this device.",
+    "statusOff": "Notifications are off for this device.",
+    "enable": "Turn on for this device",
+    "enabling": "Turning on…",
+    "disable": "Turn off for this device",
+    "disabling": "Turning off…",
+    "denied": "Notifications for this site are blocked in your browser. To turn them on, change the site permissions in your browser settings.",
+    "enabled": "Notifications turned on for this device.",
+    "disabled": "Notifications turned off for this device.",
+    "removed": "Device removed.",
+    "errorGeneric": "The setting could not be saved. Please try again.",
+    "errorDeviceLimit": "You have reached the limit of 10 devices. Remove one from the list below.",
+    "errorDenied": "The browser blocked notifications. You can change this in the site settings.",
+    "errorDismissed": "Permission for notifications was not given. Nothing was turned on.",
+    "devicesTitle": "Devices with notifications",
+    "devicesEmpty": "No devices.",
+    "loadError": "The list of devices could not be loaded.",
+    "deviceUnknown": "Unknown device",
+    "thisDevice": "(this device)",
+    "deviceAdded": "Added: {date}",
+    "deviceLastSent": "Last notification: {date}",
+    "removeDevice": "Remove",
+    "removeDeviceLabel": "Remove device {name}"
   }
 }
