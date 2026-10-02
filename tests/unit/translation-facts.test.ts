@@ -246,3 +246,36 @@ describe('negacja zdanie po zdaniu (#1106)', () => {
     );
   });
 });
+
+describe('negacja w zdaniach z faktami przy innej liczbie zdań (#1106)', () => {
+  const src = 'Wymagamy prawa jazdy C95. Nie wymagamy certyfikatu VCA.';
+
+  it('wierny przekład z podziałem zdań = ok', () => {
+    expect(diff(src, 'pl', 'We require a C95 licence. A VCA certificate is not required. Apply today.', 'en')).toBeNull();
+  });
+
+  it('negacja przeniesiona na inne wymaganie (inna liczba zdań) jest odrzucona', () => {
+    // W polu negacja jest po obu stronach, a liczba zdań się różni — dawniej przechodziło.
+    expect(diff(src, 'pl', 'A C95 licence is not required. We require a VCA certificate. Apply today.', 'en')).toBe(
+      'negation',
+    );
+  });
+
+  it('kontrola ujemna: przekład łączący zdania nie dostaje fałszywego odrzucenia', () => {
+    expect(
+      diff(
+        'Stawka 15 EUR za godzinę. Nie wymagamy doświadczenia. Oferujemy szkolenie.',
+        'pl',
+        'Rate 15 EUR per hour, no experience required. We offer training.',
+        'en',
+      ),
+    ).toBeNull();
+  });
+
+  it('kontrola ujemna: odcisk faktów niejednoznaczny (dwa zdania z tymi samymi faktami) nie jest porównywany', () => {
+    expect(
+      extractFacts('Prawo jazdy C95. Bez C95 nie. Dalej.', 'pl').negationAnchors.filter((a) => a.key.includes('C95')),
+    ).toHaveLength(2);
+    expect(diff('Prawo jazdy C95. Bez C95 nie.', 'pl', 'No C95 licence. C95 needed. Thanks.', 'en')).toBeNull();
+  });
+});

@@ -22,6 +22,7 @@ const RPCS = [
   'purge_guest_application_requests', 'process_saved_search_alerts', 'process_email_campaigns',
   'purge_job_funnel_data', 'purge_stale_message_attachments', 'rate_limit_gc',
   'processed_webhooks_gc',
+  'purge_push_data',
 ];
 const RECRUITMENT_RPCS = ['match_recompute_claim', 'match_recompute_inputs', 'match_recompute_apply'];
 /** Zadania retencji/czyszczenia — muszą działać także w trybie ogłoszeniowym. */

@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
+Tabele w migracjach: 116; z danymi osobowymi: 80; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -20,7 +20,7 @@ Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.match_recompute_queue`, `public.matches`, `public.saved_search_alert_pauses`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.company_message_template_variants`, `public.company_message_templates`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_auto_queue`, `public.company_vies_checks`, `public.employer_profiles`, `public.job_content_reviews`, `public.job_duplications`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
-| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_pending_events`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alert_pauses`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
+| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, Web Push alertów zapisanych wyszukiwań (rejestr urządzeń i kolejka wysyłek, 0219), preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_pending_events`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.push_deliveries`, `public.push_subscriptions`, `public.saved_search_alert_pauses`, `public.saved_search_alerts` | Railway, Resend, EmailLabs, Usługi push przeglądarek (FCM, Mozilla, Windows, Apple) | push_deliveries usuwane po 7 dniach, urządzenia wycofane po 30 dniach (purge_push_data, /api/maintenance); email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach (acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia. |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
@@ -134,10 +134,10 @@ Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
 - **Cel w portalu:** Funkcje AI za flagami (decyzja właściciela 2026-09-26: wyłącznie model OpenAI „GPT-6 Luna”): import ogłoszenia o pracę do szkicu oferty, asystent redagowania treści oferty, import CV do propozycji pól profilu kandydata i tłumaczenie pól tekstowych ofert/profili (#31/#32).
 - **Kategorie danych:** Import ogłoszenia: tekst strony po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła; Import ogłoszenia: albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia; Asystent treści: tytuł, opis, obowiązki i wymagania oferty napisane przez pracodawcę (e-maile, telefony i identyfikatory usunięte przed wysyłką); Import CV: tekst CV kandydata po lokalnej minimalizacji (bez pliku, nazwy pliku, kontaktów, referencji i danych szczególnych); Tłumaczenia: pola tekstowe oferty albo profilu w języku źródła (treść jak w portalu, bez maskowania kontaktów — #33/#34)
 - **Osoby:** Osoby wymienione w importowanym ogłoszeniu, Pracodawca wykonujący import lub redakcję (pośrednio), Kandydat importujący własne CV
-- **Aktywacja:** OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED, AI_TRANSLATION_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.
-- **Kod:** `src/lib/ai/openai.ts`, `src/lib/ai/model-config.ts`, `src/lib/ai-import/extract.ts`, `src/lib/ai-import/minimize.ts`, `src/lib/ai-assist/assist.ts`, `src/lib/translation/openai-provider.ts`, `src/lib/ai-assist/guard.ts`, `src/lib/cv-import/extract.ts`, `src/lib/cv-import/minimize.ts`, `docs/AI_JOB_IMPORT.md`, `docs/AI_JOB_ASSIST.md`, `docs/AI_CV_IMPORT.md`
+- **Aktywacja:** OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_JOB_EXPLAIN_ENABLED, AI_CV_IMPORT_ENABLED, AI_TRANSLATION_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.
+- **Kod:** `src/lib/ai/openai.ts`, `src/lib/ai/model-config.ts`, `src/lib/ai-import/extract.ts`, `src/lib/ai-import/minimize.ts`, `src/lib/ai-assist/assist.ts`, `src/lib/translation/openai-provider.ts`, `src/lib/ai-assist/guard.ts`, `src/lib/ai-explain/explain.ts`, `src/lib/ai-explain/sources.ts`, `src/lib/cv-import/extract.ts`, `src/lib/cv-import/minimize.ts`, `docs/AI_JOB_IMPORT.md`, `docs/AI_JOB_ASSIST.md`, `docs/AI_CV_IMPORT.md`
 - **Uwaga:** Wszystkie wywołania idą przez jednego klienta (src/lib/ai/openai.ts): structured output (strict), bez narzędzi, store: false, bez logowania treści.
-- **Uwaga:** Import ogłoszeń i asystent nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.
+- **Uwaga:** Import ogłoszeń, asystent i „Wyjaśnij ofertę” (#773) nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.
 - **Uwaga:** Tekst ogłoszenia: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.
 - **Uwaga:** Kod nie ustawia regionu przetwarzania (data residency) ani projektu z ograniczoną retencją — do decyzji właściciela.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
@@ -170,6 +170,21 @@ Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
 - **Aktywacja:** Akcja administratora w /admin/firmy/[id].
 - **Kod:** `src/lib/vies/client.ts`, `src/lib/vies/belgian-vat.ts`
 - **Uwaga:** Zapisywane są tylko wyniki rozstrzygające (company_vies_checks).
+- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
+- **Region przetwarzania:** DO UZUPEŁNIENIA
+- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
+- **Umowa (DPA):** DO UZUPEŁNIENIA
+- **Retencja u dostawcy:** DO UZUPEŁNIENIA
+
+### Usługi push przeglądarek (FCM, Mozilla, Windows, Apple) (`browser-push`)
+
+- **Cel w portalu:** Dostarczenie powiadomienia push o nowych ofertach z zapisanego wyszukiwania na urządzenie kandydata.
+- **Kategorie danych:** Adres subskrypcji urządzenia (endpoint wydany przez usługę push przeglądarki); Zaszyfrowana treść powiadomienia (tytuł, ogólna treść z liczbą ofert, ścieżka panelu) — usługa widzi tylko szyfrogram
+- **Osoby:** Kandydaci
+- **Aktywacja:** WEB_PUSH_ENABLED + klucze VAPID (WEB_PUSH_VAPID_*) oraz urządzenie zarejestrowane przez kandydata po zgodzie przeglądarki (domyślnie wyłączone).
+- **Kod:** `src/lib/push/send.ts`, `src/lib/push/encrypt.ts`, `src/lib/push/endpoint.ts`, `src/lib/push/worker.ts`
+- **Uwaga:** Tylko alerty zapisanych wyszukiwań (push_notification_allowed, 0219); bez nazwy wyszukiwania, filtrów, tytułów ofert i danych osobowych w treści.
+- **Uwaga:** Endpoint tylko z listy dozwolonych usług (push_endpoint_allowed); 404/410 unieważnia urządzenie.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -1100,6 +1115,43 @@ Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
 | `account_locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0002_core_tables.sql` |
 | `signup_locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0002_core_tables.sql` |
 | `last_seen_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0002_core_tables.sql` |
+
+### `public.push_deliveries`
+
+- **Migracja:** `supabase/migrations/0219_web_push_subscriptions.sql`
+- **Czynności:** E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Kolejka wysyłek push (0219): bez treści powiadomienia; usuwana po 7 dniach.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `subscription_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `notification_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `status` | nie dotyczy: Stan wysyłki push. | — |
+| `attempts` | nie dotyczy: Liczba prób. | — |
+| `next_attempt_at` | nie dotyczy: Termin kolejnej próby. | — |
+| `lease_until` | nie dotyczy: Dzierżawa workera. | — |
+| `last_error` | nie dotyczy: Stały kod ostatniego błędu (bez treści odpowiedzi dostawcy). | — |
+| `sent_at` | nie dotyczy: Czas wysłania. | — |
+
+### `public.push_subscriptions`
+
+- **Migracja:** `supabase/migrations/0219_web_push_subscriptions.sql`
+- **Czynności:** E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Urządzenia Web Push kandydata (0219, #724): zgrubna etykieta (przeglądarka · system), bez pełnego User-Agent; usunięcie konta = kaskada.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `endpoint` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `p256dh` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `auth_secret` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `device_label` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `last_success_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `failure_count` | nie dotyczy: Liczba kolejnych nieudanych wysyłek na urządzenie. | — |
+| `revoked_at` | nie dotyczy: Czas unieważnienia urządzenia. | — |
+| `revoked_reason` | nie dotyczy: Powód unieważnienia (user / gone / failed). | — |
 
 ### `public.rate_limits`
 

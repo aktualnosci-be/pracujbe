@@ -65,6 +65,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'match_recompute_claim',
     'purge_guest_application_requests',
     'process_saved_search_alerts',
+    // #724: Web Push po alertach (worker bez flagi nie woła bazy), potem retencja push.
+    'purge_push_data',
     'process_email_campaigns',
     'run_retention_purge',
     'purge_job_funnel_data',
@@ -124,6 +126,9 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       // P1-03: pusta kolejka dopasowań — same liczniki.
       matches: { subjects: 0, failed: 0, upserted: 0, deleted: 0, skipped: 0 },
       savedSearchDigests: 0,
+      // #724: bez WEB_PUSH_ENABLED worker push nie pobiera kolejki.
+      push: { skipped: 'disabled' },
+      purgedPushData: 0,
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
       retention: { mode: 'off', batches: 0 },

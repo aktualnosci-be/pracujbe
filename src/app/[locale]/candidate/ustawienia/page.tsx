@@ -6,6 +6,8 @@ import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
 import { loadCandidateFiles } from '@/lib/data/candidate-files';
+import { loadPushDevices } from '@/lib/data/push-devices';
+import { webPushPublicKey } from '@/lib/push/config';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
 import { AgeStatusProvider } from '@/components/settings/age-status-context';
@@ -15,6 +17,7 @@ import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettin
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
 import { ProfileVisibilitySettings } from '@/components/settings/ProfileVisibilitySettings';
+import { PushNotificationsSettings } from '@/components/settings/PushNotificationsSettings';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
@@ -34,6 +37,9 @@ import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
  * #1226: w trybie ogłoszeniowym profil zawodowy (z listą CV) jest 404 (#1142), więc CV wgrane
  * wcześniej kandydat pobiera albo usuwa tutaj — sama lista (`CvUpload` bez `allowUpload`),
  * bez wgrywania nowych plików (#1138). W trybie RECRUITMENT lista zostaje w profilu.
+ *
+ * #724: sekcja powiadomień push (alerty zapisanych wyszukiwań) tylko przy włączonej funkcji
+ * (`WEB_PUSH_ENABLED` + klucze VAPID) — wyłączona = bez sekcji i bez odczytu urządzeń.
  */
 
 export const dynamic = 'force-dynamic';
@@ -69,12 +75,14 @@ export default async function CandidateSettingsPage({
   const recruitment = isRecruitmentEnabled();
   const visibilityEnabled = isRecruitmentEnabled('candidateSearch');
   const cvListInSettings = !isRecruitmentEnabled('cvAccess');
-  const [load, blocks, visibility, age, files] = await Promise.all([
+  const pushKey = webPushPublicKey();
+  const [load, blocks, visibility, age, files, pushDevices] = await Promise.all([
     loadNotificationPreferences(),
     loadMyCompanyBlocks(),
     visibilityEnabled ? loadProfileVisibility() : Promise.resolve(null),
     loadMyAgeAttestation(),
     cvListInSettings ? loadCandidateFiles() : Promise.resolve(null),
+    pushKey ? loadPushDevices() : Promise.resolve(null),
   ]);
   // Jeden stan wieku dla sekcji „Wiek” i widoczności (#828): nieznany = bez blokady w UI.
   const initialAdult = age.status === 'ready' && age.attestedMinAge !== null ? age.isAdult : undefined;
@@ -90,6 +98,14 @@ export default async function CandidateSettingsPage({
           <NotificationPreferencesLoadError />
         )}
       </section>
+
+      {pushKey && pushDevices ? (
+        <PushNotificationsSettings
+          vapidPublicKey={pushKey}
+          devices={pushDevices.status === 'ready' ? pushDevices.devices : []}
+          loadFailed={pushDevices.status === 'error'}
+        />
+      ) : null}
 
       <EmailLocaleSection locale={locale} />
 

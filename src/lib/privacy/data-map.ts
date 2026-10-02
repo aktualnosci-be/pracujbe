@@ -156,9 +156,9 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'email-notifications': {
     name: 'E-maile i powiadomienia',
-    inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
-    processors: [...HOSTING, 'resend', 'emaillabs'],
-    retentionInCode: 'email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md).',
+    inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, Web Push alertów zapisanych wyszukiwań (rejestr urządzeń i kolejka wysyłek, 0219), preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
+    processors: [...HOSTING, 'resend', 'emaillabs', 'browser-push'],
+    retentionInCode: 'push_deliveries usuwane po 7 dniach, urządzenia wycofane po 30 dniach (purge_push_data, /api/maintenance); email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md).',
   },
   consents: {
     name: 'Zgody cookies i akceptacja dokumentów',
@@ -418,6 +418,39 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       push_enabled: 'preferences',
       in_app_enabled: 'preferences',
     },
+  },
+
+  'public.push_subscriptions': {
+    activities: ['email-notifications'],
+    subjects: ['candidate'],
+    columns: {
+      profile_id: 'reference',
+      endpoint: 'technical',
+      p256dh: 'technical',
+      auth_secret: 'credentials',
+      device_label: 'technical',
+      last_success_at: 'technical',
+    },
+    notPersonal: {
+      failure_count: 'Liczba kolejnych nieudanych wysyłek na urządzenie.',
+      revoked_at: 'Czas unieważnienia urządzenia.',
+      revoked_reason: 'Powód unieważnienia (user / gone / failed).',
+    },
+    note: 'Urządzenia Web Push kandydata (0219, #724): zgrubna etykieta (przeglądarka · system), bez pełnego User-Agent; usunięcie konta = kaskada.',
+  },
+  'public.push_deliveries': {
+    activities: ['email-notifications'],
+    subjects: ['candidate'],
+    columns: { subscription_id: 'reference', notification_id: 'reference' },
+    notPersonal: {
+      status: 'Stan wysyłki push.',
+      attempts: 'Liczba prób.',
+      next_attempt_at: 'Termin kolejnej próby.',
+      lease_until: 'Dzierżawa workera.',
+      last_error: 'Stały kod ostatniego błędu (bez treści odpowiedzi dostawcy).',
+      sent_at: 'Czas wysłania.',
+    },
+    note: 'Kolejka wysyłek push (0219): bez treści powiadomienia; usuwana po 7 dniach.',
   },
 
   // --- Pliki ------------------------------------------------------------------------------

@@ -6986,12 +6986,14 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
--- Encje TR31 to identyfikatory bez wiersza w jobs: od 0133 aktywne oferty z fixture'ów same
--- trafiają do kolejki (triggery), więc sekcja rdzenia używa własnych encji i wygasza ich zadania.
+-- Encje TR31 to SZKICE ofert (od 0223 źródło wymaga istniejącej encji, #754): szkic nie jest
+-- publiczny, więc triggery 0146 nie kolejkują go same — sekcja rdzenia steruje kolejką wprost.
 \set TRJA 'f0310000-0000-0000-0000-0000000000a1'
 \set TRJB 'f0310000-0000-0000-0000-0000000000b1'
 reset role; reset app.current_uid;
 select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJA', :'COMPA', :'EMPA', 'draft-tr31-a', 'Magazynier TR31', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 \set TRF1 '{"title":"Magazynier  ","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
 \set TRF1WS '{"title":"  Magazynier","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.  ","requirements.0":"Certyfikat VCA","empty":"   "}'
 \set TRF2 '{"title":"Magazynier (zmiana nocna)","description":"Praca w magazynie od 22:00, stawka 17,00 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
@@ -7207,6 +7209,8 @@ reset role;
 -- Ten sam scenariusz co TR31-7 na podmienionej funkcji w cofanej transakcji — asercja z TR31-7d
 -- byłaby czerwona, więc to kontrola rewizji (a nie przypadek) chroni przekład.
 begin;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJB', :'COMPA', :'EMPA', 'draft-tr31-b', 'Magazynier TR31 B', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 create or replace function public.complete_translation_job(
   p_job_id uuid, p_lease_id uuid, p_fields jsonb, p_model text default null,
   p_input_tokens integer default 0, p_output_tokens integer default 0
@@ -7279,6 +7283,8 @@ select pg_temp.assert((select status = 'retry' from public.translation_jobs wher
   'TR31-13Nb kontrola ujemna cofnięta');
 drop table tr13_log;
 select public.deactivate_translation_source('job', :'JOBB', true) >= 0 as tr13_purged \gset
+reset role;
+delete from public.jobs where id = :'TRJA';
 
 -- ============================================================================
 -- SR497. Kontrola treści pytań screeningowych przed publikacją (0103, #497): detektor w bazie
@@ -12851,7 +12857,7 @@ reset role; drop table tr33_claim;
 -- TR33-6: korekta ręczna (fr) przetrwa kolejną edycję — AI jej nie nadpisze (wynik = proposal).
 set role service_role;
 select public.save_manual_translation('job', :'TRJ1', 'fr',
-  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'EMPA') as tr33_manual \gset
+  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'ADMIN') as tr33_manual \gset
 reset role;
 update public.job_translations set title = 'Magazijnmedewerker (nacht)' where job_id = :'TRJ1' and locale = 'nl';
 select id as tr33_rev3, fields::text as tr33_f3 from public.translation_source_revisions
@@ -12863,7 +12869,7 @@ set role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tr33_fr3', :'tr33_fr3_lease', :'tr33_f3'::jsonb) = 'proposal',
   'TR33-6 wynik AI przy korekcie ręcznej = proposal');
 reset role;
-select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'EMPA'
+select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'ADMIN'
   from public.translation_documents where entity_id = :'TRJ1' and locale = 'fr'),
   'TR33-6b korekta ręczna nietknięta po edycji oferty');
 drop table tr33_claim;
@@ -13052,6 +13058,9 @@ rollback;
 
 -- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
 -- przy tej samej treści = nowa rewizja; bez nazw (5/6 argumentów) jak w 0145.
+-- TPE1 = szkic (od 0223 źródło wymaga istniejącej encji, #754).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TPE1', :'TPCO', 'draft-tp740-e1', 'Magazynier', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl');
 set role service_role;
 select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
     'tr-v1', 0, array[' Beta ', 'Alfa', 'Alfa', '', null]))->>'status') = 'created', 'TP740-3 rewizja z nazwami');
@@ -13093,6 +13102,7 @@ select pg_temp.assert(
   'TP740-6 RPC tylko dla serwera, stara sygnatura usunięta, pipeline v2');
 
 select count(public.deactivate_translation_source('job', :'TPE1'::uuid, true));
+delete from public.jobs where id = :'TPE1';
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
@@ -20564,12 +20574,15 @@ select pg_temp.assert(exists (select 1 from public.candidate_skills where candid
   'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
 
 \echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0176, #1152, #1153) ---'
--- Start i koniec w RECRUITMENT. Encje kolejki = identyfikatory bez wierszy w jobs (jak TR31).
-\set CLAIP1 'c1a10176-0000-0000-0000-0000000000c1'
+-- Start i koniec w RECRUITMENT. Encje kolejki (od 0223 muszą istnieć, #754): CLAIP1 = profil
+-- kandydata CANDA, CLAIJ1 = szkic oferty; CLAIP2 bez wiersza (odrzuca go strażnik trybu).
 \set CLAIP2 'c1a10176-0000-0000-0000-0000000000c2'
 \set CLAIJ1 'c1a10176-0000-0000-0000-0000000000d1'
 \set CLAIF '{"title":"Magazynier","description":"Szukam pracy na zmianie nocnej."}'
 reset role; reset app.current_uid;
+select id as "CLAIP1" from public.candidate_profiles where profile_id = :'CANDA' \gset
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'CLAIJ1', :'COMPA', 'draft-claib-j1', 'Magazynier CLAIB', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 select set_config('pracujbe.allow_recruitment_write', '', false);
 
 -- Stan sprzed trybu: w RECRUITMENT profil kandydata trafia do kolejki (zadania nl/fr/en).
@@ -20650,6 +20663,7 @@ select count(public.deactivate_translation_source(entity_type, entity_id, false)
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
+delete from public.jobs where id = :'CLAIJ1';
 
 \echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0185, #1033/#1034/#1089/#1091/#1090) ---'
 -- Sekcja niezależna od trybu portalu (rekordy procesu wstawia superuser ze znacznikiem seedu).
@@ -26815,6 +26829,512 @@ select pg_temp.assert((select name from public.companies where id = :'CCC') like
   'CC1244-N2 kontrola ujemna: bez CHECK nazwa firmy przyjmuje CR/LF');
 rollback to savepoint cc_neg;
 rollback;
+rollback;
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- =============================================================================
+-- TQ952 (0223 — numer tymczasowy; #644, #754, #755): integralność kolejki tłumaczeń.
+--   #644: dzierżawa ważna tylko do lease_expires_at (complete/fail/defer po terminie =
+--         stale_lease, nawet bez ponownego przejęcia);
+--   #754: źródło tylko dla istniejącej, nieusuniętej encji właściwego typu; ukrycie źródła
+--         encji, której nie ma, usuwa je;
+--   #755: korekta ręczna wymaga autora z uprawnieniem do encji.
+-- Cała sekcja w cofanej transakcji; kontrole ujemne na definicjach sprzed 0223 (\ir rollbacku).
+-- =============================================================================
+\set TQJ  'f0223000-0000-0000-0000-0000000000a1'
+\set TQJD 'f0223000-0000-0000-0000-0000000000a2'
+\set TQX  'f0223000-0000-0000-0000-0000000000ff'
+\set TQF  '{"title":"Magazynier","description":"Praca w magazynie od 8:00."}'
+\set TQOUT '{"title":"Warehouse worker","description":"Warehouse work from 8:00."}'
+reset role; reset app.current_uid;
+begin;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'TQJ', :'COMPA', :'EMPA', 'draft-tq952', 'Magazynier TQ', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
+  (:'TQJD', :'COMPA', :'EMPA', 'draft-tq952-d', 'Magazynier TQ D', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+update public.jobs set deleted_at = now() where id = :'TQJD';
+select id as tq_cpb from public.candidate_profiles where profile_id = :'CANDB' \gset
+
+-- TQ952-1 (#754): nieistniejąca, usunięta albo pomylona encja = NOT_FOUND, bez żadnego wiersza.
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQX', :'TQF'),
+  'NOT_FOUND', 'TQ952-1 nieistniejąca oferta odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('candidate_profile', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQX', :'TQF'),
+  'NOT_FOUND', 'TQ952-1b nieistniejący profil kandydata odrzucony');
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQJD', :'TQF'),
+  'NOT_FOUND', 'TQ952-1c usunięta oferta odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('candidate_profile', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQJ', :'TQF'),
+  'NOT_FOUND', 'TQ952-1d oferta podana jako profil kandydata odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'tq_cpb', :'TQF'),
+  'NOT_FOUND', 'TQ952-1e profil kandydata podany jako oferta odrzucony');
+select pg_temp.expect_error($q$select public.deactivate_translation_source('offer', gen_random_uuid(), false)$q$,
+  'VALIDATION_FAILED: entity_type', 'TQ952-1f deaktywacja nieznanego typu odrzucona');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id in (:'TQX', :'TQJD', :'tq_cpb'))
+  and not exists (select 1 from public.translation_sources where entity_type = 'candidate_profile' and entity_id = :'TQJ'),
+  'TQ952-1g odrzucone zapisy nie zostawiają głowy, rewizji ani zadań');
+set local role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TQJ', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'jobsQueued')::int = 3,
+  'TQ952-1h istniejąca oferta: źródło i trzy zadania');
+select pg_temp.assert(((public.record_translation_source('candidate_profile', :'tq_cpb', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'TQ952-1i istniejący profil kandydata: źródło');
+reset role;
+
+-- TQ952-2 (#644): dzierżawa po terminie bez ponownego przejęcia — stary worker nie zapisze wyniku.
+create temp table tq_claim on commit drop as select * from public.claim_translation_jobs(100, 300) where entity_id = :'TQJ';
+grant select on tq_claim to service_role;
+select job_id as tq_nl, lease_id as tq_nl_lease from tq_claim where target_locale = 'nl' \gset
+select job_id as tq_fr, lease_id as tq_fr_lease from tq_claim where target_locale = 'fr' \gset
+select job_id as tq_en, lease_id as tq_en_lease from tq_claim where target_locale = 'en' \gset
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id in (:'tq_nl', :'tq_fr', :'tq_en');
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tq_nl', :'tq_nl_lease', :'TQOUT'::jsonb) = 'stale_lease',
+  'TQ952-2 wynik po terminie dzierżawy (bez reclaimu) = stale_lease');
+select pg_temp.assert(public.fail_translation_job(:'tq_fr', :'tq_fr_lease', 'timeout', true) = 'stale_lease',
+  'TQ952-2b błąd po terminie dzierżawy = stale_lease');
+select pg_temp.assert(public.defer_translation_job(:'tq_en', :'tq_en_lease', 'budget_exceeded', 60) = 'stale_lease',
+  'TQ952-2c odroczenie po terminie dzierżawy = stale_lease');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TQJ')
+  and (select bool_and(status = 'leased' and attempts = 1) from public.translation_jobs where id in (:'tq_nl', :'tq_fr', :'tq_en')),
+  'TQ952-2d nic nie opublikowano, zadania czekają na ponowne przejęcie');
+create temp table tq_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300) where entity_id = :'TQJ';
+select lease_id as tq_nl_lease2, attempt as tq_nl_att from tq_claim2 where job_id = :'tq_nl' \gset
+select lease_id as tq_fr_lease2 from tq_claim2 where job_id = :'tq_fr' \gset
+set local role service_role;
+select pg_temp.assert(:tq_nl_att = 2 and public.complete_translation_job(:'tq_nl', :'tq_nl_lease', :'TQOUT'::jsonb) = 'stale_lease'
+  and public.complete_translation_job(:'tq_nl', :'tq_nl_lease2', :'TQOUT'::jsonb) = 'applied',
+  'TQ952-2e po reclaimie zapisuje tylko bieżąca dzierżawa');
+reset role;
+
+-- TQ952-3 (#755): korekta ręczna wymaga autora z uprawnieniem do encji.
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, null)$q$, :'TQJ', :'TQOUT'),
+  'VALIDATION_FAILED: author', 'TQ952-3 korekta bez autora odrzucona');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'TQX'),
+  'PERMISSION_DENIED', 'TQ952-3b nieistniejący autor odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'EMPB'),
+  'PERMISSION_DENIED', 'TQ952-3c pracownik innej firmy odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'CANDA'),
+  'PERMISSION_DENIED', 'TQ952-3d kandydat nie poprawia oferty');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('candidate_profile', %L, 'fr', %L::jsonb, %L)$q$, :'tq_cpb', :'TQOUT', :'CANDA'),
+  'PERMISSION_DENIED', 'TQ952-3e cudzy profil kandydata odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQX', :'TQOUT', :'ADMIN'),
+  'NOT_FOUND', 'TQ952-3f korekta nieistniejącej encji odrzucona');
+select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'fr', :'TQOUT'::jsonb, :'EMPA') = 1
+  and public.save_manual_translation('job', :'TQJ', 'fr', :'TQOUT'::jsonb, :'ADMIN') = 2
+  and public.save_manual_translation('candidate_profile', :'tq_cpb', 'fr', :'TQOUT'::jsonb, :'CANDB') = 1,
+  'TQ952-3g owner firmy, administrator i właściciel profilu zapisują korektę');
+reset role;
+update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'EMPA'),
+  'PERMISSION_DENIED', 'TQ952-3h członkostwo nieaktywne = brak uprawnienia');
+reset role;
+update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
+select pg_temp.assert((select origin = 'manual' and manual_author = :'ADMIN' and manual_version = 2
+  from public.translation_documents where entity_id = :'TQJ' and locale = 'fr'), 'TQ952-3i autor ostatniej korekty zapisany');
+
+-- TQ952-4 (#754): ukrycie źródła encji, której już nie ma (soft-delete profilu), usuwa je.
+update public.candidate_profiles set deleted_at = now() where id = :'tq_cpb';
+set local role service_role;
+select public.deactivate_translation_source('candidate_profile', :'tq_cpb', false) as tq_deact \gset
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'tq_cpb')
+  and not exists (select 1 from public.translation_documents where entity_id = :'tq_cpb'),
+  'TQ952-4 źródło usuniętej encji usunięte (purge), nie tylko ukryte');
+
+-- TQ952-N (kontrole ujemne): definicje sprzed 0223.
+\ir ../rollback/0223_translation_queue_integrity.down.sql
+select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is null, 'TQ952-N0 rollback usuwa helper');
+set local role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TQX', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'TQ952-N1 kontrola ujemna: bez 0223 źródło nieistniejącej oferty powstaje');
+select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'nl', :'TQOUT'::jsonb, null) = 1,
+  'TQ952-N2 kontrola ujemna: bez 0223 korekta bez autora przechodzi');
+reset role;
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id = :'tq_fr';
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tq_fr', :'tq_fr_lease2', :'TQOUT'::jsonb) in ('applied', 'proposal'),
+  'TQ952-N3 kontrola ujemna: bez 0223 wynik po terminie dzierżawy jest zapisywany');
+reset role;
+rollback;
+select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is not null
+  and not exists (select 1 from public.jobs where id in (:'TQJ', :'TQJD'))
+  and not exists (select 1 from public.translation_sources where entity_id in (:'TQJ', :'TQX')),
+  'TQ952-R sekcja cofnięta, funkcje 0223 na miejscu');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0221)
+-- ============================================================================
+\echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'
+begin;
+reset role; reset app.current_uid;
+insert into public.notification_preferences (profile_id, in_app_enabled) values (:'EMPA', false)
+  on conflict (profile_id) do update set in_app_enabled = false;
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-links', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-desc', 'company', :'COMPA', '{"kind":"company_description","status":"approved"}'),
+  (:'EMPA', 'system', 'nt1120-content', 'company', :'COMPA', '{"kind":"job_content_review","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-status', 'company', :'COMPA', '{"kind":"company_status","status":"verified"}'),
+  (:'EMPA', 'system', 'nt1120-nokind', 'company', :'COMPA', null);
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-links', 'nt1120-desc', 'nt1120-content')) = 3,
+  'NT1120-1 decyzje bez e-maila (linki, opis, treść oferty) trafiają do panelu mimo opt-outu');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-status', 'nt1120-nokind')) = 0,
+  'NT1120-2 pozostałe powiadomienia nadal respektują in_app_enabled=false');
+-- Kind spoza listy w innym typie nie omija preferencji.
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'job_match', 'nt1120-type', 'company', :'COMPA', '{"kind":"company_links"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-type') = 0,
+  'NT1120-3 wyjątek tylko dla typu system');
+select pg_temp.assert(not public.notification_inapp_required('system', null)
+  and not public.notification_inapp_required('system', '{"kind":"company_status"}')
+  and public.notification_inapp_required('system', '{"kind":"company_links"}'),
+  'NT1120-4 lista wiadomości serwisowych');
+-- Preferencja włączona: wszystko jak dotąd.
+update public.notification_preferences set in_app_enabled = true where profile_id = :'EMPA';
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-on', 'company', :'COMPA', '{"kind":"company_status"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-on') = 1,
+  'NT1120-5 in_app_enabled=true → powiadomienie utworzone');
+-- Kontrola ujemna: filtr z 0035 ukrywa decyzję bez e-maila.
+update public.notification_preferences set in_app_enabled = false where profile_id = :'EMPA';
+\ir ../rollback/0221_notification_inapp_service_messages.down.sql
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-neg', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-neg') = 0,
+  'NT1120-N kontrola ujemna: bez 0221 decyzja o linkach firmy znika przy opt-oucie');
+rollback;
+reset role; reset app.current_uid;
+
+-- AIX773. „Wyjaśnij ofertę” (#773, 0220): funkcja `job_offer_explain` w budżecie AI —
+--         rezerwacja i rozliczenie działają, limit wspólny z innymi funkcjami, klient bez
+--         dostępu, CHECK rejestru zna funkcję. Kontrole ujemne: nazwa spoza listy odrzucona
+--         (RPC i CHECK); rollback 0220 = odmowa (supabase/tests/ai-job-explain-rollback.sql).
+--         Transakcja cofana — rejestr bez wierszy tej funkcji (rollback 0176/0220 przywraca CHECK).
+-- ============================================================================
+reset role; reset app.current_uid;
+begin;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIX773-1 rezerwacja tylko dla service_role');
+-- Limit wspólny: wydatki innych funkcji z wcześniejszych sekcji się liczą — limity = wydatek + 1000.
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(public.ai_budget_day(), public.ai_budget_day()) + 1000
+ where period = 'day';
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(date_trunc('month', public.ai_budget_day())::date, public.ai_budget_day()) + 1000
+ where period = 'month';
+set local role service_role;
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 999) as aix_r1 \gset
+select pg_temp.assert((select feature = 'job_offer_explain' and model = 'gpt-6-luna' and status = 'reserved'
+                         from public.ai_usage_ledger where id = :'aix_r1'),
+  'AIX773-2 rezerwacja funkcji job_offer_explain zapisana w rejestrze');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''gpt-6-luna'', 2)',
+  'AI_BUDGET_EXCEEDED', 'AIX773-3 otwarta rezerwacja wyjaśnienia liczy się do wspólnego limitu');
+select pg_temp.assert(public.ai_budget_settle(:'aix_r1', 'ok', 900, 300, 10),
+  'AIX773-4 rozliczenie wyjaśnienia rzeczywistym kosztem');
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'gpt-6-luna', 2) is not null,
+  'AIX773-4b po rozliczeniu limit znów dostępny');
+-- Kontrola ujemna: allow-lista nie przepuszcza dowolnej nazwy (literówka funkcji).
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_offer_explainer'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIX773-5 funkcja spoza listy odrzucona');
+reset role;
+select pg_temp.expect_error(
+  $$insert into public.ai_usage_ledger (feature, model, reserved_micro_usd, usage_day)
+    values ('job_offer_explainer', 'gpt-6-luna', 1, current_date)$$,
+  'ai_usage_ledger_feature', 'AIX773-6 CHECK rejestru odrzuca nazwę spoza listy');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- AIS711. Wyszukiwanie opisem (#711, 0222): funkcja AI `job_search_filters` w globalnym budżecie.
+--   Rezerwacja dla nowej funkcji działa (service_role), klient nadal bez dostępu, rejestr
+--   przyjmuje identyfikator. Kontrola ujemna: lista funkcji z 0176 (rollback 0222) odrzuca
+--   rezerwację — budżet nie dałby się wywołać, więc wyszukiwanie opisem nie wołałoby modelu.
+-- ============================================================================
+\echo '--- AIS711 budżet AI: wyszukiwanie opisem ---'
+reset role; reset app.current_uid;
+begin;
+set local role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_search_filters', 'gpt-6-luna', 1500) as ais_r1 \gset
+select pg_temp.assert(
+  (select feature = 'job_search_filters' and reserved_micro_usd = 1500 from public.ai_usage_ledger where id = :'ais_r1'),
+  'AIS711-1 rezerwacja dla job_search_filters zapisana w rejestrze');
+select pg_temp.assert(public.ai_budget_settle(:'ais_r1', 'ok', 900, 120, 150),
+  'AIS711-2 rozliczenie rezerwacji wyszukiwania opisem');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_unknown'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-3 nieznana funkcja nadal odrzucona');
+reset role;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIS711-4 klient nie rezerwuje budżetu (EXECUTE tylko service_role)');
+set local role service_role;
+-- AIS711-5: wcześniejsza funkcja tej listy (`job_offer_explain`, #773) zostaje w budżecie po 0222.
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_r5 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_r5'),
+  'AIS711-5 0222 nie usuwa job_offer_explain z listy funkcji budżetu');
+reset role;
+-- Kontrola ujemna: definicje sprzed 0222 (0176 + job_offer_explain).
+\ir ../rollback/0222_ai_budget_job_search_filters.down.sql
+set local role service_role;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_filters'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-N kontrola ujemna: lista sprzed 0222 odrzuca wyszukiwanie opisem');
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_n2 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_n2'),
+  'AIS711-N2 rollback 0222 zostawia job_offer_explain (#773) w liście funkcji');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- WP724. Web Push alertów zapisanych wyszukiwań (0219, #724)
+-- Rejestr urządzeń kandydata (RPC-only, odczyt własny), lista dozwolonych usług push (bez
+-- dowolnych adresów — SSRF), kolejka tylko dla `job_match`/`saved_search`, dzierżawa, 404/410
+-- unieważnia urządzenie, wycofanie wygasza kolejkę, przejęcie urządzenia przez inne konto,
+-- limit urządzeń, wygaśnięcie po 24 h, wyłączony alert, retencja.
+-- Kontrole ujemne: bramka typu powiadomienia zdjęta → propozycja/wiadomość trafia do kolejki;
+-- trigger zdjęty → alert bez wysyłki.
+-- ============================================================================
+\echo '--- WP724 Web Push ---'
+reset role; reset app.current_uid;
+\set WPCA 'd7240000-0000-0000-0000-000000000001'
+\set WPCB 'd7240000-0000-0000-0000-000000000002'
+\set WPEM 'd7240000-0000-0000-0000-000000000011'
+\set WPSS 'd7240000-0000-0000-0000-0000000000a1'
+\set WPEP1 'https://fcm.googleapis.com/fcm/send/wp724-device-1'
+\set WPEP2 'https://updates.push.services.mozilla.com/wpush/v2/wp724-device-2'
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  (:'WPCA', 'wp-ca@test.be', 'WP CA', '{"role":"candidate","first_name":"Wp","last_name":"CA","locale":"nl"}'),
+  (:'WPCB', 'wp-cb@test.be', 'WP CB', '{"role":"candidate","first_name":"Wp","last_name":"CB","locale":"fr"}'),
+  (:'WPEM', 'wp-em@test.be', 'WP EM', '{"role":"employer","first_name":"Wp","last_name":"EM","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.saved_searches(id, profile_id, name, locale, filters, filters_hash)
+  values (:'WPSS', :'WPCA', 'Magazyn', 'nl', '{"keyword":"magazyn"}', repeat('a', 32));
+
+-- WP724-1: kandydat rejestruje urządzenie → push_enabled = true, widzi tylko swoje.
+set role authenticated; set app.current_uid = :'WPCA'; select pg_temp.assert_client_role();
+select public.register_push_subscription(:'WPEP1', 'B' || repeat('A', 86), repeat('Q', 22), 'Chrome · Android') as wp_sub1 \gset
+select public.register_push_subscription(:'WPEP1', 'B' || repeat('A', 86), repeat('Q', 22), 'Chrome · Android') as wp_sub1b \gset
+select public.register_push_subscription(:'WPEP2', 'C' || repeat('A', 86), repeat('R', 22), null) as wp_sub2 \gset
+select pg_temp.assert(:'wp_sub1' = :'wp_sub1b', 'WP724-1 ponowna rejestracja tego samego endpointu = ten sam wiersz');
+select pg_temp.assert((select count(*) from public.push_subscriptions) = 2, 'WP724-1b właściciel widzi swoje urządzenia');
+select pg_temp.assert((select push_enabled from public.notification_preferences where profile_id = :'WPCA'),
+  'WP724-1c rejestracja włącza push_enabled');
+-- WP724-2: bezpośredni zapis odrzucony (RPC-only).
+select pg_temp.expect_error($$insert into public.push_subscriptions(profile_id, endpoint, p256dh, auth_secret)
+  values ('d7240000-0000-0000-0000-000000000001', 'https://fcm.googleapis.com/x/wp724-direct', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'permission denied', 'WP724-2 bezpośredni INSERT odrzucony');
+select pg_temp.expect_error($$update public.push_subscriptions set endpoint = 'https://fcm.googleapis.com/x/evil'$$,
+  'permission denied', 'WP724-2b bezpośredni UPDATE odrzucony');
+-- WP724-3: endpoint spoza listy dozwolonych usług (SSRF) i złe klucze → VALIDATION_FAILED.
+select pg_temp.expect_error($$select public.register_push_subscription('https://169.254.169.254/latest/meta-data', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3 adres wewnętrzny odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com.evil.be/x/abc', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3b host z dozwolonym prefiksem odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com:8443/x/abc', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3c port odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('http://fcm.googleapis.com/x/abcdefghij', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3d http odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('https://user@fcm.googleapis.com/x/abc', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3e dane logowania w adresie odrzucone');
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-k', 'short', repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3f zły klucz odrzucony');
+reset role;
+select pg_temp.assert(public.push_endpoint_allowed('https://wns2-par02p.notify.windows.com/w/?token=abc')
+  and public.push_endpoint_allowed('https://web.push.apple.com/QGvUo1ABC')
+  and not public.push_endpoint_allowed('https://evil.be/push.apple.com/abcdefgh'),
+  'WP724-3g lista dozwolonych usług (Windows, Apple; host w ścieżce odrzucony)');
+-- WP724-4: pracodawca nie rejestruje urządzenia (push tylko dla alertów kandydata).
+set role authenticated; set app.current_uid = :'WPEM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-em', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'PERMISSION_DENIED', 'WP724-4 pracodawca bez rejestracji');
+reset role;
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.push_subscriptions) = 0, 'WP724-4b inny kandydat nie widzi cudzych urządzeń');
+select pg_temp.expect_error($$select public.revoke_push_subscription('$$ || :'wp_sub1' || $$'::uuid)$$,
+  'NOT_FOUND', 'WP724-4c cudzego urządzenia nie da się wycofać');
+select pg_temp.assert(public.unregister_push_subscription(:'WPEP1') = false, 'WP724-4d cudzy endpoint nie jest wycofywany');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-anon', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'permission denied', 'WP724-4e anon bez dostępu');
+reset role;
+
+-- WP724-5: alert zapisanego wyszukiwania → jedna wysyłka na aktywne urządzenie; inne typy — nie.
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"kind":"saved_search","count":3,"name":"Magazyn"}', 'saved_search', :'WPSS')
+  returning id as wp_n1 \gset
+insert into public.notifications(profile_id, type, title, entity_type)
+  values (:'WPCA', 'offer_received', 'offer', 'offer') returning id as wp_n2 \gset
+insert into public.notifications(profile_id, type, title, entity_type)
+  values (:'WPCA', 'message_received', 'msg', 'conversation') returning id as wp_n3 \gset
+select pg_temp.assert((select count(*) from public.push_deliveries where notification_id = :'wp_n1') = 2,
+  'WP724-5 alert kolejkuje wysyłkę na każde aktywne urządzenie');
+select pg_temp.assert(not exists (select 1 from public.push_deliveries where notification_id in (:'wp_n2', :'wp_n3')),
+  'WP724-5b propozycje i wiadomości bez push');
+-- Kontrola ujemna: bramka typu zdjęta → propozycja trafia do kolejki (to bramka zamyka kanał).
+begin;
+create or replace function public.push_notification_allowed(p_type text, p_entity_type text)
+returns boolean language sql immutable as $$ select true $$;
+insert into public.notifications(profile_id, type, title, entity_type)
+  values (:'WPCA', 'offer_received', 'offer', 'offer') returning id as wp_nn \gset
+select pg_temp.assert(exists (select 1 from public.push_deliveries where notification_id = :'wp_nn'),
+  'WP724-5n kontrola ujemna: bez bramki typu propozycja szłaby push');
+rollback;
+-- Kontrola ujemna: bez triggera alert nie ma wysyłki.
+begin;
+drop trigger trg_notifications_push_enqueue on public.notifications;
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":1}', 'saved_search', :'WPSS') returning id as wp_nt \gset
+select pg_temp.assert(not exists (select 1 from public.push_deliveries where notification_id = :'wp_nt'),
+  'WP724-5t kontrola ujemna: bez triggera alert bez kolejki');
+rollback;
+-- push_enabled = false → brak kolejki.
+update public.notification_preferences set push_enabled = false where profile_id = :'WPCA';
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":1}', 'saved_search', :'WPSS') returning id as wp_n4 \gset
+select pg_temp.assert(not exists (select 1 from public.push_deliveries where notification_id = :'wp_n4'),
+  'WP724-5c wyłączony push = brak kolejki');
+update public.notification_preferences set push_enabled = true where profile_id = :'WPCA';
+
+-- WP724-6: claim tylko service_role, język odbiorcy, liczba ofert, dzierżawa.
+set role authenticated; set app.current_uid = :'WPCA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select * from public.claim_push_deliveries(10)$$, 'permission denied',
+  'WP724-6 klient nie pobiera kolejki');
+reset role;
+set role service_role;
+select count(*) as wp_claimed,
+       coalesce(bool_and(locale = 'nl' and job_count = 3 and entity_type = 'saved_search' and attempts = 1), false) as wp_claim_ok
+  from public.claim_push_deliveries(10) \gset
+select count(*) as wp_again from public.claim_push_deliveries(10) \gset
+reset role;
+select pg_temp.assert(:'wp_claimed' = '2' and :'wp_again' = '0', 'WP724-6b dwie wysyłki, dzierżawa blokuje drugie pobranie');
+select pg_temp.assert(:'wp_claim_ok'::boolean, 'WP724-6c język odbiorcy i liczba ofert w danych wysyłki');
+select d.id as wp_d1 from public.push_deliveries d where d.subscription_id = :'wp_sub1' and d.notification_id = :'wp_n1' \gset
+select d.id as wp_d2 from public.push_deliveries d where d.subscription_id = :'wp_sub2' and d.notification_id = :'wp_n1' \gset
+
+-- WP724-7: 410 → urządzenie unieważnione (`gone`); retry → termin w przyszłości; sent.
+set role service_role;
+select public.finish_push_delivery(:'wp_d1', 'gone', 'http_410') as wp_f1 \gset
+select public.finish_push_delivery(:'wp_d1', 'sent') as wp_f1b \gset
+select public.finish_push_delivery(:'wp_d2', 'retry', 'http_503', 300) as wp_f2 \gset
+reset role;
+select pg_temp.assert(:'wp_f1' = 't' and :'wp_f1b' = 'f', 'WP724-7 wynik tylko pod dzierżawą (CAS)');
+select pg_temp.assert((select revoked_reason = 'gone' from public.push_subscriptions where id = :'wp_sub1'),
+  'WP724-7b 410 unieważnia urządzenie');
+select pg_temp.assert((select status = 'queued' and lease_until is null and next_attempt_at > now() + interval '4 minutes'
+                         from public.push_deliveries where id = :'wp_d2'),
+  'WP724-7c ponowienie po Retry-After');
+update public.push_deliveries set next_attempt_at = now() where id = :'wp_d2';
+set role service_role;
+select count(*) as wp_c2 from public.claim_push_deliveries(10) \gset
+select public.finish_push_delivery(:'wp_d2', 'sent') as wp_f3 \gset
+reset role;
+select pg_temp.assert(:'wp_c2' = '1' and (select status = 'sent' and sent_at is not null from public.push_deliveries where id = :'wp_d2')
+  and (select last_success_at is not null and failure_count = 0 from public.push_subscriptions where id = :'wp_sub2'),
+  'WP724-7d wysłane: status i ostatnia udana wysyłka urządzenia');
+
+-- WP724-8: wyłączony alert → wysyłka wygaszona przy claimie; wysyłka sprzed doby → expired.
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n5 \gset
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n6 \gset
+update public.push_deliveries set created_at = now() - interval '25 hours' where notification_id = :'wp_n6';
+update public.saved_searches set alerts_enabled = false where id = :'WPSS';
+set role service_role;
+select count(*) as wp_c3 from public.claim_push_deliveries(10) \gset
+reset role;
+select pg_temp.assert(:'wp_c3' = '0'
+  and (select status from public.push_deliveries where notification_id = :'wp_n5') = 'suppressed'
+  and (select status from public.push_deliveries where notification_id = :'wp_n6') = 'expired',
+  'WP724-8 wyłączony alert wygaszony, wysyłka sprzed doby nieaktualna');
+update public.saved_searches set alerts_enabled = true where id = :'WPSS';
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n7 \gset
+update public.notification_preferences set push_enabled = false where profile_id = :'WPCA';
+set role service_role;
+select count(*) as wp_c4 from public.claim_push_deliveries(10) \gset
+reset role;
+select pg_temp.assert(:'wp_c4' = '0' and (select status from public.push_deliveries where notification_id = :'wp_n7') = 'suppressed',
+  'WP724-8b push wyłączony po kolejkowaniu = brak wysyłki');
+update public.notification_preferences set push_enabled = true where profile_id = :'WPCA';
+
+-- WP724-9: przejęcie urządzenia przez inne konto — niewysłane alerty poprzedniego wygaszone.
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n8 \gset
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select public.register_push_subscription(:'WPEP2', 'D' || repeat('A', 86), repeat('S', 22), null) as wp_sub2b \gset
+reset role;
+select pg_temp.assert(:'wp_sub2b' = :'wp_sub2'
+  and (select profile_id = :'WPCB'::uuid from public.push_subscriptions where id = :'wp_sub2')
+  and (select status from public.push_deliveries where notification_id = :'wp_n8') = 'suppressed',
+  'WP724-9 przejęte urządzenie nie dostaje alertów poprzedniego konta');
+
+-- WP724-10: wycofanie ostatniego urządzenia → push_enabled = false.
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select public.unregister_push_subscription(:'WPEP2') as wp_u1 \gset
+reset role;
+select pg_temp.assert(:'wp_u1' = 't'
+  and (select revoked_reason = 'user' from public.push_subscriptions where id = :'wp_sub2')
+  and not (select push_enabled from public.notification_preferences where profile_id = :'WPCB'),
+  'WP724-10 wycofanie ostatniego urządzenia wyłącza push');
+
+-- WP724-11: limit 10 aktywnych urządzeń na konto.
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select count(public.register_push_subscription('https://fcm.googleapis.com/fcm/send/wp724-lim-' || g, 'B' || repeat('A', 86), repeat('Q', 22)))
+  from generate_series(1, 10) g;
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/fcm/send/wp724-lim-11', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'PUSH_DEVICE_LIMIT', 'WP724-11 jedenaste urządzenie odrzucone');
+reset role;
+
+-- WP724-12: 5 kolejnych porażek unieważnia urządzenie (`failed`).
+select id as wp_lim1 from public.push_subscriptions where endpoint = 'https://fcm.googleapis.com/fcm/send/wp724-lim-1' \gset
+update public.push_subscriptions set failure_count = 4 where id = :'wp_lim1';
+insert into public.push_deliveries(subscription_id, notification_id, status, attempts, lease_until)
+  values (:'wp_lim1', :'wp_n1', 'queued', 1, now() + interval '1 minute') returning id as wp_d9 \gset
+set role service_role;
+select public.finish_push_delivery(:'wp_d9', 'failed', 'http_400') as wp_f9 \gset
+reset role;
+select pg_temp.assert((select revoked_reason = 'failed' from public.push_subscriptions where id = :'wp_lim1'),
+  'WP724-12 piąta porażka unieważnia urządzenie');
+
+-- WP724-13: retencja — stare wysyłki i dawno wycofane urządzenia znikają.
+update public.push_deliveries set created_at = now() - interval '8 days' where notification_id = :'wp_n1';
+update public.push_subscriptions set revoked_at = now() - interval '31 days' where id = :'wp_sub1';
+set role service_role;
+select public.purge_push_data() as wp_purged \gset
+reset role;
+select pg_temp.assert(:'wp_purged'::int >= 2
+  and not exists (select 1 from public.push_subscriptions where id = :'wp_sub1')
+  and exists (select 1 from public.push_subscriptions where id = :'wp_sub2'),
+  'WP724-13 retencja usuwa stare wysyłki i wycofane urządzenia (świeżo wycofane zostają)');
+-- WP724-14: usunięcie konta = kaskada urządzeń.
+delete from auth.users where id = :'WPCB';
+select pg_temp.assert(not exists (select 1 from public.push_subscriptions where profile_id = :'WPCB'),
+  'WP724-14 usunięcie konta usuwa urządzenia');
+reset role; reset app.current_uid;
+\echo 'WP724 Web Push: PASS'
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
