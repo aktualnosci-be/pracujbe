@@ -853,12 +853,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   („do 2000”) nie wysyła dolnej granicy z końca suwaka (`salaryQueryParams`, licznik
   `matchesSidebar`). Lustro demo (`getJobsFromDemo`) szuka jak SQL: słowo kluczowe tylko w tytule,
   miasto tylko w nazwie miasta. Dowód: unit `city-aliases` (#1077, kontrole ujemne starej reguły),
-  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. **Otwarte (wymaga migracji,
-  #1076/M-4):** oferta zapisana z dopiskiem („Bruxelles 1000”) wypada z filtra rozpoznanego miasta
-  (dopasowanie po aliasie/`location_id`, nie po tekście) — potrzebny OR z tekstem albo normalizacja
-  kodu pocztowego w `resolve_location_id`; facet lokalizacji spoza 10 miast pokazuje nazwę
-  kanoniczną `locations.name` (aliasy w bazie bez kolumny języka), więc nazwa w języku widoku
-  wymaga kolumny `locale` w `location_aliases`.
+  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. Miasto z dopiskiem i facet w języku widoku (#1119, #1076/M-4, migracja `0212` — numer
+  tymczasowy): `location_lookup_key` (lustro `cityLookupKey` w `belgian-cities.ts`) usuwa z klucza
+  miasta belgijski kod pocztowy (4 cyfry, prefiks B/BE), nawiasy/przecinki i nazwę kraju;
+  `resolve_location_id` szuka najpierw pełnego klucza, potem klucza bez dopisku, więc „Bruxelles
+  1000”, „B-1050 Bruxelles”, „Leuven (3000)”, „Aalst, België” dostają `location_id` (trigger zapisu,
+  trigger słownika, backfill bez podbicia `updated_at`), a `location_filter_ids`/
+  `search_city_candidates` stosują tę samą regułę do wartości filtra i wyszukiwania (sam kod
+  pocztowy = brak miejscowości). Nazwy w języku serwisu: tabela `location_names` (miejscowość ×
+  pl/nl/fr/en, tylko nazwy różne od `locations.name`, bez 10 miast z plików tłumaczeń; blok danych
+  generuje `scripts/locations/build-migration.mjs` z migawki Wikidata) + `location_display_name(nazwa,
+  język)` — zwraca nazwę tylko, gdy wskazuje TĘ SAMĄ miejscowość (nazwa facetu = wartość filtra;
+  egzonim innej gminy, np. „Saint-Nicolas”, pominięty). Facety w bazie bez zmian: nazwę podmienia
+  zapytanie aplikacji wokół RPC (`getPublicJobFilterFacets`, `$1` = język; te same nazwy scalone),
+  podpowiedź miasta w kreatorze używa `resolve_location_id` i `location_display_name`. Dowód:
+  `rls.sql` sekcja PC1119 (kontrole ujemne: `resolve_location_id` z 0153, funkcja nazw bez
+  strażnika), rollback `0212_…down.sql` + `location-postal-names-rollback.sql` (ponowne nałożenie =
+  backfill), unit `location-postal-names`, `matching-locations` (blok = generator, kontrola ujemna),
+  `job-location`. **Otwarte:** matching liczy odległość z `cityKey` (bez klucza bez dopisku;
+  funkcja wyłączona w trybie ogłoszeniowym), kod pocztowy bez nazwy miasta (brak słownika kodów).
   Nowe filtry listy (migracja `0194` — numer tymczasowy): waluta (#787) — widełki i sort
   „najwyższe wynagrodzenie” są w EUR, kwot w innej walucie nie przeliczamy (brak datowanego
   kursu): oferta w PLN jest nieporównywalna jak inny okres stawki (nie odpada z filtra kwoty,
