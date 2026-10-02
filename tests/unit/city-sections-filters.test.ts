@@ -62,7 +62,7 @@ describe('części gmin w filtrach miasta (#1076)', () => {
     const fn = latest('get_public_job_filter_facets');
     const body = strip(fn.body);
     expect(body).toContain('left join public.locations pl on pl.id=l.parent_location_id and pl.is_active');
-    // 0960 (#1215): nazwa jako podzapytanie po kluczu głównym (gmina nadrzędna, potem część,
+    // 0213 (#1215): nazwa jako podzapytanie po kluczu głównym (gmina nadrzędna, potem część,
     // potem tekst oferty) — ta sama kolejność co dawne `coalesce(pl.name, l.name, j.city)`.
     expect(body).toContain('select coalesce(pl.name, l.name) from public.locations l');
     expect(body).toContain('where l.id=j.location_id and l.is_active ), j.city) city_label');

@@ -25016,20 +25016,20 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- PF1215. Lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (0960, #1215,
+-- PF1215. Lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (0213, #1215,
 -- audyt PERF-01). Definicje z 0194 (LANGUAGE sql, plan generyczny) zastąpione plpgsql
 -- z `plan_cache_mode = force_custom_plan`. 4000 ofert z remisami `published_at` (po 7)
 -- i wynagrodzenia (okresy, waluty, brak kwoty), tłumaczeniami, językami, wymiarem pracy,
 -- firmą-agencją, firmą zablokowaną przez kandydata, firmą niezweryfikowaną, ofertami
 -- zamkniętymi/wygasłymi/usuniętymi. PF1215-1..3: wyniki (kolejność wierszy włącznie) każdej
--- kombinacji filtrów, sortowania i strony = definicje z 0194 (rollback 0960 w savepoincie),
+-- kombinacji filtrów, sortowania i strony = definicje z 0194 (rollback 0213 w savepoincie),
 -- dla gościa, kandydata z blokadą i service_role (alerty). PF1215-4: strona 1 i sortowanie
 -- po wynagrodzeniu czytają kilkadziesiąt ofert (indeks + LIMIT), licznik bez słowa kluczowego
 -- nie czyta tłumaczeń; KONTROLA UJEMNA: definicje z 0194 czytają wszystkie oferty (strona 1
 -- i sortowanie po wynagrodzeniu).
 -- Cała sekcja w transakcji cofanej.
 -- ============================================================================
-\echo '--- PF1215 publiczne RPC ofert: plan dla wartości parametrów (0960) ---'
+\echo '--- PF1215 publiczne RPC ofert: plan dla wartości parametrów (0213) ---'
 create function pg_temp.pf1215_cases() returns table (label text, filters text, page text)
 language sql as $$
   values
@@ -25227,9 +25227,9 @@ select pg_temp.assert(
   and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE'),
   'PF1215-4d plpgsql SECURITY DEFINER z force_custom_plan i bez JIT; granty bez zmian');
 
--- Definicje z 0194 (rollback 0960) w savepoincie: te same odciski + kontrola ujemna planu.
+-- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
 savepoint pf1215_old;
-\ir ../rollback/0960_public_jobs_custom_plan.down.sql
+\ir ../rollback/0213_public_jobs_custom_plan.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.pf1215_snapshot() as pf_old_anon \gset
 reset role;
@@ -25260,7 +25260,7 @@ select pg_temp.assert(:'pf_new_saved' = :'pf_old_saved',
 select pg_temp.assert(
   (select prolang = (select oid from pg_language where lanname = 'plpgsql')
    from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure),
-  'PF1215-5 po cofnięciu savepointu stan 0960 zostaje');
+  'PF1215-5 po cofnięciu savepointu stan 0213 zostaje');
 rollback;
 reset role; reset app.current_uid;
 

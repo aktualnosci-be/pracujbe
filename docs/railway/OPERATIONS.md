@@ -276,9 +276,9 @@ w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
 `src/lib/job-list-query.ts`). Przed wdrożeniem `0110` sprawdź na Railway:
 `select * from pg_available_extensions where name = 'unaccent'`.
 
-### Po `0960` — lista, licznik i facety bez planu generycznego (#1215, 30.09.2026)
+### Po `0213` — lista, licznik i facety bez planu generycznego (#1215, 30.09.2026)
 
-Migracja `0960_public_jobs_custom_plan.sql` (numer tymczasowy) przepisuje `get_public_jobs`,
+Migracja `0213_public_jobs_custom_plan.sql` (numer tymczasowy) przepisuje `get_public_jobs`,
 `get_public_jobs_count`, `get_public_job_filter_facets` i `saved_search_jobs_after` z
 `LANGUAGE sql` na `plpgsql` z `set plan_cache_mode = force_custom_plan` i `set jit = off`.
 Funkcje `LANGUAGE sql SECURITY DEFINER` nie są inline'owane, a ich ciało było planowane
@@ -298,7 +298,7 @@ definicja z `0194` czyta wszystkie oferty dla strony 1).
 Pomiar: PG16 lokalnie, baza z `scripts/db/search-benchmark.sh` (`BENCH_JOBS=12000`,
 `BENCH_KEEP=1`; 9600 aktywnych ofert, 200 firm, tłumaczenia `en` połowy ofert, wynagrodzenie
 w 2/3 ofert, `location_id` ze słownika), wywołanie pod `set role anon`, najlepszy z 7 przebiegów
-po rozgrzaniu (ms). „Przed” = definicje z `0194`, „po” = `0960`.
+po rozgrzaniu (ms). „Przed” = definicje z `0194`, „po” = `0213`.
 
 | Wywołanie | przed | po |
 |---|---:|---:|
