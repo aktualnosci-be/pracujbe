@@ -25,7 +25,8 @@ vi.mock('@/lib/auth/email-kick', async (importOriginal) => ({
   kickAuthEmailQueue: mocks.kick,
 }));
 
-import { api, authApiError, outcome, redirectTarget, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
+import { api, authApiError, cookieJar, outcome, redirectTarget, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
+import { SIGNUP_BROWSER_COOKIE, signupBrowserMarker } from '@/lib/auth/signup-browser';
 import { registerCandidate, registerEmployer, requestPasswordReset, signIn } from '@/lib/actions/auth';
 import { AUTH_EMAIL_KICK_LIMIT, authEmailKickEnabled } from '@/lib/auth/email-kick';
 
@@ -98,6 +99,35 @@ describe('kontrole ujemne — bez zlecenia brak wysyłki', () => {
     api.signInEmail.mockRejectedValue(authApiError(401, 'INVALID_EMAIL_OR_PASSWORD'));
     expect(await signIn(credentials)).toEqual({ ok: false, error: 'AUTH_INVALID_CREDENTIALS' });
     expect(mocks.kick).not.toHaveBeenCalled();
+  });
+});
+
+describe('znacznik przeglądarki rejestracji (#1090)', () => {
+  const marker = () => signupBrowserMarker('jan@example.com', process.env.BETTER_AUTH_SECRET);
+
+  it('rejestracja zostawia HttpOnly znacznik adresu (bez samego adresu)', async () => {
+    cookieJar.clear();
+    await redirectTarget(() => registerCandidate(candidate as never));
+    const cookie = cookieJar.get(SIGNUP_BROWSER_COOKIE);
+    expect(cookie?.value).toBe(marker());
+    expect(cookie?.value).not.toContain('jan');
+    expect(cookie?.options).toMatchObject({ httpOnly: true, sameSite: 'lax', path: '/' });
+  });
+
+  it('logowanie niepotwierdzonego konta poprawnym hasłem też oznacza przeglądarkę', async () => {
+    cookieJar.clear();
+    api.signInEmail.mockRejectedValue(authApiError(403, 'EMAIL_NOT_VERIFIED'));
+    await signIn(credentials);
+    expect(cookieJar.get(SIGNUP_BROWSER_COOKIE)?.value).toBe(marker());
+  });
+
+  it('kontrola ujemna: złe hasło i nieudana rejestracja nie oznaczają przeglądarki', async () => {
+    cookieJar.clear();
+    api.signInEmail.mockRejectedValue(authApiError(401, 'INVALID_EMAIL_OR_PASSWORD'));
+    await signIn(credentials);
+    api.signUpEmail.mockRejectedValue(authApiError(500, 'FAILED_TO_CREATE_USER'));
+    await outcome(() => registerCandidate(candidate as never));
+    expect(cookieJar.has(SIGNUP_BROWSER_COOKIE)).toBe(false);
   });
 });
 

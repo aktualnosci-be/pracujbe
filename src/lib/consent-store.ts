@@ -13,8 +13,9 @@
  *
  * #570: Cloudflare Web Analytics (beacon bezcookie'owy, bez API do odwołania zgody w locie)
  * zastąpił Google Analytics i Meta Pixel — nie ma już cookies trackerów do czyszczenia ani
- * flag w rodzaju `ga-disable-*`/`fbq('consent', ...)`. Wycofanie zgody wystarczy egzekwować
- * przez (nie)renderowanie skryptu w <Analytics/> (patrz ten komponent).
+ * flag w rodzaju `ga-disable-*`/`fbq('consent', ...)`. Wycofanie zgody egzekwuje <Analytics/>:
+ * bez załadowanego skryptu — przez jego nierenderowanie, a gdy skrypt już działa w karcie
+ * (#642) — odcięciem ruchu do dostawcy i przeładowaniem strony (`@/lib/analytics/withdraw`).
  */
 
 import {
@@ -58,7 +59,8 @@ export function subscribeConsent(listener: ConsentListener): () => void {
  * To jedyna droga zmiany zgody używana przez UI (baner i panel).
  *
  * Subskrybenci (m.in. <Analytics/>) reagują natychmiast — wycofanie zgody na `analytics`
- * usuwa render beaconu Cloudflare bez potrzeby reloadu (Invariant #7).
+ * usuwa render beaconu Cloudflare, a już działający skrypt odcina i przeładowuje stronę
+ * (#642, Invariant #7).
  */
 export function updateConsent(
   categories: ConsentCategories,

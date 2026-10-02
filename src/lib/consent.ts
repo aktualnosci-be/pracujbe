@@ -90,10 +90,21 @@ export function saveConsent(
     // `record.v` = wersja polityki FAKTYCZNIE pokazana użytkownikowi (ta w jego cookie) —
     // serwer ją przyjmie tylko, jeśli istnieje w `consent_versions` (patrz `record_consent`).
     // `locale` = język banera (#672) — receipt wskazuje wiersz polityki w tym języku.
-    void persistConsentToServer(record.categories, source, record.v, locale);
+    lastPersistence = persistConsentToServer(record.categories, source, record.v, locale);
   }
 
   return record;
+}
+
+let lastPersistence: Promise<void> = Promise.resolve();
+
+/**
+ * Obietnica ostatniego zapisu zgody w serwerowym logu (nigdy nie odrzuca). Wycofanie zgody
+ * na analitykę przeładowuje stronę (#642) — przeładowanie czeka na ten zapis, żeby nie
+ * przerwać żądania Server Action w locie.
+ */
+export function pendingConsentPersistence(): Promise<void> {
+  return lastPersistence;
 }
 
 /**

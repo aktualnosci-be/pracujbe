@@ -31,8 +31,26 @@ export const CLIENT_QUERY_TIMEOUT_MS = 35_000;
 export const KEEP_ALIVE_INITIAL_DELAY_MS = 10_000;
 const authSchemaPurposes: ReadonlySet<DatabasePurpose> = new Set(['auth', 'auth_mail']);
 
+/**
+ * Limit połączeń puli domenowej (#1096): jeden widok pulpitu pracodawcy otwiera równolegle
+ * ok. 8 transakcji, więc dawne `max=5` kolejkowało je już przy jednym użytkowniku.
+ * Domyślnie 10; `DATABASE_APP_POOL_MAX` (liczba całkowita 1–50) nadpisuje — pilnuj, żeby
+ * liczba replik × limit mieściła się w `max_connections` bazy. Zła wartość = domyślna.
+ */
+export const DEFAULT_DOMAIN_POOL_MAX = 10;
+export function domainPoolMax(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.DATABASE_APP_POOL_MAX?.trim();
+  if (!raw || !/^\d{1,2}$/.test(raw)) return DEFAULT_DOMAIN_POOL_MAX;
+  const value = Number(raw);
+  return value >= 1 && value <= 50 ? value : DEFAULT_DOMAIN_POOL_MAX;
+}
+
 /** Konfiguracja jawna; nie odczytuje DATABASE_URL migratora ani nie łączy przy imporcie. */
-export function runtimePoolConfig(connectionString: string, purpose: DatabasePurpose): PoolConfig {
+export function runtimePoolConfig(
+  connectionString: string,
+  purpose: DatabasePurpose,
+  env: Record<string, string | undefined> = process.env,
+): PoolConfig {
   let url: URL;
   try { url = new URL(connectionString); }
   catch { throw new Error('Nieprawidłowa konfiguracja połączenia bazy.'); }
@@ -52,7 +70,7 @@ export function runtimePoolConfig(connectionString: string, purpose: DatabasePur
   return {
     connectionString,
     // Monitoring i worker poczty nie mogą zająć połączeń aplikacji: mniej sesji na proces.
-    max: purpose === 'ops' ? 1 : purpose === 'auth_mail' || purpose === 'rate_limit' ? 2 : purpose === 'service' ? 3 : 5,
+    max: purpose === 'ops' ? 1 : purpose === 'auth_mail' || purpose === 'rate_limit' ? 2 : purpose === 'service' ? 3 : purpose === 'domain' ? domainPoolMax(env) : 5,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
     query_timeout: CLIENT_QUERY_TIMEOUT_MS,

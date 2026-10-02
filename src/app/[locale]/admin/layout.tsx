@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { AdminShell } from '@/components/admin/AdminShell';
 import { redirect } from '@/i18n/navigation';
+import { panelLoginHref } from '@/lib/auth/panel-login-redirect';
 import type { Locale } from '@/i18n/routing';
 import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
@@ -43,7 +44,8 @@ export default async function AdminLayout({
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
     if (!identity) {
-      redirect({ href: '/logowanie', locale: locale as Locale });
+      // #1090: powrót na otwieraną stronę panelu po zalogowaniu.
+      redirect({ href: await panelLoginHref(), locale: locale as Locale });
       return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
     if (identity.role !== 'admin') {

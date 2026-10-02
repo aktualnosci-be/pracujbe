@@ -142,3 +142,15 @@ i kopii filtrów dla alertów zapisanych wyszukiwań; notka pod filtrem to mówi
 Oferta z wynagrodzeniem w innej walucie niż EUR (np. PLN) zostaje na liście przy filtrze kwoty
 (kwoty nie przeliczamy — portal nie ma datowanego źródła kursów; oferta jest nieporównywalna
 jak stawka za inny okres) i trafia na koniec sortowania „najwyższe wynagrodzenie”.
+
+## Logowanie z linku potwierdzającego i adres IP za Cloudflare (30.09.2026)
+
+Link potwierdzający otwarty na innym urządzeniu lub w innej przeglądarce niż ta, w której
+założono konto, tylko potwierdza adres e-mail — nie loguje. Osoba loguje się sama (#1090,
+znacznik przeglądarki rejestracji w `src/lib/auth/signup-browser.ts`).
+
+Przy ruchu przez Cloudflare (`TRUSTED_PROXY_HEADER=cf-connecting-ip`) adres klienta z nagłówka
+Cloudflare jest przyjmowany tylko od połączeń z brzegu Cloudflare. Listę zakresów serwer pobiera
+automatycznie z opublikowanych list Cloudflare (odświeżanie w tle raz na dobę, bez opóźniania
+żądań); przy błędzie pobrania obowiązuje ostatnia dobra lista, a bez niej lista zapisana w kodzie
+(`src/lib/http/cloudflare-ranges.ts`).
