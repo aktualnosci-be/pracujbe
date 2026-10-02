@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0971_consent_receipt_locale.sql (#672) — ręczny, NIE jest migracją.
+-- Rollback 0225_consent_receipt_locale.sql (#672) — ręczny, NIE jest migracją.
 -- Przywraca `record_consent` z 0142 (6 argumentów, bez `p_locale`).
 -- Test: supabase/tests/consent-receipt-locale-rollback.sql.
 -- =============================================================================

@@ -1,6 +1,6 @@
 -- =============================================================================
--- CVL672-R — rollback migracji 0971 (język receiptu zgody cookies, #672). Uruchamiany przez
--- scripts/test-rls.sh po rls.sql; rollback w transakcji cofanej, baza zostaje po 0971.
+-- CVL672-R — rollback migracji 0225 (język receiptu zgody cookies, #672). Uruchamiany przez
+-- scripts/test-rls.sh po rls.sql; rollback w transakcji cofanej, baza zostaje po 0225.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -13,10 +13,10 @@ end $$;
 select pg_temp.assert(
   to_regprocedure('public.record_consent(jsonb, text, text, text, text, text, text)') is not null
   and to_regprocedure('public.record_consent(jsonb, text, text, text, text, text)') is null,
-  'CVL672-R0 baza w stanie po 0971 (jedno przeciążenie z p_locale)');
+  'CVL672-R0 baza w stanie po 0225 (jedno przeciążenie z p_locale)');
 
 begin;
-\ir ../rollback/0971_consent_receipt_locale.down.sql
+\ir ../rollback/0225_consent_receipt_locale.down.sql
 
 select pg_temp.assert(
   to_regprocedure('public.record_consent(jsonb, text, text, text, text, text, text)') is null
@@ -35,6 +35,6 @@ rollback;
 
 select pg_temp.assert(
   to_regprocedure('public.record_consent(jsonb, text, text, text, text, text, text)') is not null,
-  'CVL672-R3 po teście baza wraca do stanu po 0971');
+  'CVL672-R3 po teście baza wraca do stanu po 0225');
 
-\echo '--- CVL672-R rollback 0971 OK ---'
+\echo '--- CVL672-R rollback 0225 OK ---'

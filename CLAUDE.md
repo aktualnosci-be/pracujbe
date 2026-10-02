@@ -4019,14 +4019,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `recordConsent`, zaktualizowany w tym samym PR). Dowód: `rls.sql` sekcja CVR142 (kontrole
   ujemne: nieistniejąca wersja nie trafia do receiptu, wersja nieopublikowana — przyszła lub szkic — też nie,
   authenticated nie dopisuje/nie nadpisuje receiptu cudzego konta).
-  Język receiptu (#672, migracja `0971` — numer tymczasowy): ta sama wersja może mieć osobne
+  Język receiptu (#672, migracja `0225` — numer tymczasowy): ta sama wersja może mieć osobne
   wiersze `consent_versions` dla każdego języka, więc `recordConsent(…, version, locale)` dostaje
   język banera (`useLocale` w `CookieConsent` → `updateConsent` → `saveConsent`; spoza
   `routing.locales` = null), a `record_consent(…, p_locale)` wybiera deterministycznie: wiersz
   w języku banera → wspólny (`locale is null`) → `en` → pozostałe alfabetycznie po kodzie, remis
   dat po `id` — tak samo dla wersji z klienta i fallbacku do bieżącej. Dowód: `rls.sql` sekcja
   CVL672 (kontrola ujemna: definicja z 0142 przypisuje receipt `pl` do wiersza `nl`), rollback
-  `0971_…down.sql` (`consent-receipt-locale-rollback.sql`), unit `consent-action`, `consent-store`,
+  `0225_…down.sql` (`consent-receipt-locale-rollback.sql`), unit `consent-action`, `consent-store`,
   E2E `cookie-consent-categories` (język w wywołaniu akcji).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/

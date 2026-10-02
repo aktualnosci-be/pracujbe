@@ -59,7 +59,7 @@ function loggedCategories(categories: ConsentCategories | null | undefined): Con
  * jeśli istnieje w `consent_versions` — inaczej po cichu użyje bieżącej wersji, jak przed 0142.
  *
  * `locale` (opcjonalny) to język, w którym baner pokazał politykę (#672). Ta sama wersja może
- * mieć osobne wiersze `consent_versions` dla każdego języka — RPC (0971) wybiera wiersz w tym
+ * mieć osobne wiersze `consent_versions` dla każdego języka — RPC (0225) wybiera wiersz w tym
  * języku, potem wspólny (bez języka), potem `en`. Wartość spoza obsługiwanych języków = brak.
  */
 export async function recordConsent(

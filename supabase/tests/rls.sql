@@ -16041,7 +16041,7 @@ select pg_temp.assert(
 
 -- ============================================================================
 -- CVL672. Receipt zgody cookies wskazuje wiersz consent_versions w JĘZYKU banera (#672,
--- migracja 0971). Ta sama wersja w kilku językach: wiersz językowy → wspólny (locale null)
+-- migracja 0225). Ta sama wersja w kilku językach: wiersz językowy → wspólny (locale null)
 -- → en → pozostałe alfabetycznie po kodzie; remis dat rozstrzyga id (deterministycznie).
 -- ============================================================================
 reset role; reset app.current_uid;
@@ -16110,7 +16110,7 @@ select pg_temp.assert(
 
 -- CVL672-9 (kontrola ujemna): definicja z 0142 dla banera pl wybiera wiersz nl (błąd #672).
 begin;
-\ir ../rollback/0971_consent_receipt_locale.down.sql
+\ir ../rollback/0225_consent_receipt_locale.down.sql
 set local role anon; select pg_temp.assert_client_role();
 select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-neg', null, null, '2026-05');
 reset role;

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0971_consent_receipt_locale.sql (#672) — numer tymczasowy, ostateczny nada integrator.
+-- 0225_consent_receipt_locale.sql (#672) — numer tymczasowy, ostateczny nada integrator.
 --
 -- Problem: `record_consent` (0142) dobierał wiersz `consent_versions` wyłącznie po
 -- document='cookies' i `version`. Tabela dopuszcza osobne wiersze tej samej wersji dla
@@ -21,7 +21,7 @@
 -- Zgodność: JEDYNY wołający to `recordConsent` (src/lib/actions/consent.ts), aktualizowany
 -- w tym samym PR. Sygnatura 6-argumentowa z 0142 jest usuwana (bez dwóch przeciążeń);
 -- wywołania 6-argumentowe działają dalej dzięki wartości domyślnej `p_locale`.
--- Rollback: supabase/rollback/0971_consent_receipt_locale.down.sql.
+-- Rollback: supabase/rollback/0225_consent_receipt_locale.down.sql.
 -- =============================================================================
 
 drop function if exists public.record_consent(jsonb, text, text, text, text, text);
