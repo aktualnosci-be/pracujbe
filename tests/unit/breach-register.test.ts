@@ -254,6 +254,24 @@ describe('#490 daty w strefie Europe/Brussels', () => {
     expect(appLocalInputToUtc('2026-02-30T10:00')).toBeNull();
     expect(utcToAppLocalInput(null)).toBe('');
   });
+
+  it('#1112: niezmienione pole w godzinie jesiennej zmiany czasu zachowuje zapisaną chwilę', () => {
+    // 25.10.2026: 02:30 w Brukseli występuje dwa razy — 00:30Z (CEST) i 01:30Z (CET).
+    for (const saved of ['2026-10-25T00:30:00.000Z', '2026-10-25T01:30:00.000Z']) {
+      const local = utcToAppLocalInput(saved);
+      expect(local).toBe('2026-10-25T02:30');
+      expect(appLocalInputToUtc(local, saved)).toBe(saved);
+    }
+    // Kontrola ujemna: bez podpowiedzi jedno z wystąpień przesuwa się o godzinę.
+    const roundTrips = ['2026-10-25T00:30:00.000Z', '2026-10-25T01:30:00.000Z'].map((iso) =>
+      appLocalInputToUtc(utcToAppLocalInput(iso)),
+    );
+    expect(new Set(roundTrips).size).toBe(1);
+    // Zmieniona wartość pola nie korzysta z podpowiedzi.
+    expect(appLocalInputToUtc('2026-10-25T04:00', '2026-10-25T00:30:00.000Z')).toBe('2026-10-25T03:00:00.000Z');
+    // Podpowiedź z innej chwili (inny lokalny zapis) jest ignorowana.
+    expect(appLocalInputToUtc('2026-07-01T10:00', '2026-07-01T09:00:00.000Z')).toBe('2026-07-01T08:00:00.000Z');
+  });
 });
 
 describe('#490 odbiorcy zawiadomienia i eksport', () => {
