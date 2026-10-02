@@ -52,6 +52,9 @@ echo ">> #1140 (0171): świeża baza = tryb ogłoszeniowy (CL1128-0)"
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 
+echo ">> rollback 0226 (blokady: ostatni właściciel firmy, źródło kopii oferty; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-copy-locks-rollback.sql"
+
 echo ">> rollback 0221 (wiadomości serwisowe a opt-out in-app, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/notification-inapp-service-rollback.sql"
 
