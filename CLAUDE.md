@@ -957,7 +957,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   publiczna (`getJobBySlug`, oryginał zamiast przekładu maszynowego), źródła = ponumerowane fragmenty
   (`src/lib/ai-explain/sources.ts`: tytuł, pola strukturalne po angielsku dla modelu i w języku strony
   dla czytelnika, zdania opisu, listy; bez kanału aplikowania, opisu firmy, e-maili/telefonów/
-  identyfikatorów), pamięć podręczna procesu (oferta × język × SHA-256 treści), limit per adres
+  identyfikatorów), pamięć podręczna procesu (oferta × język × SHA-256 treści), Turnstile `job_explain`
+  (fail-closed, decyzja właściciela; przed odczytem oferty i pamięcią), limit per adres
   10/h i 30/dobę (fail-closed), `withAiBudget` (#36), OpenAI `gpt-6-luna` (`src/lib/ai/openai.ts`,
   strict schema, treść jako dane w `<offer_text>`). Bramki (`guard.ts`, ekstrakcja faktów tłumaczeń):
   objaśnienie bez istniejącego źródła, z kontaktem, z innymi liczbami/walutą/datą/godziną/
@@ -970,8 +971,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   AIX773, rollback `0977_…down.sql` (`ai-job-explain-rollback.sql`, też w `portal-legal-mode-rollback.sql`
   przed 0176), unit `job-explain`, `job-explain-action`, `job-explain-panel` (kontrole ujemne), E2E
   `job-explain` (4 języki, klawiatura, axe 1280/320 px). **Otwarte:** ewaluacja na reprezentatywnych
-  ofertach z prawdziwym modelem przed włączeniem (właściciel), Turnstile/limit globalny przy ruchu
-  anonimowym, data w objaśnieniu tylko w zapisie ze źródła (ISO).
+  ofertach z prawdziwym modelem przed włączeniem (właściciel), data w objaśnieniu tylko w zapisie ze źródła (ISO).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
   Okno cutoveru (#1115, bez migracji): `isSearchIndexingEnabled()` (`src/lib/seo/indexing.ts`) =

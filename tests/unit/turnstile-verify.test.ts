@@ -199,6 +199,7 @@ describe('polityka przepływów', () => {
       contact: 'closed',
       report: 'closed',
       guestApply: 'closed',
+      jobExplain: 'closed',
     });
   });
 

@@ -18,6 +18,32 @@ import pl from '@/messages/pl.json';
 
 vi.mock('@/lib/actions/job-explain', () => ({ explainJobOffer: vi.fn() }));
 
+// Atrapa widżetu Turnstile: przycisk „rozwiąż” podaje token; `reset` zeruje go jak prawdziwy widżet.
+const turnstile = vi.hoisted(() => ({ enabled: false, resets: 0 }));
+vi.mock('@/components/auth/TurnstileWidget', async () => {
+  const React = await import('react');
+  return {
+    isTurnstileWidgetEnabled: () => turnstile.enabled,
+    TurnstileWidget: React.forwardRef(function Fake(
+      { onToken, showRequired }: { onToken: (t: string | null) => void; showRequired?: boolean },
+      ref: React.Ref<{ reset: () => void }>,
+    ) {
+      React.useImperativeHandle(ref, () => ({
+        reset: () => {
+          turnstile.resets += 1;
+          onToken(null);
+        },
+      }));
+      return React.createElement(
+        'div',
+        null,
+        React.createElement('button', { type: 'button', onClick: () => onToken('tok-ok') }, 'solve-bot-check'),
+        showRequired ? React.createElement('p', null, 'bot-check-required') : null,
+      );
+    }),
+  };
+});
+
 const OK: JobExplainResult = {
   ok: true,
   targetLocale: 'nl',
@@ -40,7 +66,11 @@ function renderPanel(messages: typeof pl = pl, locale: 'pl' | 'nl' | 'fr' | 'en'
   );
 }
 
-beforeEach(() => vi.mocked(explainJobOffer).mockReset());
+beforeEach(() => {
+  vi.mocked(explainJobOffer).mockReset();
+  turnstile.enabled = false;
+  turnstile.resets = 0;
+});
 afterEach(cleanup);
 
 describe('JobExplainPanel (#773)', () => {
@@ -64,7 +94,7 @@ describe('JobExplainPanel (#773)', () => {
     renderPanel();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'nl' } });
     fireEvent.click(screen.getByRole('button', { name: pl.jobExplain.button }));
-    expect(explainJobOffer).toHaveBeenCalledWith({ slug: 'orderpicker', locale: 'pl', targetLocale: 'nl' });
+    expect(explainJobOffer).toHaveBeenCalledWith({ slug: 'orderpicker', locale: 'pl', targetLocale: 'nl', botCheckToken: null });
     const busy = screen.getByRole('button', { name: pl.jobExplain.loading });
     expect((busy as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole('status').textContent).toBe(pl.jobExplain.loading);
@@ -110,5 +140,32 @@ describe('JobExplainPanel (#773)', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: pl.jobExplain.button }));
     expect(await screen.findByText(pl.jobExplain.empty)).toBeTruthy();
+  });
+
+  it('Turnstile włączony: bez tokenu brak zapytania i komunikat; z tokenem zapytanie, potem reset tokenu', async () => {
+    turnstile.enabled = true;
+    vi.mocked(explainJobOffer).mockResolvedValue(OK);
+    renderPanel();
+    const button = screen.getByRole('button', { name: pl.jobExplain.button });
+    fireEvent.click(button);
+    expect(explainJobOffer).not.toHaveBeenCalled();
+    expect(screen.getByText('bot-check-required')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'solve-bot-check' }));
+    expect(screen.queryByText('bot-check-required')).toBeNull();
+    fireEvent.click(button);
+    expect(explainJobOffer).toHaveBeenCalledWith(expect.objectContaining({ botCheckToken: 'tok-ok' }));
+    await screen.findByTestId('job-explain-result');
+    expect(turnstile.resets).toBe(1);
+    // Token jednorazowy: kolejne zapytanie znów wymaga weryfikacji.
+    fireEvent.click(screen.getByRole('button', { name: pl.jobExplain.again }));
+    expect(explainJobOffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('kontrola ujemna: Turnstile wyłączony (bez klucza) — zapytanie bez widżetu', () => {
+    vi.mocked(explainJobOffer).mockResolvedValue(OK);
+    renderPanel();
+    expect(screen.queryByRole('button', { name: 'solve-bot-check' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: pl.jobExplain.button }));
+    expect(explainJobOffer).toHaveBeenCalledTimes(1);
   });
 });

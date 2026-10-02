@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, Loader2, Sparkles } from 'lucide-react';
 
+import { isTurnstileWidgetEnabled, TurnstileWidget, type TurnstileHandle } from '@/components/auth/TurnstileWidget';
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -70,6 +71,11 @@ export function JobExplainPanel({ slug, locale }: JobExplainPanelProps): React.J
   const inFlight = React.useRef(false);
   const resultRef = React.useRef<HTMLHeadingElement>(null);
   const errorRef = React.useRef<HTMLDivElement>(null);
+  // Turnstile (`job_explain`, #773): token jednorazowy — reset po każdym zapytaniu.
+  const botCheckEnabled = isTurnstileWidgetEnabled();
+  const botCheckRef = React.useRef<TurnstileHandle | null>(null);
+  const [botCheckToken, setBotCheckToken] = React.useState<string | null>(null);
+  const [botCheckMissing, setBotCheckMissing] = React.useState(false);
 
   React.useEffect(() => {
     if (resultKey > 0) resultRef.current?.focus();
@@ -77,11 +83,15 @@ export function JobExplainPanel({ slug, locale }: JobExplainPanelProps): React.J
 
   async function request(): Promise<void> {
     if (inFlight.current) return;
+    if (botCheckEnabled && !botCheckToken) {
+      setBotCheckMissing(true);
+      return;
+    }
     inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
-      const res = await explainJobOffer({ slug, locale, targetLocale: target });
+      const res = await explainJobOffer({ slug, locale, targetLocale: target, botCheckToken });
       if (res.ok) {
         setResult(res);
         setResultKey((k) => k + 1);
@@ -93,6 +103,7 @@ export function JobExplainPanel({ slug, locale }: JobExplainPanelProps): React.J
       setResult(null);
       setError(t('errorNetwork'));
     } finally {
+      botCheckRef.current?.reset();
       inFlight.current = false;
       setBusy(false);
     }
@@ -142,6 +153,20 @@ export function JobExplainPanel({ slug, locale }: JobExplainPanelProps): React.J
           {busy ? t('loading') : result ? t('again') : t('button')}
         </button>
       </div>
+
+      {botCheckEnabled ? (
+        <div className="mt-3">
+          <TurnstileWidget
+            ref={botCheckRef}
+            flow="jobExplain"
+            onToken={(token) => {
+              setBotCheckToken(token);
+              if (token) setBotCheckMissing(false);
+            }}
+            showRequired={botCheckMissing}
+          />
+        </div>
+      ) : null}
 
       <p role="status" className={cn(FORM_HINT, 'mt-2')}>
         {busy ? t('loading') : ''}

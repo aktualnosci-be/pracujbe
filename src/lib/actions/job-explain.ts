@@ -25,6 +25,7 @@ import { jobStartDateInstant, jobStartInfo } from '@/lib/job-start';
 import { getJobBySlug, type JobDetail } from '@/lib/jobs';
 import { languageDisplayName } from '@/lib/languages';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { enforceTurnstile } from '@/lib/turnstile/verify';
 import { formatSalaryRange } from '@/lib/salary';
 import { salaryLabelsFor } from '@/lib/salary-labels';
 
@@ -32,7 +33,7 @@ import { salaryLabelsFor } from '@/lib/salary-labels';
  * „Wyjaśnij ofertę” (#773) — objaśnienie warunków JEDNEJ aktywnej, publicznej oferty prostym
  * językiem, na żądanie odwiedzającego, w wybranym języku.
  *
- * Kolejność: flaga + dostawca → walidacja wejścia → odczyt oferty (`getJobBySlug` = tylko oferta
+ * Kolejność: flaga + dostawca → walidacja wejścia → Turnstile (`job_explain`, fail-closed) → odczyt oferty (`getJobBySlug` = tylko oferta
  * publiczna; treść oryginału, nie przekładu maszynowego) → pamięć podręczna (ta sama treść
  * i język = bez nowego wywołania) → limity per adres (fail-closed) → budżet AI (#36) → model →
  * bramki faktów. Do modelu trafia wyłącznie treść oferty i język odpowiedzi — bez CV, profilu,
@@ -75,6 +76,8 @@ const inputSchema = z.object({
   slug: z.string().min(1).max(200).regex(/^[a-z0-9][a-z0-9-]*$/),
   locale: z.enum(LOCALES),
   targetLocale: z.enum(LOCALES),
+  /** Token Cloudflare Turnstile (`job_explain`); bez kluczy poza produkcją weryfikacja pominięta. */
+  botCheckToken: z.string().max(4096).nullable().optional(),
 });
 
 /** Limity per adres — wywołanie bez konta to płatne zapytanie do modelu. */
@@ -166,11 +169,16 @@ export async function explainJobOffer(input: unknown): Promise<JobExplainResult>
 
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
-  const { slug, locale, targetLocale } = parsed.data;
+  const { slug, locale, targetLocale, botCheckToken } = parsed.data;
 
   const configured = isPortalDataConfigured();
   // Bez bazy (demo) tylko atrapa — anonimowy ruch nie może generować kosztów.
   if (!configured && provider !== 'fixture') return { ok: false, error: 'DEMO_UNAVAILABLE' };
+
+  // Decyzja właściciela (#773): Turnstile PRZED odczytem oferty, pamięcią podręczną, limitem
+  // i modelem. Polityka `closed` — w produkcji brak kluczy albo awaria dostawcy = odmowa.
+  const botCheck = await enforceTurnstile('jobExplain', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
 
   try {
     let job = await getJobBySlug(slug, locale);

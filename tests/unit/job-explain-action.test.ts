@@ -6,6 +6,7 @@ import { clearExplainCache } from '@/lib/ai-explain/cache';
 import { isProductionMode } from '@/lib/env';
 import { getJobBySlug, type JobDetail } from '@/lib/jobs';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { enforceTurnstile, turnstileDecision, verifyTurnstileToken } from '@/lib/turnstile/verify';
 import { fakeDb, fakeSession, resetFakeDb } from '../helpers/fake-db';
 
 /**
@@ -24,6 +25,10 @@ vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fake
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/jobs', () => ({ getJobBySlug: vi.fn() }));
+vi.mock('@/lib/turnstile/verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/turnstile/verify')>()),
+  enforceTurnstile: vi.fn(async () => null),
+}));
 vi.mock('next-intl/server', () => ({
   getTranslations: vi.fn(async ({ namespace }: { namespace: string }) => (key: string) => `${namespace}.${key}`),
 }));
@@ -83,6 +88,7 @@ beforeEach(() => {
   fakeDb.rpc('ai_budget_settle', () => true);
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
+  vi.mocked(enforceTurnstile).mockResolvedValue(null);
   vi.mocked(getJobBySlug).mockResolvedValue(JOB);
   explain.mockImplementation(async (_sources, _locale, onUsage?: (u: { inputTokens: number; outputTokens: number }) => void) => {
     onUsage?.({ inputTokens: 800, outputTokens: 200 });
@@ -198,5 +204,47 @@ describe('explainJobOffer (#773)', () => {
     process.env.AI_JOB_EXPLAIN_PROVIDER = 'fixture';
     process.env.OPENAI_API_KEY = '';
     expect(await explainJobOffer(INPUT)).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
+
+  it('Turnstile job_explain: token przekazany do weryfikacji przed odczytem oferty', async () => {
+    await explainJobOffer({ ...INPUT, botCheckToken: 'tok-1' });
+    expect(enforceTurnstile).toHaveBeenCalledWith('jobExplain', 'tok-1');
+    expect(vi.mocked(enforceTurnstile).mock.invocationCallOrder[0]!).toBeLessThan(
+      vi.mocked(getJobBySlug).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it.each(['BOT_CHECK_FAILED', 'BOT_CHECK_UNAVAILABLE'] as const)(
+    'Turnstile odmawia (%s) = brak odczytu oferty, limitu, budżetu i modelu',
+    async (code) => {
+      vi.mocked(enforceTurnstile).mockResolvedValueOnce(code);
+      expect(await explainJobOffer(INPUT)).toEqual({ ok: false, error: code });
+      expect(getJobBySlug).not.toHaveBeenCalled();
+      expect(checkRateLimit).not.toHaveBeenCalled();
+      expect(explain).not.toHaveBeenCalled();
+      expect(fakeDb.calls.map((c) => c.name)).not.toContain('ai_budget_reserve');
+    },
+  );
+
+  it('polityka job_explain jest fail-closed (kontrola ujemna: login przy awarii dostawcy przepuszcza)', () => {
+    const unavailable = { status: 'unavailable', reason: 'timeout' } as const;
+    expect(turnstileDecision('jobExplain', unavailable)).toBe('BOT_CHECK_UNAVAILABLE');
+    expect(turnstileDecision('login', unavailable)).toBeNull();
+  });
+
+  it('niepoprawny token (nie tekst) = VALIDATION_FAILED bez weryfikacji', async () => {
+    expect(await explainJobOffer({ ...INPUT, botCheckToken: 42 })).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(enforceTurnstile).not.toHaveBeenCalled();
+  });
+
+  it('bez kluczy: produkcja = niedostępne (fail-closed), poza produkcją = pominięte', async () => {
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+    delete process.env.TURNSTILE_SECRET_KEY;
+    vi.mocked(isProductionMode).mockReturnValue(true);
+    const prod = await verifyTurnstileToken('jobExplain', 'tok');
+    expect(prod.status).toBe('unavailable');
+    expect(turnstileDecision('jobExplain', prod)).toBe('BOT_CHECK_UNAVAILABLE');
+    vi.mocked(isProductionMode).mockReturnValue(false);
+    expect((await verifyTurnstileToken('jobExplain', null)).status).toBe('skipped');
   });
 });

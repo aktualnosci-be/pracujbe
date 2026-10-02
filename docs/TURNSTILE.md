@@ -53,6 +53,7 @@ błędny sekret) oraz braku konfiguracji w produkcji:
 | kontakt | `contact` | **fail-closed** | polityka gotowa; publicznego formularza kontaktu jeszcze nie ma |
 | zgłoszenia | `report` | **fail-closed** | publiczny formularz zgłoszenia treści `/zglos-tresc` (#41, `submitContentReport`) |
 | aplikacja bez konta (#98) | `guest_apply` | **fail-closed** | publiczny formularz wysyłający e-mail z linkiem na podany adres; do tego limity `guest-apply` (IP) i `guest-apply-email` (adres) — [`GUEST_APPLY.md`](./GUEST_APPLY.md) |
+| „Wyjaśnij ofertę” (#773) | `job_explain` | **fail-closed** | dostępne bez konta, każde wywołanie modelu AI kosztuje (decyzja właściciela); weryfikacja przed odczytem oferty, pamięcią podręczną, limitami `job-explain`/`job-explain-day` i budżetem AI |
 | aplikowanie z konta | — | nie dotyczy | wymaga zalogowanego kandydata (logowanie i rejestracja chronione) + limit `apply` + idempotencja w bazie |
 
 Fail-open przy logowaniu obejmuje awarię **serwerowej** weryfikacji. Jeśli skrypt Turnstile nie
