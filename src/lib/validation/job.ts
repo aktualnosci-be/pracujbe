@@ -6,6 +6,7 @@ import {
 } from '@/lib/validation/candidate';
 import { localeSchema } from '@/lib/validation/auth';
 import { refineScreeningPrimaryLocale, screeningQuestionsSchema } from '@/lib/validation/screening';
+import { isPlausibleCalendarDate, NO_NUL_REGEX } from '@/lib/validation/text';
 import { JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 import {
   APPLY_EMAIL_MAX_LENGTH,
@@ -49,8 +50,14 @@ export const JOB_ITEM_LIMITS = {
   certificate: 160,
 } as const;
 
+/**
+ * Znak NUL baza odrzuca błędem technicznym (`invalid byte sequence`) — sprawdzamy go przy polu,
+ * żeby użytkownik dostał czytelny komunikat zamiast ogólnego błędu (#1108).
+ */
+const TEXT_INVALID = 'job.error.textInvalid';
+
 const itemLine = (max: number) =>
-  z.string().trim().min(1).max(max, 'job.error.itemTooLong');
+  z.string().trim().min(1).max(max, 'job.error.itemTooLong').regex(NO_NUL_REGEX, TEXT_INVALID);
 const requirementLine = itemLine(JOB_ITEM_LIMITS.requirement);
 const textLine = itemLine(JOB_ITEM_LIMITS.line);
 const skillLine = itemLine(JOB_ITEM_LIMITS.skill);
@@ -64,7 +71,8 @@ const step1Base = z.object({
     // Pusty string (formularz wysyła '') → „wymagane", a „za krótkie" dopiero dla 1–4 znaków (#367).
     .min(1, 'job.error.titleRequired')
     .min(5, 'job.error.titleTooShort')
-    .max(120, 'job.error.titleTooLong'),
+    .max(120, 'job.error.titleTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   category: categoryKeySchema,
   // #1048 (I18N-01): jawny język ogłoszenia (`jobs.default_locale` szkicu). Opcjonalny —
   // brak = język bez zmian (edycja opublikowanej oferty i starsi wołający nie wysyłają pola).
@@ -73,7 +81,8 @@ const step1Base = z.object({
     .string({ required_error: 'job.error.occupationRequired' })
     .trim()
     .min(2, 'job.error.occupationRequired')
-    .max(80, 'job.error.occupationTooLong'),
+    .max(80, 'job.error.occupationTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
 });
 export const step1Schema = step1Base;
 
@@ -84,8 +93,9 @@ const step2Base = z.object({
     .string({ required_error: 'job.error.workingHoursRequired' })
     .trim()
     .min(2, 'job.error.workingHoursRequired')
-    .max(80, 'job.error.workingHoursTooLong'),
-  shifts: z.string().trim().max(120, 'job.error.shiftsTooLong').optional(),
+    .max(80, 'job.error.workingHoursTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
+  shifts: z.string().trim().max(120, 'job.error.shiftsTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   /** #811 (0194): wymiar pracy (filtr listy); brak = pracodawca nie podaje. */
   workTime: z.enum(WORK_TIME_VALUES).optional(),
   startImmediately: z.boolean().default(false),
@@ -93,6 +103,9 @@ const step2Base = z.object({
     .string()
     .trim()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'job.error.startDateInvalid')
+    // Istniejąca data z rokiem 1900–2100 — rok 0000 albo 31 lutego przechodziły sam format,
+    // a kolumnę `date` odrzucała baza ogólnym błędem (#1108).
+    .refine(isPlausibleCalendarDate, 'job.error.startDateInvalid')
     .optional(),
 });
 export const step2Schema = step2Base;
@@ -103,13 +116,15 @@ const step3Base = z.object({
     .string({ required_error: 'job.error.cityRequired' })
     .trim()
     .min(2, 'job.error.cityRequired')
-    .max(80, 'job.error.cityTooLong'),
+    .max(80, 'job.error.cityTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   region: z
     .string({ required_error: 'job.error.regionRequired' })
     .trim()
     .min(2, 'job.error.regionRequired')
-    .max(80, 'job.error.regionTooLong'),
-  address: z.string().trim().max(160, 'job.error.addressTooLong').optional(),
+    .max(80, 'job.error.regionTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
+  address: z.string().trim().max(160, 'job.error.addressTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   remote: z.boolean().default(false),
 });
 export const step3Schema = step3Base;
@@ -149,7 +164,8 @@ const step5Base = z.object({
     .trim()
     .min(1, 'job.error.descriptionRequired')
     .min(30, 'job.error.descriptionTooShort')
-    .max(5000, 'job.error.descriptionTooLong'),
+    .max(5000, 'job.error.descriptionTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   responsibilities: z
     .array(textLine)
     .min(1, 'job.error.responsibilitiesRequired')
@@ -340,7 +356,8 @@ const step9DraftBase = z.object({
     .trim()
     .min(1, 'job.error.companyDescriptionRequired')
     .min(20, 'job.error.companyDescriptionTooShort')
-    .max(3000, 'job.error.companyDescriptionTooLong'),
+    .max(3000, 'job.error.companyDescriptionTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   contactEmail: z.string().trim().email('job.error.contactEmailInvalid').optional(),
   // #1129 (0172): kanał aplikowania u ogłoszeniodawcy — reguły 1:1 z CHECK-ami bazy
   // (`src/lib/job-apply-channel.ts`). W szkicu każdy opcjonalny; wymóg „co najmniej jeden”

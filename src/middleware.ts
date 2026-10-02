@@ -1,9 +1,10 @@
 import createIntlMiddleware from 'next-intl/middleware';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 import { routing } from './i18n/routing';
 import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
 import { isOneTimeLinkPath, isPrivateRoutePath } from '@/lib/analytics/route-policy';
+import { PANEL_RETURN_PATH_HEADER, panelReturnPath } from '@/lib/auth/panel-return-path';
 import { guestLinkPurpose } from '@/lib/guest-apply/link-state';
 import { isAppReady } from '@/lib/env';
 import { isOversizedPublicAction } from '@/lib/http/public-action-body-limit';
@@ -151,6 +152,22 @@ async function siteAccessGate(request: NextRequest): Promise<NextResponse | null
   });
 }
 
+/**
+ * Żądanie z nagłówkiem `PANEL_RETURN_PATH_HEADER` = ścieżka strony panelu (albo bez niego) —
+ * guard panelu bez sesji kieruje na logowanie z powrotem na tę stronę (#1090). Nagłówek
+ * wysłany przez klienta jest zawsze zastępowany. Treść żądania nie jest tu potrzebna
+ * (next-intl czyta tylko adres, nagłówki i cookies; dalej idzie oryginalne żądanie
+ * z nadpisanymi nagłówkami).
+ */
+function withPanelReturnPath(request: NextRequest): NextRequest {
+  const returnPath = panelReturnPath(request.nextUrl.pathname, request.nextUrl.search);
+  if (!returnPath && !request.headers.has(PANEL_RETURN_PATH_HEADER)) return request;
+  const headers = new Headers(request.headers);
+  headers.delete(PANEL_RETURN_PATH_HEADER);
+  if (returnPath) headers.set(PANEL_RETURN_PATH_HEADER, returnPath);
+  return new NextRequest(request.url, { method: request.method, headers });
+}
+
 export default async function middleware(request: NextRequest) {
   const guestRedirect = rejectLegacyGuestLink(request);
   if (guestRedirect) return guestRedirect;
@@ -190,8 +207,10 @@ export default async function middleware(request: NextRequest) {
     return passthrough;
   }
 
-  // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale).
-  const response = handleIntl(request);
+  // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale). next-intl
+  // przekazuje nagłówki żądania dalej, więc tu dokładamy ścieżkę strony panelu dla guarda
+  // (powrót po logowaniu, #1090); wartość od klienta jest zawsze usuwana.
+  const response = handleIntl(withPanelReturnPath(request));
   protectOneTimeResponse(request, response);
   // Serwis za bramką hasła: odpowiedź dla osoby z dostępem nie może trafić do cache współdzielonego.
   if (getSiteAccessPassword()) response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);

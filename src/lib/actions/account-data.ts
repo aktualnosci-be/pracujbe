@@ -2,10 +2,9 @@
 
 import { z } from 'zod/v3';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/error-report';
 
 /**
  * Usunięcie konta kandydata albo pracodawcy (#486).
@@ -57,7 +56,7 @@ export async function deleteMyAccountAction(confirmEmail: unknown): Promise<Dele
     return { ok: true };
   } catch (error) {
     const code = isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'failed';
-    if (code === 'failed') captureError(error, { area: 'account-data.deleteMyAccountAction' });
+    if (code === 'failed') captureActionError(error, 'account-data.deleteMyAccountAction');
     return { ok: false, error: code };
   }
 }

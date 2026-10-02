@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getEmployerApplicationHistoryPage, type ApplicationHistoryPage } from '@/lib/data/employer';
 import type { ErrorCode } from '@/lib/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { captureActionError } from '@/lib/db/errors';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -40,7 +41,8 @@ export async function loadMoreApplicationHistory(
     const result = await getEmployerApplicationHistoryPage(applicationId, parsed.data);
     if (result.status === 'error') return { status: 'error' };
     return { status: 'ready', page: result.page };
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'employer-application-history.loadMoreApplicationHistory');
     return { status: 'error' };
   }
 }

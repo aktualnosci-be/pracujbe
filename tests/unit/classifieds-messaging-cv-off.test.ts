@@ -46,6 +46,7 @@ const { storeCandidateCv } = await import('@/lib/files/candidate-cv');
 const cvImport = await import('@/lib/actions/cv-import');
 const cvConfig = await import('@/lib/cv-import/config');
 const { emailTargetPath } = await import('@/lib/email/delivery-data');
+const templates = await import('@/lib/actions/message-templates');
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const CONVERSATION = '55555555-5555-4555-8555-555555555555';
@@ -96,6 +97,27 @@ describe('#1134: akcje wiadomości', () => {
     await expect(messages.sendMessage(CONVERSATION, 'Dzień dobry', CLIENT_ID)).resolves.toEqual({ ok: true, id: 'row-1' });
     expect(fakeDb.callsTo('get_or_create_conversation')).toHaveLength(1);
     expect(fakeDb.callsTo('send_message')).toHaveLength(1);
+  });
+});
+
+describe('#1211: szablony odpowiedzi (narzędzie wiadomości)', () => {
+  const COMPANY = '88888888-8888-4888-8888-888888888888';
+  const TEMPLATE = '99999999-9999-4999-8999-999999999999';
+  const input = { id: null, name: 'Zaproszenie', variants: { pl: 'Dzień dobry {imie}' }, expectedUpdatedAt: null };
+
+  it('tryb ogłoszeniowy: zapis i usunięcie = RECRUITMENT_DISABLED bez bazy i limitera', async () => {
+    await expect(templates.saveMessageTemplate(input, COMPANY)).resolves.toEqual(DISABLED);
+    await expect(templates.deleteMessageTemplate(TEMPLATE, COMPANY)).resolves.toEqual(DISABLED);
+    // Także niepoprawne dane: tryb sprawdzany przed walidacją.
+    await expect(templates.deleteMessageTemplate('x', COMPANY)).resolves.toEqual(DISABLED);
+    expect(fakeDb.calls).toEqual([]);
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: tryb RECRUITMENT dochodzi do limitera', async () => {
+    recruitment();
+    await templates.deleteMessageTemplate(TEMPLATE, COMPANY);
+    expect(checkRateLimit).toHaveBeenCalledTimes(1);
   });
 });
 

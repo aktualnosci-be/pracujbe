@@ -33,6 +33,7 @@ import {
 } from '../helpers/auth-portal';
 import { confirmEmail, requestPasswordReset, signIn } from '@/lib/actions/auth';
 import { accountRateLimitKey } from '@/lib/auth/account-rate-limit';
+import { SIGNUP_BROWSER_COOKIE, signupBrowserMarker } from '@/lib/auth/signup-browser';
 
 const ACCOUNT_ACTIONS = ['signin-account', 'password-reset-account', 'register-account'];
 const credentials = { email: 'Jan@Example.com', password: 'Haslo1234' };
@@ -120,6 +121,8 @@ describe('potwierdzenie adresu w przeglądarce z aktywną sesją', () => {
     mocks.verifyJWT.mockReset().mockResolvedValue({ email: 'j@ex.org' });
     api.verifyEmail.mockResolvedValue(verified());
     internalAdapter.findUserByEmail.mockResolvedValue({ user: { id: USER_ID, email: 'j@ex.org' } });
+    // Ta przeglądarka założyła konto (#1090) — tu sprawdzamy tylko regułę istniejącej sesji.
+    cookieJar.set(SIGNUP_BROWSER_COOKIE, { value: signupBrowserMarker('j@ex.org', process.env.BETTER_AUTH_SECRET)! });
   });
 
   it('istniejąca sesja innego konta zostaje; nowa sesja unieważniona; przekierowanie do logowania', async () => {

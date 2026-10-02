@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod/v3';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryRows } from '@/lib/db/sql';
+import { captureActionError } from '@/lib/db/errors';
 
 export type PublicSavedState =
   | { status: 'candidate'; savedIds: string[] }
@@ -43,7 +44,8 @@ export async function getPublicSavedJobs(
       status: 'candidate',
       savedIds: rows.map((row) => row.job_id),
     };
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'public-saved-jobs.getPublicSavedJobs');
     return { status: 'error' };
   }
 }

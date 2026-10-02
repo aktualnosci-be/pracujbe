@@ -26,8 +26,8 @@ import {
   getCategoryCounts,
   getCityCounts,
   type CategoryKey,
-  type LocationKey,
 } from '@/lib/jobs';
+import { CITY_LANDING_KEYS, linkedCityLandings } from '@/lib/locations/city-landings';
 import { buildHubFacet } from '@/lib/jobs-hub';
 import { LandingHubGrid, type LandingHubItem } from '@/components/public/LandingHubGrid';
 import { prerenderParamsAtBuild } from '@/lib/static-rendering';
@@ -58,19 +58,6 @@ const CATEGORY_KEYS: readonly CategoryKey[] = [
   'care',
   'logistics',
   'seasonal',
-];
-
-const LOCATION_KEYS: readonly LocationKey[] = [
-  'brussels',
-  'antwerp',
-  'ghent',
-  'leuven',
-  'mechelen',
-  'hasselt',
-  'liege',
-  'charleroi',
-  'bruges',
-  'kortrijk',
 ];
 
 const CATEGORY_ICON: Record<CategoryKey, LucideIcon> = {
@@ -146,7 +133,7 @@ export default async function JobsHubPage({ params }: PageProps) {
 
   const [categoryCounts, cityCounts] = await Promise.all([
     getCategoryCounts(locale, CATEGORY_KEYS),
-    getCityCounts(locale, LOCATION_KEYS),
+    getCityCounts(locale, CITY_LANDING_KEYS),
   ]);
 
   const countLabel = (n: number): string | undefined =>
@@ -165,7 +152,9 @@ export default async function JobsHubPage({ params }: PageProps) {
     };
   });
 
-  const cityItems: LandingHubItem[] = LOCATION_KEYS.map((key) => {
+  // #920: tylko landingi powyżej progu podaży (ta sama reguła co metadane i sitemap); bez
+  // liczników (demo/build/awaria) — rdzeń katalogu bez liczb.
+  const cityItems: LandingHubItem[] = linkedCityLandings(cityCounts).map((key) => {
     const name = tLoc(key);
     const facet = buildHubFacet(CITY_BASE, key, key, cityCounts);
     return {
@@ -232,7 +221,11 @@ export default async function JobsHubPage({ params }: PageProps) {
           </div>
         </div>
         <div className="mt-5">
-          <LandingHubGrid items={cityItems} ariaLabel={t('byCityTitle')} />
+          {cityItems.length > 0 ? (
+            <LandingHubGrid items={cityItems} ariaLabel={t('byCityTitle')} />
+          ) : (
+            <p className="max-w-2xl text-sm text-muted-foreground">{t('byCityEmpty')}</p>
+          )}
         </div>
       </section>
 
