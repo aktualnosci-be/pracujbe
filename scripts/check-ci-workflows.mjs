@@ -17,7 +17,7 @@ const root = new URL('../', import.meta.url);
 const workflowsDir = process.argv[2]
   ? pathToFileURL(`${process.argv[2].replace(/\/$/, '')}/`)
   : new URL('.github/workflows/', root);
-const workflows = ['ci.yml', 'delete-old-runs.yml'];
+const workflows = ['ci.yml', 'delete-old-runs.yml', 'backup-image.yml'];
 const sources = new Map();
 
 for (const name of workflows) {
@@ -57,7 +57,6 @@ const expected = {
   typecheck: ['Typecheck', ['install']],
   unit: ['Unit tests (Vitest)', ['install']],
   sca: ['SCA (npm audit)', []],
-  'backup-image': ['Backup image (build + scan)', []],
   build: ['Build (Next.js)', ['lint', 'typecheck', 'unit']],
   rls: ['RLS integration (PostgreSQL 16)', []],
   migrations: ['Migration runner (PostgreSQL 16)', ['install']],
@@ -409,11 +408,32 @@ for (const spec of fixtureSpecs) {
   assert.ok(e2eFiles.has(spec.replace('**/', '')), `fixture config: ${spec} nie istnieje w tests/e2e`);
 }
 
-// Obraz usługi kopii bazy (#751): job buduje docker/backup/Dockerfile od zera, uruchamia smoke,
-// generuje SBOM i skanuje pakiety skanerem przypiętym do digestu, a bramka rozróżnia awarię
-// skanera od wyniku „brak podatności”. Obraz bazowy w Dockerfile przypięty do digestu.
-const backupJob = jobs.get('backup-image');
+// Obraz usługi kopii bazy (#751): OSOBNY workflow backup-image.yml (decyzja właściciela
+// 2026-10-02) — poza ci.yml, żeby skan obrazu nie blokował wdrożenia web (Wait for CI).
+// Job buduje docker/backup/Dockerfile od zera, uruchamia smoke, generuje SBOM i skanuje pakiety
+// skanerem przypiętym do digestu; bramka odróżnia awarię skanera od wyniku „brak podatności”.
+// Uruchamiany przy zmianie obrazu/skryptów, ręcznie i co tydzień. Obraz bazowy z digestem.
+assert.doesNotMatch(ci, /backup-image|docker\/backup\/Dockerfile/, 'ci.yml: skan obrazu kopii należy do backup-image.yml, nie do ci.yml (nie blokuje wdrożenia)');
+const backupWorkflow = sources.get('backup-image.yml');
+const backupOn = backupWorkflow.match(/^on:\s*\r?\n((?:^[ \t]+.*\r?\n)+)/m)?.[1] ?? '';
+for (const event of ['push', 'pull_request']) {
+  const paths = backupOn.match(new RegExp(`^  ${event}:\\s*\\r?\\n((?:^    .*\\r?\\n)+)`, 'm'))?.[1] ?? '';
+  assert.match(paths, /^      - docker\/backup\/\*\*\s*$/m, `backup-image.yml: ${event} przy zmianie docker/backup/**`);
+  assert.match(paths, /^      - \.github\/workflows\/backup-image\.yml\s*$/m, `backup-image.yml: ${event} przy zmianie samego workflowu`);
+}
+assert.match(backupOn, /^  schedule:\s*\r?\n    - cron: '\d+ \d+ \* \* [0-6]'\s*$/m, 'backup-image.yml: harmonogram tygodniowy (nowe podatności w niezmienionym obrazie)');
+assert.match(backupOn, /^  workflow_dispatch:\s*$/m, 'backup-image.yml: uruchomienie ręczne (workflow_dispatch)');
+assert.match(backupWorkflow, /^permissions:\s*\r?\n  contents: read\s*$/m, 'backup-image.yml: minimalne uprawnienia');
+const backupJobsSection = backupWorkflow.slice(backupWorkflow.search(/^jobs:\s*$/m));
+const backupJobs = [...backupJobsSection.matchAll(/^  ([a-z][a-z0-9_-]*):\s*\r?\n/gm)].map((match) => match[1]);
+assert.deepEqual(backupJobs, ['backup-image'], 'backup-image.yml: jeden job backup-image');
+const backupJob = backupJobsSection;
 const DIGEST = '@sha256:[0-9a-f]{64}';
+assert.match(backupJob, /^    name: Backup image \(build \+ scan\)\s*$/m, 'backup-image: stała nazwa checka');
+assert.match(backupJob, /^    runs-on: ubuntu-latest\s*$/m, 'backup-image: użyj ubuntu-latest');
+const backupTimeout = Number(backupJob.match(/^    timeout-minutes:\s*(\d+)\s*$/m)?.[1]);
+assert.ok(backupTimeout > 0 && backupTimeout <= 30, 'backup-image: ustaw timeout-minutes (1–30)');
+assert.ok(backupJob.match(/^    if:\s*(.+?)\s*$/m)?.[1].includes("github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository"), 'backup-image: brak warunku „bez PR z forków”');
 assert.match(backupJob, /docker build --pull --no-cache -f docker\/backup\/Dockerfile /, 'backup-image: zbuduj docker/backup/Dockerfile od zera (--pull --no-cache)');
 assert.match(backupJob, /bash scripts\/db\/backup-image-smoke\.sh "\$BACKUP_IMAGE"/, 'backup-image: smoke obrazu (scripts/db/backup-image-smoke.sh)');
 assert.match(backupJob, new RegExp(`^      TRIVY_IMAGE: aquasec/trivy:\\d+\\.\\d+\\.\\d+${DIGEST}\\s*$`, 'm'), 'backup-image: skaner przypięty do wersji i digestu');

@@ -4,8 +4,8 @@
 # (Railpack). Opis zmiennych: docs/railway/OPERATIONS.md („Kopia w Cloudflare R2”).
 #
 # #751: obraz bazowy przypięty do digestu (powtarzalny build, audytowalne pochodzenie).
-# Aktualizacja = PR zmieniający digest (Dependabot, .github/dependabot.yml) — job CI
-# „Backup image (build + scan)” buduje obraz, uruchamia smoke (scripts/db/backup-image-smoke.sh),
+# Aktualizacja = PR zmieniający digest (Dependabot, .github/dependabot.yml) — job
+# „Backup image (build + scan)” (.github/workflows/backup-image.yml) buduje obraz, uruchamia smoke (scripts/db/backup-image-smoke.sh),
 # generuje SBOM i skanuje pakiety (scripts/security/backup-image-scan.mjs). Sam tag bez
 # digestu odrzuca tests/unit/backup-r2-image.test.ts. Runbook: docs/railway/BACKUP_RESTORE.md.
 FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c

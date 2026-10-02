@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
  * w konfiguracji fixture).
  */
 const WORKFLOWS = join(process.cwd(), '.github/workflows');
-const FILES = ['ci.yml', 'delete-old-runs.yml'];
+const FILES = ['ci.yml', 'delete-old-runs.yml', 'backup-image.yml'];
 const PLAYWRIGHT_CONFIG = join(process.cwd(), 'playwright.config.ts');
 const dirs: string[] = [];
 
@@ -124,18 +124,43 @@ describe('strażnik workflowów CI', () => {
       return file;
     };
 
+    /** Kopia workflowów z jednym celowym błędem w backup-image.yml. */
+    const mutatedBackup = (edit: (source: string) => string) => {
+      const dir = mkdtempSync(join(tmpdir(), 'ci-guard-backup-'));
+      dirs.push(dir);
+      for (const file of FILES) copyFileSync(join(WORKFLOWS, file), join(dir, file));
+      const source = readFileSync(join(dir, 'backup-image.yml'), 'utf8');
+      const next = edit(source);
+      expect(next, 'mutacja musi zmienić backup-image.yml').not.toBe(source);
+      writeFileSync(join(dir, 'backup-image.yml'), next);
+      return dir;
+    };
+
+    it('kopia backup-image.yml bez zmian przechodzi', () => {
+      expect(runGuard(mutatedBackup((source) => `${source}\n`)).code).toBe(0);
+    });
+
     it.each([
-      ['usunięty job backup-image', (ci: string) => ci.replace(/^  backup-image:\n[\s\S]*?(?=^  build:\n)/m, ''), 'zmieniono listę lub kolejność jobów CI'],
-      ['build bez --no-cache', (ci: string) => ci.replace('docker build --pull --no-cache', 'docker build --pull'), 'zbuduj docker/backup/Dockerfile od zera'],
-      ['bez smoke obrazu', (ci: string) => ci.replace(/\n      - name: Smoke backup image\n        run: .*\n/, '\n'), 'smoke obrazu'],
-      ['skaner na ruchomym tagu', (ci: string) => ci.replace(/(TRIVY_IMAGE: aquasec\/trivy:[\d.]+)@sha256:[0-9a-f]{64}/, '$1'), 'skaner przypięty do wersji i digestu'],
-      ['bez SBOM', (ci: string) => ci.replace('--format cyclonedx', '--format table'), 'SBOM CycloneDX'],
-      ['bez bramki podatności', (ci: string) => ci.replace('node scripts/security/backup-image-scan.mjs', 'echo skan'), 'bramka podatności'],
-      ['bramka miękka (continue-on-error)', (ci: string) => ci.replace('      - name: Vulnerability gate\n', '      - name: Vulnerability gate\n        continue-on-error: true\n'), 'bez continue-on-error'],
+      ['build bez --no-cache', (w: string) => w.replace('docker build --pull --no-cache', 'docker build --pull'), 'zbuduj docker/backup/Dockerfile od zera'],
+      ['bez smoke obrazu', (w: string) => w.replace(/\n      - name: Smoke backup image\n        run: .*\n/, '\n'), 'smoke obrazu'],
+      ['skaner na ruchomym tagu', (w: string) => w.replace(/(TRIVY_IMAGE: aquasec\/trivy:[\d.]+)@sha256:[0-9a-f]{64}/, '$1'), 'skaner przypięty do wersji i digestu'],
+      ['bez SBOM', (w: string) => w.replace('--format cyclonedx', '--format table'), 'SBOM CycloneDX'],
+      ['bez bramki podatności', (w: string) => w.replace('node scripts/security/backup-image-scan.mjs', 'echo skan'), 'bramka podatności'],
+      ['bramka miękka (continue-on-error)', (w: string) => w.replace('      - name: Vulnerability gate\n', '      - name: Vulnerability gate\n        continue-on-error: true\n'), 'bez continue-on-error'],
+      ['bez harmonogramu tygodniowego', (w: string) => w.replace(/^  schedule:\n    - cron: .*\n/m, ''), 'harmonogram tygodniowy'],
+      ['bez workflow_dispatch', (w: string) => w.replace(/^  workflow_dispatch:\n/m, ''), 'workflow_dispatch'],
+      ['PR bez ścieżki docker/backup/**', (w: string) => w.replace(/(pull_request:[\s\S]*?)      - docker\/backup\/\*\*\n/, '$1'), 'pull_request przy zmianie docker/backup/**'],
+      ['bez timeoutu', (w: string) => w.replace(/^    timeout-minutes: \d+\n/m, ''), 'ustaw timeout-minutes'],
     ])('kontrola ujemna: %s', (_name, edit, message) => {
-      const { code, output } = runGuard(mutated(edit));
+      const { code, output } = runGuard(mutatedBackup(edit));
       expect(code).not.toBe(0);
       expect(output).toContain(message);
+    });
+
+    it('kontrola ujemna: skan obrazu z powrotem w ci.yml (blokowałby wdrożenie)', () => {
+      const { code, output } = runGuard(mutated((ci) => ci.replace('      - name: Build application\n', '      - name: Build application\n        # docker/backup/Dockerfile\n')));
+      expect(code).not.toBe(0);
+      expect(output).toContain('nie do ci.yml');
     });
 
     it('kontrola ujemna: Dockerfile z samym ruchomym tagiem obrazu bazowego', () => {

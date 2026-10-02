@@ -142,8 +142,14 @@ niepełna konfiguracja, endpoint http). Logika w Vitest: `backup-r2.test.ts`,
 ## Obraz usługi kopii — build, smoke, SBOM i skan (#751)
 
 Usługa `backup` w Railway buduje `docker/backup/Dockerfile`. Ten sam plik buduje od zera
-(`--pull --no-cache`) job CI **„Backup image (build + scan)”** na każdym przebiegu — błąd
-repozytorium APT, obrazu bazowego albo zależności wychodzi w CI, a nie dopiero w Railway.
+(`--pull --no-cache`) job **„Backup image (build + scan)”** w OSOBNYM workflow
+`.github/workflows/backup-image.yml` — błąd repozytorium APT, obrazu bazowego albo zależności
+wychodzi w CI, a nie dopiero w Railway. Workflow nie jest częścią `ci.yml` (decyzja właściciela
+2026-10-02), więc wynik skanu nie blokuje wdrożenia aplikacji web (`Wait for CI`). Uruchamia
+się przy zmianie `docker/backup/**`, `scripts/db/**`, skryptów bramki, `package.json` albo
+samego workflowu (push na `main` i PR), ręcznie (`workflow_dispatch`) i co tydzień (poniedziałek
+04:23 UTC — nowe podatności w niezmienionym obrazie). Czerwony przebieg = nie włączaj ani nie
+aktualizuj usługi `backup` w Railway, dopóki bramka nie będzie zielona.
 
 - **Obraz bazowy przypięty do digestu** (`node:22-bookworm-slim@sha256:…`). Sam tag bez
   digestu odrzuca strażnik (`scripts/check-ci-workflows.mjs`, `backup-r2-image.test.ts`).

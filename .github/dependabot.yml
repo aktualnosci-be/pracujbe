@@ -1,5 +1,5 @@
 # Dependabot (#751): tylko digest obrazu bazowego usługi kopii (docker/backup/Dockerfile).
-# PR pokazuje stary i nowy digest; job CI „Backup image (build + scan)” buduje, uruchamia
+# PR pokazuje stary i nowy digest; job „Backup image (build + scan)” (.github/workflows/backup-image.yml) buduje, uruchamia
 # smoke i skanuje nowy obraz przed scaleniem. Zależności npm aplikacji — bez zmian (SCA).
 version: 2
 updates:
