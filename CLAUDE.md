@@ -833,6 +833,19 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
+  Plan dla wartości parametrów (#1215, audyt PERF-01, migracja `0213` — numer tymczasowy):
+  `get_public_jobs`/`_count`/`get_public_job_filter_facets` i `saved_search_jobs_after` to
+  `plpgsql` z `set plan_cache_mode = force_custom_plan` i `set jit = off` (dawniej `LANGUAGE sql`
+  = plan generyczny, pełny skan aktywnych ofert przy każdym wywołaniu). Tytuł do słowa kluczowego
+  = podzapytanie, lista dołącza tłumaczenie do wierszy strony, indeksy częściowe klucza
+  wynagrodzenia (`idx_jobs_public_salary_month`/`_hour`), facety biorą nazwę miejscowości po
+  kluczu głównym. Kontrakt (sygnatury, wyniki z kolejnością, granty) bez zmian; blok FROM … WHERE
+  nadal wspólny z kopią alertów (`saved-search-keyset-sync`). PG16, 9600 aktywnych ofert:
+  strona 1 233 → 1 ms, sort po wynagrodzeniu 616 → 2 ms, licznik 212 → 5 ms, facety 245 → 41 ms
+  (`docs/railway/OPERATIONS.md` §3). Dowód: `rls.sql` sekcja PF1215 (odciski wyników 34 kombinacji
+  = definicje z 0194; kontrola ujemna: stara definicja czyta wszystkie oferty), rollback
+  `0213_…down.sql` (`public-jobs-plan-rollback.sql`). Zmiana filtrów listy = ta sama zmiana
+  w czterech funkcjach (w plpgsql).
   Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
   (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
   (`f.locations.join(',')` + `splitParam`/`value.split(',')` nie rozróżniały separatora listy
@@ -891,6 +904,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   pola. Dowód: `rls.sql` sekcja FL974 (kontrole ujemne N1–N6), rollback `0194_…down.sql`
   (`job-filters-rollback.sql`; w `city-sections-filters-rollback.sql` przed 0183), unit
   `job-filters-0194`, `job-work-time`, E2E `job-filters-0194` (bez JS, axe 320/1280 px).
+  Słowo kluczowe w kwalifikacjach (#866, migracja `0214`, stosowana PO 0213
+  z #1275): lista, licznik, facety i kopia filtrów alertów dopasowują słowo kluczowe także do
+  umiejętności (`job_skills`), certyfikatów (`job_certificates`) i wymagań (`job_requirements`,
+  tylko w języku pokazywanym na szczególe: język strony, a bez wymagań danego rodzaju — język
+  oferty); prefiltr `search_keyword_candidates` po indeksach trigramowych, dokładny warunek
+  `job_keyword_qualification_match`. Opis oferty poza zakresem. Lustro demo szuka w tytule
+  i wymaganiach. Dowód: `rls.sql` sekcja KQ866 (kontrola ujemna: definicje z 0213), rollback
+  `0214_…down.sql` (`keyword-qualifications-rollback.sql`), unit `jobs-demo-search-mirror`.
   Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
   fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
   lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało

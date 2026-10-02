@@ -25343,6 +25343,349 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- PF1215. Lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (0213, #1215,
+-- audyt PERF-01). Definicje z 0194 (LANGUAGE sql, plan generyczny) zastąpione plpgsql
+-- z `plan_cache_mode = force_custom_plan`. 4000 ofert z remisami `published_at` (po 7)
+-- i wynagrodzenia (okresy, waluty, brak kwoty), tłumaczeniami, językami, wymiarem pracy,
+-- firmą-agencją, firmą zablokowaną przez kandydata, firmą niezweryfikowaną, ofertami
+-- zamkniętymi/wygasłymi/usuniętymi. PF1215-1..3: wyniki (kolejność wierszy włącznie) każdej
+-- kombinacji filtrów, sortowania i strony = definicje z 0194 (rollback 0213 w savepoincie),
+-- dla gościa, kandydata z blokadą i service_role (alerty). PF1215-4: strona 1 i sortowanie
+-- po wynagrodzeniu czytają kilkadziesiąt ofert (indeks + LIMIT), licznik bez słowa kluczowego
+-- nie czyta tłumaczeń; KONTROLA UJEMNA: definicje z 0194 czytają wszystkie oferty (strona 1
+-- i sortowanie po wynagrodzeniu).
+-- Cała sekcja w transakcji cofanej.
+-- ============================================================================
+\echo '--- PF1215 publiczne RPC ofert: plan dla wartości parametrów (0213) ---'
+create function pg_temp.pf1215_cases() returns table (label text, filters text, page text)
+language sql as $$
+  values
+    ('default', '', ''),
+    ('p100', '', 'p_limit => 100'),
+    ('p100o100', '', 'p_limit => 100, p_offset => 100'),
+    ('p100o2300', '', 'p_limit => 100, p_offset => 2300'),
+    ('limit0', '', 'p_limit => 0'),
+    ('limit500neg', '', 'p_limit => 500, p_offset => -5'),
+    ('offsetmax', '', 'p_offset => 20000'),
+    ('salary', '', 'p_sort => ''salary'', p_limit => 100'),
+    ('salaryo700', '', 'p_sort => ''salary'', p_limit => 100, p_offset => 700'),
+    ('salaryhour', 'p_salary_unit => ''hour''', 'p_sort => ''salary'', p_limit => 100'),
+    ('salaryhouro300', 'p_salary_unit => ''hour''', 'p_sort => ''salary'', p_limit => 100, p_offset => 300'),
+    ('sortbogus', '', 'p_sort => ''bogus'', p_limit => 50'),
+    ('keyword', 'p_keyword => ''kierowca pf1215''', 'p_limit => 100'),
+    ('keywordtr', 'p_keyword => ''welder''', 'p_limit => 100'),
+    ('keywordtren', 'p_locale => ''en'', p_keyword => ''welder''', 'p_limit => 100'),
+    ('keywordsalary', 'p_keyword => ''pf1215''', 'p_sort => ''salary'', p_limit => 100, p_offset => 40'),
+    ('localexx', 'p_locale => ''xx''', 'p_limit => 30'),
+    ('localefr', 'p_locale => ''fr''', 'p_limit => 100, p_offset => 50'),
+    ('city', 'p_city => ''Gent''', 'p_limit => 100'),
+    ('locations', 'p_locations => array[''Gent'',''Bruxelles'']', 'p_limit => 100'),
+    ('locationsempty', 'p_locations => array[]::text[], p_categories => array[]::text[]', 'p_limit => 40'),
+    ('catcontract', 'p_categories => array[''transport'',''cleaning''], p_contract_types => array[''interim'']', 'p_limit => 100'),
+    ('salaryrange', 'p_salary_min => 2200, p_salary_max => 2600', 'p_limit => 100'),
+    ('salaryhourrange', 'p_salary_min => 14, p_salary_unit => ''hour''', 'p_sort => ''salary'', p_limit => 100'),
+    ('accimm', 'p_accommodation => true, p_immediate => true', 'p_limit => 100'),
+    ('noacc', 'p_accommodation => false, p_no_language => true', 'p_limit => 100'),
+    ('direct', 'p_direct_only => true', 'p_limit => 100'),
+    ('since', 'p_since => now() - interval ''3 hours''', 'p_limit => 100'),
+    ('language', 'p_language => ''nl'', p_language_level => ''fluent''', 'p_limit => 100'),
+    ('languagefr', 'p_language => ''fr''', 'p_limit => 100'),
+    ('worktime', 'p_work_time => ''part_time''', 'p_limit => 100'),
+    ('near', 'p_near => ''Gent'', p_radius_km => 60', 'p_limit => 100'),
+    ('nearunknown', 'p_near => ''Nieznane PF1215''', 'p_limit => 100'),
+    ('combo', 'p_keyword => ''pf1215'', p_locations => array[''Gent''], p_salary_min => 1500, p_direct_only => true', 'p_sort => ''salary'', p_limit => 100');
+$$;
+-- Odcisk wyników: lista (z numerem wiersza — kolejność), licznik, facety (posortowane).
+create function pg_temp.pf1215_snapshot() returns text language plpgsql as $$
+declare c record; v text; acc text := '';
+begin
+  for c in select * from pg_temp.pf1215_cases() loop
+    execute format(
+      'select count(*)::text || '':'' || md5(coalesce(string_agg(row_to_json(r)::text, ''|'' order by r.ordinality), '''')) '
+      'from public.get_public_jobs(%s) with ordinality r',
+      concat_ws(', ', nullif(c.filters, ''), nullif(c.page, ''))) into v;
+    acc := acc || c.label || ':list=' || v;
+    execute format('select public.get_public_jobs_count(%s)::text', c.filters) into v;
+    acc := acc || ':count=' || v;
+    execute format(
+      'select md5(coalesce(string_agg(f.dimension || ''/'' || coalesce(f.key, ''∅'') || ''='' || f.total, ''|'' '
+      'order by f.dimension, f.key nulls first), '''')) from public.get_public_job_filter_facets(%s) f',
+      c.filters) into v;
+    acc := acc || ':facets=' || v || E'\n';
+  end loop;
+  return acc;
+end $$;
+-- Kopia filtrów dla alertów (tylko service_role): pierwsza strona, strona od kursora, filtry.
+create function pg_temp.pf1215_saved() returns text language plpgsql as $$
+declare c record; v text; acc text := '';
+  base text := 'p_locale => ''pl'', p_keyword => %s, p_city => null, p_categories => null, p_locations => %s, '
+    'p_contract_types => null, p_salary_min => %s, p_salary_max => null, p_accommodation => null, '
+    'p_immediate => null, p_no_language => null, p_since => null, p_salary_unit => ''month'', '
+    'p_after_published_at => %s, p_after_id => %s, p_limit => %s';
+begin
+  for c in select * from (values
+    ('all', 'null', 'null', 'null', 'null', 'null', '1000'),
+    ('cursor', 'null', 'null', 'null',
+      '(select published_at from public.jobs where slug = ''pf1215-1400'')',
+      '(select id from public.jobs where slug = ''pf1215-1400'')', '300'),
+    ('filters', '''pf1215''', 'array[''Gent'',''Namur'']', '1800', 'null', 'null', '1000')
+  ) x(label, kw, loc, smin, apub, aid, lim) loop
+    execute format('select count(*)::text || '':'' || md5(coalesce(string_agg(r.id::text || r.published_at::text, ''|'' '
+      'order by r.ordinality), '''')) from public.saved_search_jobs_after(' || base || ') with ordinality r',
+      c.kw, c.loc, c.smin, c.apub, c.aid, c.lim) into v;
+    acc := acc || c.label || '=' || v || E'\n';
+  end loop;
+  return acc;
+end $$;
+-- Odczytane wiersze tabeli w bieżącej transakcji (skan sekwencyjny + pobrania z indeksu).
+create function pg_temp.pf1215_reads(p_rel regclass) returns bigint language sql as $$
+  select pg_stat_get_xact_tuples_returned(p_rel) + pg_stat_get_xact_tuples_fetched(p_rel);
+$$;
+
+begin;
+\set PFA 'e9c31215-0000-0000-0000-0000000000a1'
+\set PFC 'e9c31215-0000-0000-0000-0000000000c1'
+\set PFG 'e9c31215-0000-0000-0000-0000000000c2'
+\set PFB 'e9c31215-0000-0000-0000-0000000000c3'
+\set PFU 'e9c31215-0000-0000-0000-0000000000c4'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PFA','pfa@test.be','Pia A','{"role":"candidate","first_name":"Pia","last_name":"A","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status,is_agency) values
+  (:'PFC','Firma PF1215','verified',false), (:'PFG','Agencja PF1215','verified',true),
+  (:'PFB','Firma PF1215 zablokowana','verified',false), (:'PFU','Firma PF1215 niezweryfikowana','pending',false);
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'PFA', :'PFB');
+
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status,
+  default_locale, published_at, expires_at, deleted_at, remote, salary_min, salary_max, salary_period,
+  currency, accommodation, immediate, no_language_required, work_time)
+select
+  case when n % 10 < 7 then :'PFC'::uuid when n % 10 = 7 then :'PFG'::uuid
+       when n % 10 = 8 then :'PFB'::uuid else :'PFU'::uuid end,
+  'pf1215-' || n,
+  (array['Kierowca PF1215 ', 'Spawacz PF1215 ', 'Magazynier PF1215 '])[1 + n % 3] || n,
+  (array['transport', 'production', 'warehouse', 'cleaning'])[1 + n % 4]::public.job_category,
+  (array['permanent', 'temporary', 'interim'])[1 + n % 3]::public.contract_type,
+  (array['Gent', 'Bruxelles', 'Antwerpen', 'Liège', 'Namur'])[1 + n % 5], 'BE',
+  case when n % 23 = 0 then 'closed' else 'active' end::public.job_status,
+  case when n % 4 = 0 then 'nl' else 'pl' end,
+  date_trunc('minute', now()) - make_interval(mins => n / 7),
+  case when n % 31 = 0 then now() - interval '1 day' when n % 13 = 0 then now() + interval '10 days' end,
+  case when n % 37 = 0 then now() end,
+  n % 41 = 0,
+  case n % 6 when 0 then null when 1 then 2000 + (n % 9) * 100 when 2 then 30000 + (n % 5) * 1000
+    when 3 then 12 + n % 5 when 4 then 2500 else 1900 + (n % 4) * 100 end,
+  case n % 6 when 0 then null when 1 then 2400 + (n % 9) * 100 when 2 then null
+    when 3 then 15 + n % 5 when 4 then 3000 else null end,
+  (case n % 6 when 2 then 'year' when 3 then 'hour' else 'month' end)::public.salary_period,
+  case when n % 6 = 4 then 'PLN' else 'EUR' end,
+  n % 5 = 0, n % 7 = 0, n % 9 = 0,
+  (array[null, 'full_time', 'part_time', 'both'])[1 + n % 4]
+from generate_series(1, 4000) n;
+insert into public.job_translations(job_id, locale, title, highlights)
+select j.id, 'en', replace(replace(j.title, 'Spawacz', 'Welder'), 'Kierowca', 'Driver'), array['en ' || j.slug]
+from public.jobs j where j.slug like 'pf1215-%' and (substring(j.slug from 8))::int % 2 = 0;
+insert into public.job_translations(job_id, locale, title)
+select j.id, 'fr', 'Soudeur PF1215 ' || j.slug
+from public.jobs j where j.slug like 'pf1215-%' and (substring(j.slug from 8))::int % 5 = 0;
+insert into public.job_languages(job_id, language_label, level)
+select j.id, case when n % 8 = 1 then 'Niderlandzki' else 'Francuski' end,
+  case when n % 8 = 1 then (array['basic', 'fluent', 'native'])[1 + n % 3]::public.language_level end
+from (select id, (substring(slug from 8))::int n from public.jobs where slug like 'pf1215-%') j
+where n % 8 in (1, 3) and n % 9 <> 0;
+analyze public.jobs; analyze public.job_translations; analyze public.companies; analyze public.job_languages;
+
+select pg_temp.assert(
+  (select count(*) from public.jobs j join public.companies c on c.id = j.company_id
+    where j.slug like 'pf1215-%' and j.status = 'active' and j.deleted_at is null and c.status = 'verified'
+      and (j.expires_at is null or j.expires_at > now())) > 2500
+  and (select count(distinct published_at) from public.jobs where slug like 'pf1215-%') < 600
+  and exists (select 1 from public.jobs where slug like 'pf1215-%' and location_id is not null)
+  and exists (select 1 from public.job_languages jl join public.languages lg on lg.id = jl.language_id
+              where lg.code = 'nl'),
+  'PF1215-0 dane: tysiące ofert publicznych, remisy published_at, miejscowości i języki ze słownika');
+
+-- Odciski wyników nowych definicji (gość, kandydat z blokadą firmy, service_role).
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_new_anon \gset
+reset role;
+set role authenticated; set app.current_uid = :'PFA'; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_new_cand \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.pf1215_saved() as pf_new_saved \gset
+reset role;
+
+select pg_temp.assert(
+  position('default:list=20:' in :'pf_new_anon') > 0
+  and position('p100o2300:list=100:' in :'pf_new_anon') > 0
+  and position('limit0:list=1:' in :'pf_new_anon') > 0
+  and position('keywordtren:list=0:' in :'pf_new_anon') = 0
+  and position('offsetmax:list=0:' in :'pf_new_anon') > 0
+  and :'pf_new_anon' <> :'pf_new_cand'
+  and position('all=1000:' in :'pf_new_saved') > 0 and position('cursor=300:' in :'pf_new_saved') > 0,
+  'PF1215-1 odciski niepuste: strony pełne, offset za końcem pusty, blokada firmy zmienia wynik kandydata');
+
+-- PF1215-4: odczyty tabel (statystyki bieżącej transakcji).
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_reads('public.jobs') as pf_r0 \gset
+select count(*) from public.get_public_jobs('pl', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_r1 \gset
+select count(*) from public.get_public_jobs('pl', p_sort => 'salary', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_r2 \gset
+select pg_temp.pf1215_reads('public.job_translations') as pf_t0 \gset
+select public.get_public_jobs_count('pl') \g /dev/null
+select pg_temp.pf1215_reads('public.job_translations') as pf_t1 \gset
+reset role;
+select pg_temp.assert(:pf_r1 - :pf_r0 < 200,
+  'PF1215-4 strona 1 bez filtrów czyta najwyżej kilkadziesiąt ofert (indeks published_at + LIMIT), przeczytano ' || (:pf_r1 - :pf_r0));
+select pg_temp.assert(:pf_r2 - :pf_r1 < 400,
+  'PF1215-4b sortowanie po wynagrodzeniu idzie indeksem klucza wynagrodzenia, przeczytano ' || (:pf_r2 - :pf_r1));
+select pg_temp.assert(:pf_t1 - :pf_t0 = 0,
+  'PF1215-4c licznik bez słowa kluczowego nie czyta tłumaczeń, przeczytano ' || (:pf_t1 - :pf_t0));
+select pg_temp.assert(
+  (select proconfig @> array['plan_cache_mode=force_custom_plan', 'jit=off'] and prolang = (select oid from pg_language where lanname = 'plpgsql')
+     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)'::regprocedure)
+  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE'),
+  'PF1215-4d plpgsql SECURITY DEFINER z force_custom_plan i bez JIT; granty bez zmian');
+
+-- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
+savepoint pf1215_old;
+\ir ../rollback/0213_public_jobs_custom_plan.down.sql
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_old_anon \gset
+reset role;
+set role authenticated; set app.current_uid = :'PFA'; select pg_temp.assert_client_role();
+select pg_temp.pf1215_snapshot() as pf_old_cand \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.pf1215_saved() as pf_old_saved \gset
+reset role;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.pf1215_reads('public.jobs') as pf_o0 \gset
+select count(*) from public.get_public_jobs('pl', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_o1 \gset
+select count(*) from public.get_public_jobs('pl', p_sort => 'salary', p_limit => 20) \g /dev/null
+select pg_temp.pf1215_reads('public.jobs') as pf_o2 \gset
+reset role;
+select pg_temp.assert(:pf_o1 - :pf_o0 > 3000 and :pf_o2 - :pf_o1 > 3000,
+  'PF1215-N KONTROLA UJEMNA: definicja z 0194 czyta wszystkie oferty dla strony 1 (' || (:pf_o1 - :pf_o0)
+  || ') i dla sortowania po wynagrodzeniu (' || (:pf_o2 - :pf_o1) || ')');
+rollback to savepoint pf1215_old;
+
+select pg_temp.assert(:'pf_new_anon' = :'pf_old_anon',
+  'PF1215-2 gość: lista (kolejność), licznik i facety każdej kombinacji = definicje z 0194');
+select pg_temp.assert(:'pf_new_cand' = :'pf_old_cand',
+  'PF1215-2b kandydat z blokadą firmy: wyniki = definicje z 0194');
+select pg_temp.assert(:'pf_new_saved' = :'pf_old_saved',
+  'PF1215-3 saved_search_jobs_after (strona, kursor, filtry) = definicja z 0194');
+select pg_temp.assert(
+  (select prolang = (select oid from pg_language where lanname = 'plpgsql')
+   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure),
+  'PF1215-5 po cofnięciu savepointu stan 0213 zostaje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- KQ866. Słowo kluczowe listy ofert szuka też w kwalifikacjach oferty (0214, #866).
+-- Oferty o tytułach bez szukanego słowa: certyfikat VCA, umiejętność „wózek widłowy”,
+-- wymaganie w języku oferty (pl) i wymaganie tylko w innym języku (en). KQ866-1..6: lista,
+-- licznik, facety i kopia dla alertów znajdują ofertę po kwalifikacji, bez wielkości liter
+-- i diakrytyków; wymaganie w innym języku niż wyświetlany nie daje trafienia; oferta firmy
+-- niezweryfikowanej nadal ukryta; tytuł działa jak dotąd. KQ866-N: KONTROLA UJEMNA — po
+-- rollbacku 0214 (definicje z 0213) oferta po samej kwalifikacji nie jest znajdowana.
+-- ============================================================================
+\echo '--- KQ866 słowo kluczowe w kwalifikacjach oferty (0214) ---'
+begin;
+\set KQC 'e9c30866-0000-0000-0000-0000000000c1'
+\set KQU 'e9c30866-0000-0000-0000-0000000000c2'
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values
+  (:'KQC', 'Firma KQ866', 'verified'), (:'KQU', 'Firma KQ866 niezweryfikowana', 'pending');
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status,
+  default_locale, published_at)
+values
+  (:'KQC', 'kq866-vca', 'Magazynier KQ866 alfa', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '1 hour'),
+  (:'KQC', 'kq866-skill', 'Magazynier KQ866 beta', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '2 hours'),
+  (:'KQC', 'kq866-req', 'Kierowca KQ866 gamma', 'transport', 'interim', 'Gent', 'BE', 'active', 'pl', now() - interval '3 hours'),
+  (:'KQC', 'kq866-reqen', 'Kierowca KQ866 delta', 'transport', 'interim', 'Gent', 'BE', 'active', 'pl', now() - interval '4 hours'),
+  (:'KQU', 'kq866-unverified', 'Magazynier KQ866 omega', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '5 hours');
+set constraints all immediate;
+insert into public.job_certificates(job_id, certificate_label)
+select id, 'Certyfikat VCA-kq866' from public.jobs where slug in ('kq866-vca', 'kq866-unverified');
+insert into public.job_skills(job_id, skill_label)
+select id, 'Wózek widłowy kq866' from public.jobs where slug = 'kq866-skill';
+insert into public.job_requirements(job_id, locale, kind, position, content)
+select id, 'pl', 'mandatory', 0, 'Prawo jazdy kat. CE kq866' from public.jobs where slug = 'kq866-req';
+insert into public.job_requirements(job_id, locale, kind, position, content)
+select id, 'pl', 'mandatory'::public.requirement_kind, 0, 'Doświadczenie w transporcie kq866' from public.jobs where slug = 'kq866-reqen'
+union all
+select id, 'en', 'mandatory'::public.requirement_kind, 0, 'Tachograph card kq866' from public.jobs where slug = 'kq866-reqen';
+
+create function pg_temp.kq_slugs(p_locale text, p_keyword text) returns text language sql as $$
+  select coalesce(string_agg(slug, ',' order by slug), '')
+  from public.get_public_jobs(p_locale, p_keyword, p_limit => 100);
+$$;
+create function pg_temp.kq_facet_total(p_locale text, p_keyword text) returns bigint language sql as $$
+  select coalesce(sum(total), 0) from public.get_public_job_filter_facets(p_locale, p_keyword)
+  where dimension = 'category';
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-KQ866') = 'kq866-vca'
+  and public.get_public_jobs_count('pl', 'vca-KQ866') = 1
+  and pg_temp.kq_facet_total('pl', 'vca-KQ866') = 1,
+  'KQ866-1 certyfikat: lista, licznik i facety znajdują ofertę (bez firmy niezweryfikowanej)');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'WOZEK widlowy kq866') = 'kq866-skill'
+  and public.get_public_jobs_count('pl', 'WOZEK widlowy kq866') = 1,
+  'KQ866-2 umiejętność: bez wielkości liter i diakrytyków');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'kat. ce kq866') = 'kq866-req'
+  and pg_temp.kq_slugs('nl', 'kat. ce kq866') = 'kq866-req',
+  'KQ866-3 wymaganie w języku oferty: strona pl i strona nl (brak wymagań nl = język oferty)');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'tachograph card kq866') = ''
+  and public.get_public_jobs_count('pl', 'tachograph card kq866') = 0
+  and pg_temp.kq_slugs('en', 'tachograph card kq866') = 'kq866-reqen'
+  and public.get_public_jobs_count('en', 'tachograph card kq866') = 1,
+  'KQ866-4 wymaganie tylko w języku en: niewidoczne na stronie pl nie daje trafienia, na en daje');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'magazynier kq866') = 'kq866-skill,kq866-vca'
+  and pg_temp.kq_slugs('pl', 'kq866') = 'kq866-req,kq866-reqen,kq866-skill,kq866-vca'
+  and public.get_public_jobs_count('pl', 'kq866') = 4,
+  'KQ866-5 tytuł bez zmian; słowo z tytułu i kwalifikacji = suma zbiorów bez dubli');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'kq866%') = '',
+  'KQ866-5b znak % jest literałem także w kwalifikacjach');
+reset role;
+set role service_role;
+select pg_temp.assert((select count(*) from public.saved_search_jobs_after(
+    p_locale => 'pl', p_keyword => 'vca-kq866', p_city => null, p_categories => null, p_locations => null,
+    p_contract_types => null, p_salary_min => null, p_salary_max => null, p_accommodation => null,
+    p_immediate => null, p_no_language => null, p_since => null, p_salary_unit => 'month',
+    p_after_published_at => null, p_after_id => null, p_limit => 100)) = 1,
+  'KQ866-6 kopia filtrów dla alertów znajduje ofertę po certyfikacie');
+reset role;
+select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_candidates(text)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.job_keyword_qualification_match(uuid, text, text, text)', 'EXECUTE'),
+  'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
+
+savepoint kq866_old;
+\ir ../rollback/0214_keyword_job_qualifications.down.sql
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
+  and public.get_public_jobs_count('pl', 'wozek widlowy kq866') = 0
+  and pg_temp.kq_slugs('pl', 'magazynier kq866') = 'kq866-skill,kq866-vca',
+  'KQ866-N KONTROLA UJEMNA: definicje z 0213 szukają tylko w tytule');
+reset role;
+rollback to savepoint kq866_old;
+select pg_temp.assert(to_regprocedure('public.search_keyword_candidates(text)') is not null,
+  'KQ866-8 po cofnięciu savepointu stan 0214 zostaje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- PC1119. Miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119, #1076/M-4,
 --         migracja 0212): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
 --         rozpoznanego miasta; facet lokalizacji w języku widoku (location_names), tylko gdy
@@ -25491,6 +25834,8 @@ select pg_temp.assert(public.location_display_name('Sint-Niklaas', 'fr') = 'Sain
   'PC1119-N2 kontrola ujemna: bez strażnika nazwa prowadzi do innej gminy');
 rollback;
 reset role; reset app.current_uid;
+
+-- ============================================================================
 -- SD1112. Termin digestu zapisanych wyszukiwań bez dryfu (#1112, TIME21-04, migracja 0211).
 --   * `saved_search_next_run_at`: poprzedni termin + pełne okresy w czasie ściennym
 --     Europe/Brussels, pierwszy termin po chwili przebiegu (zaległe okresy pominięte), pora
