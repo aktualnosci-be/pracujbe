@@ -1,7 +1,7 @@
 -- =============================================================================
--- 0994_p2_concurrency_fixes.sql — trzy poprawki współbieżności i spójności (P2).
+-- 0210_p2_concurrency_fixes.sql — trzy poprawki współbieżności i spójności (P2).
 --
--- NUMER TYMCZASOWY (0994) — ostateczny nadaje integrator. Zależy od 0086/0121/0133/0178
+-- NUMER TYMCZASOWY (0210) — ostateczny nadaje integrator. Zależy od 0086/0121/0133/0178
 -- (zaproszenia), 0101/0186 (kampanie) i 0145/0146/0190 (kolejka tłumaczeń).
 --
 -- 1. #906 — `enqueue_campaign_batch`: równoległe paczki tej samej kampanii są serializowane
@@ -31,7 +31,7 @@
 --    konto i czy limit zadziałał). Adres z kontem: bez zmian (token wymieniany, jak w 0121).
 --    Treść = 0178 poza miejscem wymiany tokenu.
 --
--- Rollback: supabase/rollback/0994_p2_concurrency_fixes.down.sql (definicje z 0186, 0190
+-- Rollback: supabase/rollback/0210_p2_concurrency_fixes.down.sql (definicje z 0186, 0190
 -- i 0178). Testy: supabase/tests/rls.sql sekcja P2C994 (dblink, kontrole ujemne),
 -- supabase/tests/p2-concurrency-rollback.sql.
 -- =============================================================================

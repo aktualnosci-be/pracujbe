@@ -1,5 +1,5 @@
 -- =============================================================================
--- P2C994-R — rollback migracji 0994 (#906/#802/#793). Uruchamiany przez scripts/test-rls.sh
+-- P2C994-R — rollback migracji 0210 (#906/#802/#793). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -19,10 +19,10 @@ $$;
 select pg_temp.assert(
   position('for no key update' in pg_temp.defs()) > 0 and position('for share of c' in pg_temp.defs()) > 0
   and position('v_sent' in pg_temp.defs()) > 0,
-  'P2C994-R0 stan po 0994');
+  'P2C994-R0 stan po 0210');
 
 begin;
-\ir ../rollback/0994_p2_concurrency_fixes.down.sql
+\ir ../rollback/0210_p2_concurrency_fixes.down.sql
 select pg_temp.assert(
   position('for no key update' in pg_temp.defs()) = 0 and position('v_seen' in pg_temp.defs()) = 0
   and position('for share of c' in pg_temp.defs()) = 0 and position('v_sent' in pg_temp.defs()) = 0
@@ -36,4 +36,4 @@ select pg_temp.assert(
   'P2C994-R1 rollback przywraca definicje z 0186, 0190 i 0178 (z grantami)');
 rollback;
 
-select pg_temp.assert(position('v_sent' in pg_temp.defs()) > 0, 'P2C994-R2 po cofnięciu transakcji stan po 0994');
+select pg_temp.assert(position('v_sent' in pg_temp.defs()) > 0, 'P2C994-R2 po cofnięciu transakcji stan po 0210');

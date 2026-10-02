@@ -1,4 +1,4 @@
--- Rollback 0994 (numer tymczasowy): przywraca definicje sprzed poprawek #906/#802/#793.
+-- Rollback 0210 (numer tymczasowy): przywraca definicje sprzed poprawek #906/#802/#793.
 -- Ciała skopiowane z 0186 (enqueue_campaign_batch), 0190 (sync_job_translation_source)
 -- i 0178 (invite_company_member). Granty jak w tych migracjach. Test:
 -- supabase/tests/p2-concurrency-rollback.sql (uruchamiany przez scripts/test-rls.sh).

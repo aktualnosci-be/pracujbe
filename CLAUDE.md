@@ -2114,7 +2114,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
   nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
   TM403-13c przez `INVITATION_LIMIT_REACHED`).
-  Token a limit e-maili (#793, migracja `0994`): odświeżenie zaproszenia dla adresu bez konta
+  Token a limit e-maili (#793, migracja `0210`): odświeżenie zaproszenia dla adresu bez konta
   wymienia `signup_token_hash` dopiero po udanym zakolejkowaniu e-maila z nowym tokenem — odmowa
   limitu 3/dobę zostawia token z ostatnio wysłanego e-maila (link działa); wynik RPC bez zmian,
   adres z kontem jak dotąd. Podpowiedź `team.inviteLinkHint` opisuje limit. Dowód: `rls.sql`
@@ -2306,7 +2306,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
   (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
   unit `translation-worker`, `translation-job-sync`.
-  Wyścig wznowienia oferty z zawieszeniem firmy (#802, migracja `0994`):
+  Wyścig wznowienia oferty z zawieszeniem firmy (#802, migracja `0210`):
   `sync_job_translation_source` czyta firmę z `FOR SHARE OF c` — synchronizacja oferty czeka na
   zatwierdzenie zmiany statusu firmy i widzi `suspended` (źródło nieaktywne, zadania nie wracają);
   wiersz oferty bez blokady (brak zakleszczenia ze stroną firmy); migracja ponownie synchronizuje
@@ -2653,7 +2653,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
   `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
   (edytor), `admin-a11y` (nowe trasy).
-  Równoległe paczki (#906, migracja `0994` — numer tymczasowy): `enqueue_campaign_batch` blokuje
+  Równoległe paczki (#906, migracja `0210` — numer tymczasowy): `enqueue_campaign_batch` blokuje
   wiersz kampanii `FOR NO KEY UPDATE` (dawniej `FOR SHARE`), więc druga paczka czeka na pierwszą
   i widzi jej rezerwacje; `completed` tylko, gdy zapytanie nie znalazło nikogo do rezerwacji
   (konflikt nie kończy kampanii). Dowód: `rls.sql` sekcja P2C994 (dblink, limit 1; kontrola

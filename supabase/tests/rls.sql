@@ -25016,19 +25016,19 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- P2C994 (0994, numer tymczasowy): współbieżność paczek kampanii (#906), synchronizacji
+-- P2C994 (0210, numer tymczasowy): współbieżność paczek kampanii (#906), synchronizacji
 --        tłumaczeń oferty przy zawieszeniu firmy (#802) i tokenu zaproszenia przy limicie
 --        e-maili (#793). Sesje równoległe przez dblink; fixture'y zatwierdzane osobną sesją.
---        Kontrole ujemne: te same przeploty na definicjach sprzed 0994 (rollback zatwierdzony
+--        Kontrole ujemne: te same przeploty na definicjach sprzed 0210 (rollback zatwierdzony
 --        na czas kontroli, potem migracja nakładana ponownie).
 -- ============================================================================
 reset role; reset app.current_uid;
-\set P2CC1 'e0994000-0000-0000-0000-0000000000c1'
-\set P2CC2 'e0994000-0000-0000-0000-0000000000c2'
-\set P2CJ1 'e0994000-0000-0000-0000-0000000000a1'
-\set P2CJ2 'e0994000-0000-0000-0000-0000000000a2'
-\set P2CO  'e0994000-0000-0000-0000-0000000000e1'
-\set P2CCO 'e0994000-0000-0000-0000-0000000000e2'
+\set P2CC1 'e0210000-0000-0000-0000-0000000000c1'
+\set P2CC2 'e0210000-0000-0000-0000-0000000000c2'
+\set P2CJ1 'e0210000-0000-0000-0000-0000000000a1'
+\set P2CJ2 'e0210000-0000-0000-0000-0000000000a2'
+\set P2CO  'e0210000-0000-0000-0000-0000000000e1'
+\set P2CCO 'e0210000-0000-0000-0000-0000000000e2'
 \set P2CH1 '1994000000000000000000000000000000000000000000000000000000000000'
 \set P2CH2 '2994000000000000000000000000000000000000000000000000000000000000'
 \set P2CH3 '3994000000000000000000000000000000000000000000000000000000000000'
@@ -25038,31 +25038,31 @@ reset role; reset app.current_uid;
 
 select pg_temp.un45_sql($q$
   insert into auth.users(id,email,name,raw_user_meta_data) values
-    ('e0994000-0000-0000-0000-0000000000f1','p2c1@test.be','P2c Jeden','{"role":"candidate","first_name":"P2c","last_name":"Jeden","locale":"pl"}'),
-    ('e0994000-0000-0000-0000-0000000000f2','p2c2@test.be','P2c Dwa','{"role":"candidate","first_name":"P2c","last_name":"Dwa","locale":"nl"}');
+    ('e0210000-0000-0000-0000-0000000000f1','p2c1@test.be','P2c Jeden','{"role":"candidate","first_name":"P2c","last_name":"Jeden","locale":"pl"}'),
+    ('e0210000-0000-0000-0000-0000000000f2','p2c2@test.be','P2c Dwa','{"role":"candidate","first_name":"P2c","last_name":"Dwa","locale":"nl"}');
   select test_fixture.attest_candidates();
   update auth.users set email_verified = true
-   where id in ('e0994000-0000-0000-0000-0000000000f1','e0994000-0000-0000-0000-0000000000f2');
+   where id in ('e0210000-0000-0000-0000-0000000000f1','e0210000-0000-0000-0000-0000000000f2');
   update public.notification_preferences set email_marketing = true
-   where profile_id in ('e0994000-0000-0000-0000-0000000000f1','e0994000-0000-0000-0000-0000000000f2');
+   where profile_id in ('e0210000-0000-0000-0000-0000000000f1','e0210000-0000-0000-0000-0000000000f2');
   -- #802: dwie firmy zweryfikowane, po jednej ofercie (nl) opublikowanej i wstrzymanej —
   -- źródło tłumaczeń istnieje i jest nieaktywne, zadania superseded.
   insert into public.companies(id, name, status) values
-    ('e0994000-0000-0000-0000-0000000000c1', 'Firma P2C Een', 'verified'),
-    ('e0994000-0000-0000-0000-0000000000c2', 'Firma P2C Twee', 'verified');
+    ('e0210000-0000-0000-0000-0000000000c1', 'Firma P2C Een', 'verified'),
+    ('e0210000-0000-0000-0000-0000000000c2', 'Firma P2C Twee', 'verified');
   insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
-    values ('e0994000-0000-0000-0000-0000000000a1', 'e0994000-0000-0000-0000-0000000000c1', 'p2c994-een',
+    values ('e0210000-0000-0000-0000-0000000000a1', 'e0210000-0000-0000-0000-0000000000c1', 'p2c994-een',
             'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl'),
-           ('e0994000-0000-0000-0000-0000000000a2', 'e0994000-0000-0000-0000-0000000000c2', 'p2c994-twee',
+           ('e0210000-0000-0000-0000-0000000000a2', 'e0210000-0000-0000-0000-0000000000c2', 'p2c994-twee',
             'Chauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl');
   select 'ok'$q$);
 select pg_temp.un45_sql($q$
   update public.jobs set status = 'active', published_at = now()
-   where id in ('e0994000-0000-0000-0000-0000000000a1', 'e0994000-0000-0000-0000-0000000000a2');
+   where id in ('e0210000-0000-0000-0000-0000000000a1', 'e0210000-0000-0000-0000-0000000000a2');
   select 'ok'$q$);
 select pg_temp.un45_sql($q$
   update public.jobs set status = 'paused'
-   where id in ('e0994000-0000-0000-0000-0000000000a1', 'e0994000-0000-0000-0000-0000000000a2');
+   where id in ('e0210000-0000-0000-0000-0000000000a1', 'e0210000-0000-0000-0000-0000000000a2');
   select 'ok'$q$);
 select pg_temp.assert(
   (select count(*) from public.translation_sources
@@ -25162,9 +25162,9 @@ end $$;
 select pg_temp.assert(
   (select status from public.email_campaigns where id = :'p2c_camp1') = 'completed'
   and exists (select 1 from public.email_campaign_recipients
-               where campaign_id = :'p2c_camp1' and profile_id = 'e0994000-0000-0000-0000-0000000000f1')
+               where campaign_id = :'p2c_camp1' and profile_id = 'e0210000-0000-0000-0000-0000000000f1')
   and exists (select 1 from public.email_campaign_recipients
-               where campaign_id = :'p2c_camp1' and profile_id = 'e0994000-0000-0000-0000-0000000000f2'),
+               where campaign_id = :'p2c_camp1' and profile_id = 'e0210000-0000-0000-0000-0000000000f2'),
   'P2C994-1b kampania zakończona po obsłużeniu wszystkich (oba nowe adresy mają wpis)');
 
 -- P2C994-2 (#802): wznowienie oferty przeplecione z zawieszeniem firmy — źródło zostaje
@@ -25203,7 +25203,7 @@ select pg_temp.assert(public.consume_team_invitation_signup(:'P2CH3', 'limit793@
 reset role;
 -- P2C994-3e: adres z kontem — odświeżenie wymienia token jak dotąd (bez e-maila rejestracyjnego).
 insert into auth.users(id,email,name,raw_user_meta_data) values
-  ('e0994000-0000-0000-0000-0000000000e3','konto793@ti.test','Konto K','{"role":"employer","first_name":"Konto","last_name":"K","locale":"pl"}');
+  ('e0210000-0000-0000-0000-0000000000e3','konto793@ti.test','Konto K','{"role":"employer","first_name":"Konto","last_name":"K","locale":"pl"}');
 set role authenticated; set app.current_uid = :'P2CO'; select pg_temp.assert_client_role();
 select invitation_id as p2cacc from public.invite_company_member(:'P2CCO', 'konto793@ti.test', 'member', 'pl', :'P2CH6', 'nonce-p2c-0000000005') \gset
 select * from public.invite_company_member(:'P2CCO', 'konto793@ti.test', 'member', 'pl', :'P2CH7', 'nonce-p2c-0000000006') \gset p2cacc2_
@@ -25211,8 +25211,8 @@ reset role; reset app.current_uid;
 select pg_temp.assert((select signup_token_hash from public.company_invitations where id = :'p2cacc') = :'P2CH7',
   'P2C994-3e adres z kontem: token wymieniany przy odświeżeniu (jak w 0121)');
 
--- --- Kontrole ujemne: definicje sprzed 0994 (zatwierdzone, żeby widziały je sesje dblink) ---
-\ir ../rollback/0994_p2_concurrency_fixes.down.sql
+-- --- Kontrole ujemne: definicje sprzed 0210 (zatwierdzone, żeby widziały je sesje dblink) ---
+\ir ../rollback/0210_p2_concurrency_fixes.down.sql
 select pg_temp.p2c_campaign('p2c994-old') as p2c_camp2 \gset
 select pg_temp.p2c_campaign_race(:'p2c_camp2') as p2c_race2 \gset
 select pg_temp.assert(:'p2c_race2' = '0|completed|1',
@@ -25230,12 +25230,12 @@ select pg_temp.assert(
   'P2C994-N3 kontrola ujemna: stare odświeżenie ponad limit wymienia token bez e-maila');
 
 -- Migracja nałożona ponownie: jej jednorazowa synchronizacja naprawia źródło z N2.
-\ir ../migrations/0994_p2_concurrency_fixes.sql
+\ir ../migrations/0210_p2_concurrency_fixes.sql
 select pg_temp.assert(
   position('for share of c' in pg_get_functiondef('public.sync_job_translation_source(uuid)'::regprocedure)) > 0
   and position('v_seen' in pg_get_functiondef('public.enqueue_campaign_batch(uuid, integer)'::regprocedure)) > 0
   and position('v_sent' in pg_get_functiondef('public.invite_company_member(uuid, text, text, text, text, text)'::regprocedure)) > 0,
-  'P2C994-4 definicje z 0994 przywrócone');
+  'P2C994-4 definicje z 0210 przywrócone');
 select pg_temp.assert(
   not (select is_active from public.translation_sources where entity_type = 'job' and entity_id = :'P2CJ2')
   and not exists (select 1 from public.translation_jobs
