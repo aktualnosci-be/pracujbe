@@ -165,7 +165,7 @@ oferty i wyszukiwania, blokady firm (nazwa firmy), preferencje i powiadomienia, 
 przejęte przez to konto, historia wniosków, zgłoszenia treści złożone przez kandydata
 (`contentReports`: numer sprawy, kategoria/powód, opis, dane podane w formularzu, stan i daty — bez
 zgłoszonej treści, identyfikatora celu i kodu dostępu) oraz wysłane ostrzeżenia przed usunięciem z powodu
-braku aktywności (`retentionWarnings`: kategoria, aktywność, data ostrzeżenia, termin; migracja 0949 —
+braku aktywności (`retentionWarnings`: kategoria, aktywność, data ostrzeżenia, termin; migracja 0218 —
 numer tymczasowy, #1091). Historii widoczności profilu dla firm eksport nie obejmuje (funkcja wyłączona
 w trybie ogłoszeniowym, #1128).
 

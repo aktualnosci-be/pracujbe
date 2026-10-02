@@ -25420,9 +25420,9 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- CX1091. Eksport danych kandydata (#1091, 0949): zgłoszenia treści złożone przez kandydata
+-- CX1091. Eksport danych kandydata (#1091, 0218): zgłoszenia treści złożone przez kandydata
 -- (bez zgłoszonej treści, identyfikatora celu i kodu dostępu) i ostrzeżenia retencji wysłane
--- do kandydata; bez danych innej osoby. Kontrole ujemne: rollback 0949 gubi oba klucze,
+-- do kandydata; bez danych innej osoby. Kontrole ujemne: rollback 0218 gubi oba klucze,
 -- definicja bez filtra właściciela ujawnia zgłoszenie innej osoby.
 -- ============================================================================
 \echo '--- CX1091 eksport kandydata: zgłoszenia treści i ostrzeżenia retencji ---'
@@ -25479,7 +25479,7 @@ select pg_temp.assert(:'cx_exp'::jsonb ? 'applicationJournal' and :'cx_exp'::jso
 -- CX1091-6: pracodawca nadal bez eksportu kandydata.
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED',
-  'CX1091-6 pracodawca bez eksportu kandydata po 0949');
+  'CX1091-6 pracodawca bez eksportu kandydata po 0218');
 reset role; reset app.current_uid;
 
 -- CX1091-N1: kontrola ujemna — definicja bez filtra właściciela ujawnia cudze zgłoszenie.
@@ -25495,14 +25495,14 @@ select pg_temp.assert(position('Opis zgłoszenia CX2' in :'cx_leak') > 0,
   'CX1091-N1 kontrola ujemna: bez filtra właściciela eksport ujawnia zgłoszenie innej osoby');
 rollback to savepoint cx1091n1;
 
--- CX1091-N2: kontrola ujemna — po rollbacku 0949 eksport gubi oba klucze.
+-- CX1091-N2: kontrola ujemna — po rollbacku 0218 eksport gubi oba klucze.
 savepoint cx1091n2;
-\ir ../rollback/0949_candidate_export_reports_warnings.down.sql
+\ir ../rollback/0218_candidate_export_reports_warnings.down.sql
 set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
 select public.export_my_data()::text as cx_old \gset
 reset role; reset app.current_uid;
 select pg_temp.assert(not (:'cx_old'::jsonb ? 'contentReports') and not (:'cx_old'::jsonb ? 'retentionWarnings'),
-  'CX1091-N2 kontrola ujemna: definicja sprzed 0949 pomija zgłoszenia treści i ostrzeżenia retencji');
+  'CX1091-N2 kontrola ujemna: definicja sprzed 0218 pomija zgłoszenia treści i ostrzeżenia retencji');
 rollback to savepoint cx1091n2;
 -- TMR867. Przywrócenie wyłączonego członka przez zaproszenie respektuje hierarchię ról
 -- (0217, #867): admin nie przywróci wyłączonego admina zaproszeniem na niższą rolę ani przy

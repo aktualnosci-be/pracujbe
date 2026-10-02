@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0949 (numer tymczasowy — ostateczny nada integrator) — eksport danych kandydata (#1091).
+-- 0218 (numer tymczasowy — ostateczny nada integrator) — eksport danych kandydata (#1091).
 --
 -- `export_my_data` pomijał dwie grupy danych osoby z kontem kandydata:
 --   - `contentReports` — zgłoszenia treści złożone przez tę osobę (`reports.reporter_id`):
@@ -17,7 +17,7 @@
 -- klienta), nowa dopisuje klucze. Uprawnienia, limit 10 eksportów na dobę, ślad wniosku
 -- i audyt bez zmian (robi je funkcja wewnętrzna).
 --
--- Rollback: supabase/rollback/0949_candidate_export_reports_warnings.down.sql.
+-- Rollback: supabase/rollback/0218_candidate_export_reports_warnings.down.sql.
 -- =============================================================================
 
 do $mig$

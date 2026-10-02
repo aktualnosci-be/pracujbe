@@ -1,7 +1,7 @@
 -- =============================================================================
--- CX1091-R — rollback migracji 0949 (eksport kandydata: zgłoszenia treści i ostrzeżenia
+-- CX1091-R — rollback migracji 0218 (eksport kandydata: zgłoszenia treści i ostrzeżenia
 -- retencji, #1091). Uruchamiany przez scripts/test-rls.sh po rls.sql; rollback w transakcji
--- cofanej, baza zostaje po 0949.
+-- cofanej, baza zostaje po 0218.
 -- =============================================================================
 \set ON_ERROR_STOP on
 \set CXR 'c1091000-0000-4000-8000-0000000000f1'
@@ -16,7 +16,7 @@ select pg_temp.assert(
   to_regprocedure('public.export_my_data_pre_reports()') is not null
   and position('contentReports' in pg_get_functiondef('public.export_my_data()'::regprocedure)) > 0
   and not has_function_privilege('authenticated', 'public.export_my_data_pre_reports()', 'execute'),
-  'CX1091-R0 baza w stanie po 0949 (część wewnętrzna bez EXECUTE dla klienta)');
+  'CX1091-R0 baza w stanie po 0218 (część wewnętrzna bez EXECUTE dla klienta)');
 
 begin;
 insert into auth.users(id, email, name, raw_user_meta_data) values
@@ -29,14 +29,14 @@ select pg_temp.assert(:'cxr_before'::jsonb ? 'contentReports' and :'cxr_before':
   and :'cxr_before'::jsonb ? 'applicationJournal',
   'CX1091-R1 przed rollbackiem eksport ma nowe klucze i klucze z 0196');
 
-\ir ../rollback/0949_candidate_export_reports_warnings.down.sql
+\ir ../rollback/0218_candidate_export_reports_warnings.down.sql
 
 select pg_temp.assert(
   to_regprocedure('public.export_my_data_pre_reports()') is null
   and to_regprocedure('public.export_my_data()') is not null
   and has_function_privilege('authenticated', 'public.export_my_data()', 'execute')
   and not has_function_privilege('anon', 'public.export_my_data()', 'execute'),
-  'CX1091-R2 rollback przywraca funkcję sprzed 0949 z uprawnieniami');
+  'CX1091-R2 rollback przywraca funkcję sprzed 0218 z uprawnieniami');
 
 set local role authenticated; set local app.current_uid = :'CXR';
 select public.export_my_data()::text as cxr_after \gset
@@ -50,6 +50,6 @@ rollback;
 select pg_temp.assert(
   to_regprocedure('public.export_my_data_pre_reports()') is not null
   and position('retentionWarnings' in pg_get_functiondef('public.export_my_data()'::regprocedure)) > 0,
-  'CX1091-R4 po teście baza wraca do stanu po 0949');
+  'CX1091-R4 po teście baza wraca do stanu po 0218');
 
-\echo '--- CX1091-R rollback 0949 OK ---'
+\echo '--- CX1091-R rollback 0218 OK ---'

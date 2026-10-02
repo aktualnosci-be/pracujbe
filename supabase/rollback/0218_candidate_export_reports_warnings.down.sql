@@ -1,9 +1,9 @@
 -- =============================================================================
--- Rollback 0949 — eksport danych kandydata bez zgłoszeń treści i ostrzeżeń retencji (#1091).
+-- Rollback 0218 — eksport danych kandydata bez zgłoszeń treści i ostrzeżeń retencji (#1091).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/candidate-export-reports-rollback.sql wykonuje go w transakcji i cofa).
--- Przywraca funkcję sprzed 0949 (wewnętrzną część z 0196). Danych nie zmienia.
+-- Przywraca funkcję sprzed 0218 (wewnętrzną część z 0196). Danych nie zmienia.
 -- =============================================================================
 do $mig$
 begin
