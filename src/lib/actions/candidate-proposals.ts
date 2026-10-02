@@ -6,6 +6,7 @@ import { routing } from '@/i18n/routing';
 import { getMyOffersPage, type MyOffersPage } from '@/lib/data/candidate';
 import type { ErrorCode } from '@/lib/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { captureActionError } from '@/lib/db/errors';
 
 const cursorSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
@@ -26,7 +27,8 @@ export async function loadMoreProposals(locale: string, cursor: unknown): Promis
 
   try {
     return { status: 'ready', page: await getMyOffersPage(locale, parsed.data) };
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'candidate-proposals.loadMoreProposals');
     return { status: 'error' };
   }
 }

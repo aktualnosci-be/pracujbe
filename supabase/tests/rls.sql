@@ -13547,6 +13547,56 @@ select pg_temp.assert(
   'CT61-8d audyt zmiany statusu bez treści');
 
 -- ============================================================================
+-- CT1093. Potwierdzenie formularza kontaktu w języku ODBIORCY (#1093, 0205 — numer tymczasowy):
+--         zalogowany nadawca → język konta (resolve_recipient_locale), bez konta → język
+--         formularza; kolumna contact_messages.locale nadal = język formularza.
+--         Kontrola ujemna: definicja z 0125 (rollback) wysyła w języku formularza.
+-- ============================================================================
+reset role; reset app.current_uid;
+select public.resolve_recipient_locale(:'CANDB') as ct93_acc,
+       case when public.resolve_recipient_locale(:'CANDB') = 'nl' then 'fr' else 'nl' end as ct93_form \gset
+select pg_temp.assert(:'ct93_acc' <> :'ct93_form', 'CT1093-0 język formularza różny od języka konta');
+
+set role service_role;
+select message_id as ct93_id from public.submit_contact_message(
+  :'CANDB', gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-konto@test.be', :'ct93_form') \gset
+select message_id as ct93_guest from public.submit_contact_message(
+  null, gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-gosc@test.be', :'ct93_form') \gset
+select message_id as ct93_gone from public.submit_contact_message(
+  'c1093000-0000-0000-0000-00000000dead', gen_random_uuid(), 'other', :'CTMSG', null,
+  'ct1093-brak@test.be', :'ct93_form') \gset
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = :'ct93_acc')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_id'),
+  'CT1093-1 zalogowany nadawca: supportContact w języku konta, nie formularza');
+select pg_temp.assert(
+  (select locale = :'ct93_form' from public.contact_messages where id = :'ct93_id'),
+  'CT1093-2 wiadomość zachowuje język formularza');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = :'ct93_form')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_guest'),
+  'CT1093-3 nadawca bez konta: supportContact w języku formularza');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = :'ct93_form')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_gone'),
+  'CT1093-4 nieistniejący profil = jak bez konta (język formularza)');
+
+-- KONTROLA UJEMNA: definicja z 0125 wysyła potwierdzenie zalogowanemu w języku formularza.
+begin;
+\ir ../rollback/0205_contact_recipient_locale.down.sql
+set local role service_role;
+select message_id as ct93_old from public.submit_contact_message(
+  :'CANDB', gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-stara@test.be', :'ct93_form') \gset
+reset role;
+select pg_temp.assert(
+  (select bool_and(locale = :'ct93_form') and bool_and(locale <> :'ct93_acc')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_old'),
+  'CT1093-N kontrola ujemna: bez 0205 zalogowany dostaje język formularza (CT1093-1 by to złapał)');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- AIB36. Globalny budżet AI (#36, 0120): rezerwacja przed API, dzienny i miesięczny limit,
 --        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
 --        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza
@@ -19922,6 +19972,112 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CL174: powrót
 reset role;
 
 -- ============================================================================
+-- CLTPL — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211; migracja 0204, numer tymczasowy).
+-- RPC zapisu i usunięcia ze strażnikiem trybu (nakładki na treść z 0170), BEFORE INSERT na
+-- tabelach szablonów dla każdej roli. Odczyt istniejących szablonów pod RLS bez zmian.
+-- Fixture z RT170 (firma RTCO, rekruter RTE1, szablon rttpl). Kontrole ujemne: bez nakładki
+-- treść z 0170 zapisuje w trybie ogłoszeniowym; bez triggera service_role wstawia szablon.
+-- ============================================================================
+\echo '--- CLTPL tryb ogłoszeniowy: szablony odpowiedzi (0204) ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CLTPL-pre tryb RECRUITMENT na starcie sekcji');
+-- Tryb RECRUITMENT: usunięcie przez nakładkę działa (kontrola dodatnia; zwalnia miejsce pod limit).
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.delete_company_message_template(:'RTCO'::uuid,
+  (select id from public.company_message_templates where company_id = :'RTCO'::uuid and name = 'T1'));
+select public.save_company_message_template(:'RTCO'::uuid, null, 'CLTPL tymczasowy', '{"pl":"x"}'::jsonb) as cltpltmp \gset
+select public.delete_company_message_template(:'RTCO'::uuid, :'cltpltmp'::uuid);
+select pg_temp.assert((select count(*) = 0 from public.company_message_templates where id = :'cltpltmp'::uuid),
+  'CLTPL-pre zapis i usunięcie działają w trybie RECRUITMENT');
+select pg_temp.expect_error('select public.save_company_message_template_impl(''e9400000-0000-4000-8000-0000000000f1''::uuid, null, ''X'', ''{"pl":"x"}''::jsonb)',
+  'permission denied', 'CLTPL-pre klient nie woła treści bez strażnika (_impl zapisu)');
+select pg_temp.expect_error('select public.delete_company_message_template_impl(''e9400000-0000-4000-8000-0000000000f1''::uuid, gen_random_uuid())',
+  'permission denied', 'CLTPL-pre klient nie woła treści bez strażnika (_impl usunięcia)');
+reset role; reset app.current_uid;
+select count(*) as cltpl_before from public.company_message_templates where company_id = :'RTCO'::uuid \gset
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CLTPL', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'CLTPL-0 tryb ogłoszeniowy');
+
+-- CLTPL-1: RPC odrzucają zapis nowego, edycję i usunięcie — przed walidacją i uprawnieniami.
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'CLTPL nowy', '{"pl":"x"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1 nowy szablon → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, %L::uuid, %L, %L::jsonb)', :'RTCO', :'rttpl', 'CLTPL edycja', '{"pl":"x"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1b edycja szablonu → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('select public.delete_company_message_template(%L::uuid, %L::uuid)', :'RTCO', :'rttpl'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1c usunięcie szablonu → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'X', '{"de":"Hallo"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1d strażnik trybu przed walidacją');
+-- CLTPL-2: istniejące szablony nadal czytelne dla recruiter+ (odczyt bez zmian).
+select pg_temp.assert((select name = 'Zaproszenie 2' from public.company_message_templates where id = :'rttpl'::uuid),
+  'CLTPL-2 odczyt istniejącego szablonu pod RLS bez zmian');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_message_templates where company_id = :'RTCO'::uuid) = :cltpl_before
+  and (select name = 'Zaproszenie 2' from public.company_message_templates where id = :'rttpl'::uuid),
+  'CLTPL-2b brak zmian po odrzuconych wywołaniach');
+
+-- CLTPL-3: bezpośredni INSERT odrzucony także dla service_role (obie tabele).
+set role service_role;
+select pg_temp.expect_error(
+  format('insert into public.company_message_templates(company_id, name) values (%L::uuid, %L)', :'RTCO', 'CLTPL sr'),
+  'RECRUITMENT_DISABLED', 'CLTPL-3 INSERT szablonu (service_role) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('insert into public.company_message_template_variants(template_id, locale, body) values (%L::uuid, %L, %L)', :'rttpl', 'en', 'Hello'),
+  'RECRUITMENT_DISABLED', 'CLTPL-3b INSERT wariantu (service_role) → RECRUITMENT_DISABLED');
+reset role;
+
+-- CLTPL-N (kontrole ujemne).
+-- N1: bez triggera service_role wstawia szablon w trybie ogłoszeniowym.
+begin;
+drop trigger trg_aa_recruitment_mode on public.company_message_templates;
+set local role service_role;
+insert into public.company_message_templates(company_id, name) values (:'RTCO', 'CLTPL neg');
+reset role;
+select pg_temp.assert((select count(*) = 1 from public.company_message_templates where name = 'CLTPL neg'),
+  'CLTPL-N1 kontrola ujemna: bez triggera nowy szablon powstaje w trybie ogłoszeniowym');
+rollback;
+-- N2: treść bez nakładki (0170) zapisuje w trybie ogłoszeniowym, gdy zdjęty jest też trigger —
+-- nakładka jest więc niezależną blokadą (nie zasłania jej wyłącznie trigger tabeli).
+begin;
+drop trigger trg_aa_recruitment_mode on public.company_message_templates;
+drop trigger trg_aa_recruitment_mode on public.company_message_template_variants;
+select set_config('app.current_uid', :'RTE1', true);
+select pg_temp.assert(public.save_company_message_template_impl(:'RTCO'::uuid, null, 'CLTPL neg2', '{"pl":"x"}'::jsonb) is not null,
+  'CLTPL-N2 kontrola ujemna: bez nakładki ze strażnikiem szablon zapisuje się w trybie ogłoszeniowym');
+rollback;
+-- N3: nakładka sama (trigger zdjęty) nadal odrzuca zapis — strażnik RPC działa bez triggera.
+begin;
+drop trigger trg_aa_recruitment_mode on public.company_message_templates;
+drop trigger trg_aa_recruitment_mode on public.company_message_template_variants;
+set local role authenticated; select set_config('app.current_uid', :'RTE1', true); select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'CLTPL neg3', '{"pl":"x"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-N3 nakładka odrzuca zapis bez triggera tabeli');
+rollback;
+reset role; reset app.current_uid;
+
+-- CLTPL-4: kaskada usunięcia (UPDATE created_by → null) nie jest blokowana w trybie ogłoszeniowym.
+begin;
+update public.company_message_templates set created_by = null where id = :'rttpl'::uuid;
+select pg_temp.assert((select created_by is null from public.company_message_templates where id = :'rttpl'::uuid),
+  'CLTPL-4 UPDATE istniejącego szablonu (np. kaskada set null) bez strażnika');
+rollback;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLTPL: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
+
+-- ============================================================================
 -- CA1142 / NT1145 — konto bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych
 -- (#1142, #1145; migracja 0175). Tryb ogłoszeniowy: każde RPC profilu
 -- zawodowego i bezpośredni zapis pól zawodowych odrzucone; powiadomienia o aplikacjach,
@@ -22041,8 +22197,8 @@ select pg_temp.pj_mk(44, :'WMCOA', 'closed');
 
 update public.jobs set expires_at = now() - interval '1 day' where id = pg_temp.pj_id(6);
 update public.jobs set title = '   ' where id = pg_temp.pj_id(7);
-update public.jobs set title = 'draft roboczy' where id = pg_temp.pj_id(8);
-update public.jobs set title = 'Tekst placeholder do uzupełnienia' where id = pg_temp.pj_id(9);
+-- Oferty 8 i 9 (dawniej tytuły „draft…”/„…placeholder…”) — reguła tytułu to od #1221 (0203)
+-- tylko pusty tytuł; realne tytuły z tymi słowami sprawdza sekcja BZ1221.
 update public.jobs set city = '  ' where id = pg_temp.pj_id(10);
 update public.jobs set region = '' where id = pg_temp.pj_id(11);
 delete from public.job_translations where job_id = pg_temp.pj_id(12);
@@ -22076,10 +22232,6 @@ select pg_temp.pj_add('draftonly', 'oferta zamknięta (ponowna publikacja)', pg_
 select pg_temp.pj_add('expired', 'data ważności w przeszłości', pg_temp.pj_id(6), :'WMEA'::uuid,
   'JOB_EXPIRED: termin ważności oferty minął');
 select pg_temp.pj_add('title', 'tytuł z samych spacji', pg_temp.pj_id(7), :'WMEA'::uuid,
-  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
-select pg_temp.pj_add('title', 'tytuł zaczyna się od „draft”', pg_temp.pj_id(8), :'WMEA'::uuid,
-  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
-select pg_temp.pj_add('title', 'tytuł zawiera „placeholder”', pg_temp.pj_id(9), :'WMEA'::uuid,
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
 select pg_temp.pj_add('title', 'miasto z samych spacji', pg_temp.pj_id(10), :'WMEA'::uuid,
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
@@ -22144,14 +22296,14 @@ end $$;
 
 -- PJ1071-1: definicja produkcyjna — każdy brak kończy się pełnym komunikatem własnej reguły,
 -- a stan ofert (status) pozostaje bez zmian.
-select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 23
+select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 21
   and (select count(distinct rule) from pg_temp.pj_cases) = 10
   and (select count(distinct rule) from pg_temp.pj_mutations) = 10,
-  'PJ1071-0 lista przypadków obejmuje 10 reguł (23 przypadki)');
+  'PJ1071-0 lista przypadków obejmuje 10 reguł (21 przypadków)');
 select pg_temp.pj_run(null) as pj_base \gset
 select pg_temp.assert(:'pj_base' = '', format('PJ1071-1 każdy brak ma własny, pełny komunikat: %s', :'pj_base'));
 select pg_temp.assert(
-  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 19
+  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 17
   and (select count(*) from public.jobs where id in (pg_temp.pj_id(42)) and status = 'active') = 1,
   'PJ1071-1b odrzucone szkice pozostają szkicami, oferta aktywna nie zmienia się');
 
@@ -22231,6 +22383,105 @@ reset role; reset app.current_uid;
 select pg_temp.assert(:'pj_n10' = '', format('PJ1071-N10 bez reguły „oferta nie istnieje” brak oferty trafia na kontrolę uprawnień: %s', :'pj_n10'));
 select pg_temp.assert(pg_temp.pj_run(null) = '',
   'PJ1071-N11 po cofnięciu mutacji definicja produkcyjna jest przywrócona (każdy brak nadal ma swój komunikat)');
+
+-- ============================================================================
+-- BZ1221. Tytuł oferty bez heurystyki „zaślepki” (#1221, audyt 29.09 BIZ-3, 0203).
+--   `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucały tytuł
+--   zaczynający się od „draft” albo zawierający „placeholder” — realne stanowisko
+--   „Draftsman (AutoCAD)” nie dało się opublikować. Od 0203 zaślepką jest tylko pusty tytuł.
+--   Kontrole ujemne: definicje sprzed 0203 (rollback w transakcji cofanej) odrzucają te same
+--   tytuły w każdej z trzech funkcji; pusty tytuł odrzucany w obu wariantach.
+-- ============================================================================
+\echo '--- BZ1221 tytuł oferty: tylko pusty tytuł to zaślepka ---'
+reset role; reset app.current_uid;
+select pg_temp.pj_mk(n, :'WMCOA') from generate_series(51, 53) n;
+update public.jobs set title = 'Draftsman (AutoCAD)' where id = pg_temp.pj_id(51);
+update public.jobs set title = 'Placeholder QA Tester' where id = pg_temp.pj_id(52);
+update public.jobs set title = '   ' where id = pg_temp.pj_id(53);
+select pg_temp.assert(not exists (
+    select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
+                               'public.update_published_job(uuid, jsonb, timestamptz)']) f
+     where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
+  'BZ1221-0 żadna z trzech funkcji nie zawiera heurystyki tytułu-zaślepki');
+
+-- BZ1221-N1: kontrola ujemna — definicje sprzed 0203 odrzucają oba realne tytuły.
+begin;
+\ir ../rollback/0203_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(51), 'bz1221-n1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N1a kontrola ujemna: stara publish_job odrzuca „Draftsman (AutoCAD)”');
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(52), 'bz1221-n1b'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N1b kontrola ujemna: stara publish_job odrzuca tytuł z „Placeholder”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
+-- BZ1221-1: realne tytuły publikują się; pusty tytuł nadal odrzucany.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.publish_job(pg_temp.pj_id(51), 'bz1221-draftsman') = 'bz1221-draftsman',
+  'BZ1221-1a „Draftsman (AutoCAD)” publikuje się');
+select pg_temp.assert(public.publish_job(pg_temp.pj_id(52), 'bz1221-placeholder') = 'bz1221-placeholder',
+  'BZ1221-1b tytuł z „Placeholder” publikuje się');
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(53), 'bz1221-empty'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)', 'BZ1221-1c pusty tytuł nadal odrzucany');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select string_agg(status::text, ',' order by id) from public.jobs
+    where id in (pg_temp.pj_id(51), pg_temp.pj_id(52), pg_temp.pj_id(53))) = 'active,active,draft',
+  'BZ1221-1d stan ofert po publikacji: dwie aktywne, pusta zostaje szkicem');
+
+-- BZ1221-2: edycja opublikowanej oferty — tytuł „Draftsman …” przechodzi, pusty nie.
+select set_config('pb.bz_upd', (current_setting('pb.rr_ok')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.rr_ok')::jsonb -> 'job')
+       || '{"title": "Draftsman (Revit)", "accommodation": false}'::jsonb))::text, false);
+select set_config('pb.bz_upd_empty', (current_setting('pb.bz_upd')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.bz_upd')::jsonb -> 'job') || '{"title": "  "}'::jsonb))::text, false);
+select updated_at as bz_v1 from public.jobs where id = pg_temp.pj_id(51) \gset
+begin;
+\ir ../rollback/0203_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+    pg_temp.pj_id(51), current_setting('pb.bz_upd'), :'bz_v1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N2 kontrola ujemna: stara update_published_job odrzuca „Draftsman (Revit)”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+    pg_temp.pj_id(51), current_setting('pb.bz_upd_empty'), :'bz_v1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)', 'BZ1221-2a edycja z pustym tytułem odrzucona');
+select public.update_published_job(pg_temp.pj_id(51), current_setting('pb.bz_upd')::jsonb, :'bz_v1'::timestamptz) as bz_res \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Draftsman (Revit)' and status::text = 'active' and slug = 'bz1221-draftsman'
+     from public.jobs where id = pg_temp.pj_id(51)),
+  'BZ1221-2b edycja zapisuje tytuł „Draftsman (Revit)”, status i slug bez zmian');
+
+-- BZ1221-3: ponowne otwarcie zamkniętej oferty z tytułem „Draftsman …”.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'close') = 'closed', 'BZ1221-3a zamknięcie oferty');
+reset role; reset app.current_uid;
+begin;
+\ir ../rollback/0203_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.set_job_status(%L::uuid, %L)', pg_temp.pj_id(51), 'reopen'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N3 kontrola ujemna: stary set_job_status(reopen) odrzuca „Draftsman (Revit)”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'reopen') = 'active',
+  'BZ1221-3b ponowne otwarcie oferty „Draftsman (Revit)” przechodzi');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (
+    select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
+                               'public.update_published_job(uuid, jsonb, timestamptz)']) f
+     where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
+  'BZ1221-4 po cofniętych kontrolach ujemnych definicje 0203 są na miejscu');
 
 -- ============================================================================
 -- RD1114. Polityki ODCZYTU bez wcześniejszych testów regresyjnych (#1114, TQ2-05): historia statusów
@@ -24530,7 +24781,6 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
--- =============================================================================
 -- TQ952 (0952 — numer tymczasowy; #644, #754, #755): integralność kolejki tłumaczeń.
 --   #644: dzierżawa ważna tylko do lease_expires_at (complete/fail/defer po terminie =
 --         stale_lease, nawet bez ponownego przejęcia);
@@ -24662,6 +24912,186 @@ select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uu
   and not exists (select 1 from public.jobs where id in (:'TQJ', :'TQJD'))
   and not exists (select 1 from public.translation_sources where entity_id in (:'TQJ', :'TQX')),
   'TQ952-R sekcja cofnięta, funkcje 0952 na miejscu');
+=======
+-- ============================================================================
+-- EX1232. Eksport pracodawcy: odwołania i zgłoszenia treści (#1232, migracja 0207)
+-- ============================================================================
+\echo '--- EX1232 eksport pracodawcy: odwołania i zgłoszenia ---'
+\set XE1 'e1232000-0000-4000-8000-000000000001'
+\set XE2 'e1232000-0000-4000-8000-000000000002'
+\set XCO1 'e1232000-0000-4000-8000-0000000000a1'
+\set XCO2 'e1232000-0000-4000-8000-0000000000a2'
+\set XJ1 'e1232000-0000-4000-8000-0000000000b1'
+\set XJ2 'e1232000-0000-4000-8000-0000000000b2'
+\set XGROUNDS 'Wymóg opłaty był błędem szablonu; nie pobieramy opłat od kandydatów.'
+\set XFACTS 'Oferta żąda od kandydatów opłaty za rekrutację z góry.'
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'XE1','xe1@test.be','Xawery E','{"role":"employer","first_name":"Xawery","last_name":"E","locale":"pl"}'),
+  (:'XE2','xe2@test.be','Xenia F','{"role":"employer","first_name":"Xenia","last_name":"F","locale":"nl"}');
+insert into public.companies(id, name, status) values
+  (:'XCO1', 'Firma X Odwołująca', 'verified'), (:'XCO2', 'Firma X Zgłoszona', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'XCO1', :'XE1', 'owner', true), (:'XCO2', :'XE2', 'owner', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'XJ1', :'XCO1', 'ex1232-job-1', 'Magazynier X1', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl'),
+  (:'XJ2', :'XCO2', 'ex1232-job-2', 'Magazynier X2', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl');
+set local role service_role;
+-- Zgłoszenie oferty XCO1 przez gościa (decyzja, od której XE1 się odwoła) i zgłoszenie oferty XCO2
+-- złożone przez XE1 (zalogowany zgłaszający).
+select report_id as xr1 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'XJ1', 'fraud', 'Oferta X1 wymaga opłaty za rekrutację z góry.', null, 'Gość X', 'ex1232-guest@test.be', 'fr', true) \gset
+select report_id as xr2, case_number as xcase2 from public.submit_content_report(:'XE1', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'XJ2', 'other', 'Oferta X2 podaje mylące warunki pracy w opisie.',
+  'https://example.test/ex1232', 'Xawery E', 'xe1-report@test.be', 'pl', true) \gset
+reset role;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'xr1', 'open', 'job_removed', :'XFACTS', 'terms', 'Regulamin § 4') as xd1 \gset
+reset role;
+set local role authenticated; set local app.current_uid = :'XE1'; select pg_temp.assert_client_role();
+select appeal_id as xa1, reference as xaref1 from public.submit_moderation_appeal(:'xd1', gen_random_uuid(), :'XGROUNDS') \gset
+select public.export_my_employer_data()::text as xexp \gset
+reset role;
+select pg_temp.assert(
+  jsonb_array_length((:'xexp')::jsonb -> 'moderationAppeals') = 1
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,reference}' = :'xaref1'
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,role}' = 'author'
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,grounds}' = :'XGROUNDS'
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,status}' = 'pending',
+  'EX1232-1 eksport pracodawcy zawiera jego odwołanie (kształt jak u kandydata)');
+select pg_temp.assert(
+  jsonb_array_length((:'xexp')::jsonb -> 'contentReports') = 1
+  and (:'xexp')::jsonb #>> '{contentReports,0,caseNumber}' = :'xcase2'
+  and (:'xexp')::jsonb #>> '{contentReports,0,kind}' = 'dsa_notice'
+  and (:'xexp')::jsonb #>> '{contentReports,0,targetType}' = 'job'
+  and (:'xexp')::jsonb #>> '{contentReports,0,details}' = 'Oferta X2 podaje mylące warunki pracy w opisie.'
+  and (:'xexp')::jsonb #>> '{contentReports,0,reporterEmail}' = 'xe1-report@test.be',
+  'EX1232-2 eksport pracodawcy zawiera jego zgłoszenie treści');
+-- Bez danych osób trzecich: identyfikator i migawka zgłoszonej oferty, fakty decyzji, zgłoszenie
+-- gościa o własnej firmie (inny zgłaszający), skrót kodu dostępu.
+select pg_temp.assert(
+  position(:'XJ2' in :'xexp') = 0 and position('Magazynier X2' in :'xexp') = 0
+  and position(:'XFACTS' in :'xexp') = 0 and position('ex1232-guest@test.be' in :'xexp') = 0
+  and position('Oferta X1 wymaga' in :'xexp') = 0 and position(:'xr1' in :'xexp') = 0
+  and not exists (select 1 from jsonb_array_elements((:'xexp')::jsonb -> 'contentReports') r
+                   where r ? 'targetId' or r ? 'targetSnapshot' or r ? 'accessCodeHash'),
+  'EX1232-3 eksport bez treści zgłoszonej, faktów decyzji i zgłoszeń innych osób');
+-- Inny pracodawca nie widzi cudzych odwołań ani zgłoszeń.
+set local role authenticated; set local app.current_uid = :'XE2'; select pg_temp.assert_client_role();
+select public.export_my_employer_data()::text as xexp2 \gset
+reset role;
+select pg_temp.assert(
+  jsonb_array_length((:'xexp2')::jsonb -> 'moderationAppeals') = 0
+  and jsonb_array_length((:'xexp2')::jsonb -> 'contentReports') = 0
+  and position(:'XGROUNDS' in :'xexp2') = 0,
+  'EX1232-4 eksport innego pracodawcy bez cudzych odwołań i zgłoszeń');
+-- Kontrola ujemna: definicja z 0161 (rollback 0207) gubi obie pozycje.
+\ir ../rollback/0207_employer_export_appeals_reports.down.sql
+set local role authenticated; set local app.current_uid = :'XE1'; select pg_temp.assert_client_role();
+select public.export_my_employer_data()::text as xexpn \gset
+reset role;
+select pg_temp.assert(
+  not ((:'xexpn')::jsonb ? 'moderationAppeals') and not ((:'xexpn')::jsonb ? 'contentReports')
+  and position(:'XGROUNDS' in :'xexpn') = 0,
+  'EX1232-N kontrola ujemna: eksport z 0161 pomija odwołania i zgłoszenia');
+
+-- ============================================================================
+-- DBP1245 / CC1244 (0206): indeksy pod usuwanie konta i kaskady FK (#1245) oraz nazwy
+-- zapisanych wyszukiwań i firm bez znaków sterujących (#1244). Sekcja w transakcji cofanej.
+-- ============================================================================
+\echo '--- DBP1245 / CC1244 indeksy usuwania konta i znaki sterujące ---'
+begin;
+create function pg_temp.plan_uses_index(p_sql text, p_index text) returns boolean
+language plpgsql as $$
+declare v_plan text;
+begin
+  execute 'explain (format json, costs off) ' || p_sql into v_plan;
+  return v_plan like '%"Index Name": "' || p_index || '"%';
+end $$;
+set local enable_seqscan = off;
+
+select pg_temp.assert((select count(*) from pg_indexes where indexname in (
+    'idx_notifications_entity', 'idx_email_deliveries_entity', 'idx_saved_search_alerts_profile',
+    'idx_jobs_created_by', 'idx_offers_sender', 'idx_application_status_history_changed_by',
+    'idx_offer_status_history_changed_by', 'idx_conversations_created_by',
+    'idx_contact_messages_sender', 'email_outbox_user_idx')) = 10,
+  'DBP1245-1 komplet indeksów FK/usuwania konta');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$delete from public.notifications where entity_id = any(array['00000000-0000-0000-0000-000000000001'::uuid])$q$,
+    'idx_notifications_entity'),
+  'DBP1245-2 usunięcie powiadomień po entity_id używa indeksu');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$delete from public.email_deliveries where entity_id = any(array['00000000-0000-0000-0000-000000000001'::uuid])$q$,
+    'idx_email_deliveries_entity'),
+  'DBP1245-2b usunięcie e-maili po entity_id używa indeksu');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$delete from public.saved_search_alerts where profile_id = '00000000-0000-0000-0000-000000000001'$q$,
+    'idx_saved_search_alerts_profile'),
+  'DBP1245-2c kaskada profilu na saved_search_alerts używa indeksu');
+select pg_temp.assert(pg_temp.plan_uses_index(
+    $q$update public.jobs set created_by = null where created_by = '00000000-0000-0000-0000-000000000001'$q$,
+    'idx_jobs_created_by'),
+  'DBP1245-2d SET NULL twórcy oferty używa indeksu');
+-- Kontrola ujemna: bez indeksu to samo usunięcie skanuje tabelę.
+savepoint dbp_neg;
+drop index public.idx_notifications_entity;
+select pg_temp.assert(not pg_temp.plan_uses_index(
+    $q$delete from public.notifications where entity_id = any(array['00000000-0000-0000-0000-000000000001'::uuid])$q$,
+    'idx_notifications_entity'),
+  'DBP1245-N kontrola ujemna: bez indeksu plan nie korzysta z indeksu');
+rollback to savepoint dbp_neg;
+reset enable_seqscan;
+
+\set CCA 'e9910000-0000-0000-0000-0000000000a1'
+\set CCC 'e9910000-0000-0000-0000-0000000000c1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CCA','cca@test.be','Cora A','{"role":"candidate","first_name":"Cora","last_name":"A","locale":"pl"}');
+select test_fixture.attest_candidates();
+
+set local role authenticated; set local app.current_uid = :'CCA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  $q$select * from public.save_saved_search(E'Praca\r\nBcc: x@example.com', 'pl', '{"keyword":"cc1244 a"}', '?keyword=cc1244+a')$q$,
+  'VALIDATION_FAILED', 'CC1244-1 nazwa z CR/LF odrzucona przy zapisie (jak przy zmianie nazwy)');
+select pg_temp.expect_error(
+  $q$select * from public.save_saved_search(E'Praca\tnoc', 'pl', '{"keyword":"cc1244 b"}')$q$,
+  'VALIDATION_FAILED', 'CC1244-1b tabulator odrzucony');
+select pg_temp.expect_error(
+  $q$select * from public.save_saved_search(E'Praca\u0085noc', 'pl', '{"keyword":"cc1244 c"}')$q$,
+  'VALIDATION_FAILED', 'CC1244-1c znak C1 (NEL) odrzucony');
+select saved_search_id as cc_ss from public.save_saved_search('Łódź — żółć, nocka', 'pl',
+  '{"keyword":"cc1244 d"}', '?keyword=cc1244+d') \gset
+select pg_temp.assert((select name from public.saved_searches where id = :'cc_ss') = 'Łódź — żółć, nocka',
+  'CC1244-2 zwykła nazwa z polskimi znakami zapisana');
 reset role; reset app.current_uid;
+-- CHECK niezależny od ścieżki (superuser/service_role, bezpośredni DML).
+select pg_temp.expect_error(
+  $q$update public.saved_searches set name = E'A\nB' where id = '$q$ || :'cc_ss' || $q$'$q$,
+  'saved_searches_name_no_control', 'CC1244-3 CHECK odrzuca CR/LF w nazwie wyszukiwania każdą ścieżką');
+select pg_temp.expect_error(
+  $q$insert into public.companies(id, name, status) values ('$q$ || :'CCC' || $q$', E'Firma\r\nBcc', 'unverified')$q$,
+  'companies_name_no_control', 'CC1244-3b CHECK odrzuca CR/LF w nazwie firmy');
+insert into public.companies(id, name, status) values (:'CCC', 'Firma CC Zwykła', 'unverified');
+select pg_temp.expect_error(
+  $q$update public.companies set name = E'Firma\u0007' where id = '$q$ || :'CCC' || $q$'$q$,
+  'companies_name_no_control', 'CC1244-3c CHECK odrzuca znak sterujący przy zmianie nazwy firmy');
+-- Kontrola ujemna: definicja z 0092 i brak CHECK przepuszczają CR/LF.
+savepoint cc_neg;
+\ir ../rollback/0206_db_perf_indexes_control_chars.down.sql
+set local role authenticated; set local app.current_uid = :'CCA'; select pg_temp.assert_client_role();
+select saved_search_id as cc_bad from public.save_saved_search(E'Praca\r\nBcc: x@example.com', 'pl',
+  '{"keyword":"cc1244 neg"}') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select name from public.saved_searches where id = :'cc_bad') like E'%\n%',
+  'CC1244-N kontrola ujemna: stara save_saved_search zapisuje nazwę z CR/LF');
+update public.companies set name = E'Firma\r\nBcc' where id = :'CCC';
+select pg_temp.assert((select name from public.companies where id = :'CCC') like E'%\r%',
+  'CC1244-N2 kontrola ujemna: bez CHECK nazwa firmy przyjmuje CR/LF');
+rollback to savepoint cc_neg;
+rollback;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- ======================================================================reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

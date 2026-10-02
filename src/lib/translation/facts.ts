@@ -289,9 +289,11 @@ function extractCore(input: string, locale: Locale, protectedTerms: readonly str
   const text = { value: original };
 
   const emails = take(text, EMAIL_RE, (m) => normalizeEmailCase(m(0)));
+  // Goła domena: etykiety ≤ 63 znaki, ≤ 21 etykiet — bez limitów ciąg „a.a.a.…” bez znanej
+  // końcówki dawał złożoność kwadratową (#1108); prawdziwe domeny mieszczą się w limitach.
   const urls = take(
     text,
-    /\b(?:https?:\/\/|www\.)[^\s<>"'()]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:be|com|eu|nl|fr|pl|org|net|lu|de|io|uk)\b(?:\/[^\s<>"'()]*)?/giu,
+    /\b(?:https?:\/\/|www\.)[^\s<>"'()]+|\b[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63}){0,20}\.(?:be|com|eu|nl|fr|pl|org|net|lu|de|io|uk)\b(?:\/[^\s<>"'()]*)?/giu,
     (m) => normalizeUrlCase(m(0).replace(TRAILING_PUNCT, '')),
   );
   const dates = [

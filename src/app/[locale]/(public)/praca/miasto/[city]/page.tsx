@@ -10,10 +10,16 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
-import { getJobs, getJobsCount, isShowingDemoJobs, type LocationKey } from '@/lib/jobs';
+import { getCityCounts, getJobs, getJobsCount, isShowingDemoJobs } from '@/lib/jobs';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import { cityAliases } from '@/lib/locations/city-aliases';
+import {
+  CITY_LANDING_KEYS,
+  cityLandingQualifies,
+  isCityLandingKey,
+  linkedCityLandings,
+} from '@/lib/locations/city-landings';
 import { JobCard } from '@/components/public/JobCard';
 import { resolveCityAlias } from './city-alias';
 import { prerenderParamsAtBuild } from '@/lib/static-rendering';
@@ -35,23 +41,6 @@ const CITY_BASE = '/praca/miasto';
 const JOBS_PATH = '/oferty-pracy';
 const LIST_LIMIT = 12;
 
-const LOCATION_KEYS: readonly LocationKey[] = [
-  'brussels',
-  'antwerp',
-  'ghent',
-  'leuven',
-  'mechelen',
-  'hasselt',
-  'liege',
-  'charleroi',
-  'bruges',
-  'kortrijk',
-];
-
-function isLocationKey(value: string): value is LocationKey {
-  return (LOCATION_KEYS as readonly string[]).includes(value);
-}
-
 type PageProps = {
   params: Promise<{ locale: string; city: string }>;
 };
@@ -62,7 +51,7 @@ export const revalidate = 60;
 export function generateStaticParams(): Array<{ locale: string; city: string }> {
   const params: Array<{ locale: string; city: string }> = [];
   for (const locale of routing.locales) {
-    for (const city of LOCATION_KEYS) {
+    for (const city of CITY_LANDING_KEYS) {
       params.push({ locale, city });
     }
   }
@@ -71,7 +60,7 @@ export function generateStaticParams(): Array<{ locale: string; city: string }> 
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { locale, city } = await params;
-  if (!isLocationKey(city)) {
+  if (!isCityLandingKey(city)) {
     return { robots: { index: false, follow: false } };
   }
 
@@ -94,11 +83,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = t('cityMetaTitle', { name });
   const description = t(`city_${city}`);
 
-  // Pusty landing (0 ofert) działa dla użytkownika, ale nie jest indeksowany (thin content, #299).
-  // Ten sam filtr co treść strony (wszystkie nazwy miasta, #189), więc indeksowalność i wynik
-  // są spójne z listą także w trybie demo (#1119: dawniej tekst po nazwie w języku strony).
+  // Landing poniżej progu podaży (#920; dawniej 0 ofert, #299) działa jako filtr, ale nie jest
+  // indeksowany. Ten sam filtr co treść strony (wszystkie nazwy miasta, #189), więc
+  // indeksowalność i wynik są spójne z listą także w trybie demo (#1119), a próg = hub i sitemap.
   const total = await getJobsCount({ locale, locations: cityAliases(city) });
-  const indexable = total > 0;
+  const indexable = cityLandingQualifies(total);
 
   return {
     title: { absolute: title },
@@ -123,9 +112,9 @@ export default async function CityLandingPage({ params }: PageProps) {
   const { locale, city } = await params;
   setRequestLocale(locale);
 
-  if (!isLocationKey(city)) {
+  if (!isCityLandingKey(city)) {
     // Nazwa miasta w dowolnym języku / inna wielkość liter → kanoniczny adres z kluczem.
-    const alias = await resolveCityAlias(city, LOCATION_KEYS);
+    const alias = await resolveCityAlias(city, CITY_LANDING_KEYS);
     if (alias) permanentRedirect(`/${locale}${CITY_BASE}/${alias}`);
     notFound();
   }
@@ -139,14 +128,18 @@ export default async function CityLandingPage({ params }: PageProps) {
 
   const name = tLoc(city);
   // #189: oferty miasta po wszystkich jego nazwach (PL/NL/FR/EN), nie po nazwie w języku strony.
-  const result = await getJobs({
-    locale,
-    locations: cityAliases(city),
-    page: 1,
-    pageSize: LIST_LIMIT,
-  }, undefined, { translateCards: true });
+  const [result, cityCounts] = await Promise.all([
+    getJobs({
+      locale,
+      locations: cityAliases(city),
+      page: 1,
+      pageSize: LIST_LIMIT,
+    }, undefined, { translateCards: true }),
+    getCityCounts(locale, CITY_LANDING_KEYS),
+  ]);
 
-  const otherCities = LOCATION_KEYS.filter((key) => key !== city);
+  // #920: linki tylko do landingów, które się kwalifikują (te same, co w hubie i sitemapie).
+  const otherCities = linkedCityLandings(cityCounts).filter((key) => key !== city);
 
   const trail = [
     { label: tCommon('home'), href: '/' },
@@ -225,6 +218,7 @@ export default async function CityLandingPage({ params }: PageProps) {
       </section>
 
       {/* Inne miasta — linkowanie wewnętrzne */}
+      {otherCities.length > 0 ? (
       <section className="mt-12 border-t border-border pt-8">
         <h2 className="text-lg font-semibold text-foreground">{t('otherCities')}</h2>
         <ul className="mt-4 flex flex-wrap gap-2">
@@ -240,6 +234,7 @@ export default async function CityLandingPage({ params }: PageProps) {
           ))}
         </ul>
       </section>
+      ) : null}
     </div>
     </PublicSavedJobsProvider>
   );

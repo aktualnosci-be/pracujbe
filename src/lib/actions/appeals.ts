@@ -15,7 +15,7 @@ import {
   FIXTURE_RESTORED_CASE_NUMBER,
   isReportFixtureMode,
 } from '@/lib/content-reports/case';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -114,7 +114,7 @@ function appealFailure(error: unknown, area: string): AppealActionResult {
   const field = groundsFailure(message);
   if (field) return field;
   const code = mapPgError(message);
-  if (code === 'INTERNAL') captureError(error, { area });
+  if (code === 'INTERNAL') captureActionError(error, area);
   return { ok: false, error: code };
 }
 
@@ -265,7 +265,7 @@ export async function decideAppeal(
       return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
     }
     const code = mapPgError(message);
-    if (code === 'INTERNAL') captureError(error, { area: 'appeals.decide' });
+    if (code === 'INTERNAL') captureActionError(error, 'appeals.decide');
     return { ok: false, error: code };
   }
 }
