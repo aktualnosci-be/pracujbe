@@ -25265,6 +25265,100 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- KQ866. Słowo kluczowe listy ofert szuka też w kwalifikacjach oferty (0214, #866).
+-- Oferty o tytułach bez szukanego słowa: certyfikat VCA, umiejętność „wózek widłowy”,
+-- wymaganie w języku oferty (pl) i wymaganie tylko w innym języku (en). KQ866-1..6: lista,
+-- licznik, facety i kopia dla alertów znajdują ofertę po kwalifikacji, bez wielkości liter
+-- i diakrytyków; wymaganie w innym języku niż wyświetlany nie daje trafienia; oferta firmy
+-- niezweryfikowanej nadal ukryta; tytuł działa jak dotąd. KQ866-N: KONTROLA UJEMNA — po
+-- rollbacku 0214 (definicje z 0213) oferta po samej kwalifikacji nie jest znajdowana.
+-- ============================================================================
+\echo '--- KQ866 słowo kluczowe w kwalifikacjach oferty (0214) ---'
+begin;
+\set KQC 'e9c30866-0000-0000-0000-0000000000c1'
+\set KQU 'e9c30866-0000-0000-0000-0000000000c2'
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values
+  (:'KQC', 'Firma KQ866', 'verified'), (:'KQU', 'Firma KQ866 niezweryfikowana', 'pending');
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status,
+  default_locale, published_at)
+values
+  (:'KQC', 'kq866-vca', 'Magazynier KQ866 alfa', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '1 hour'),
+  (:'KQC', 'kq866-skill', 'Magazynier KQ866 beta', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '2 hours'),
+  (:'KQC', 'kq866-req', 'Kierowca KQ866 gamma', 'transport', 'interim', 'Gent', 'BE', 'active', 'pl', now() - interval '3 hours'),
+  (:'KQC', 'kq866-reqen', 'Kierowca KQ866 delta', 'transport', 'interim', 'Gent', 'BE', 'active', 'pl', now() - interval '4 hours'),
+  (:'KQU', 'kq866-unverified', 'Magazynier KQ866 omega', 'warehouse', 'permanent', 'Gent', 'BE', 'active', 'pl', now() - interval '5 hours');
+set constraints all immediate;
+insert into public.job_certificates(job_id, certificate_label)
+select id, 'Certyfikat VCA-kq866' from public.jobs where slug in ('kq866-vca', 'kq866-unverified');
+insert into public.job_skills(job_id, skill_label)
+select id, 'Wózek widłowy kq866' from public.jobs where slug = 'kq866-skill';
+insert into public.job_requirements(job_id, locale, kind, position, content)
+select id, 'pl', 'mandatory', 0, 'Prawo jazdy kat. CE kq866' from public.jobs where slug = 'kq866-req';
+insert into public.job_requirements(job_id, locale, kind, position, content)
+select id, 'pl', 'mandatory'::public.requirement_kind, 0, 'Doświadczenie w transporcie kq866' from public.jobs where slug = 'kq866-reqen'
+union all
+select id, 'en', 'mandatory'::public.requirement_kind, 0, 'Tachograph card kq866' from public.jobs where slug = 'kq866-reqen';
+
+create function pg_temp.kq_slugs(p_locale text, p_keyword text) returns text language sql as $$
+  select coalesce(string_agg(slug, ',' order by slug), '')
+  from public.get_public_jobs(p_locale, p_keyword, p_limit => 100);
+$$;
+create function pg_temp.kq_facet_total(p_locale text, p_keyword text) returns bigint language sql as $$
+  select coalesce(sum(total), 0) from public.get_public_job_filter_facets(p_locale, p_keyword)
+  where dimension = 'category';
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-KQ866') = 'kq866-vca'
+  and public.get_public_jobs_count('pl', 'vca-KQ866') = 1
+  and pg_temp.kq_facet_total('pl', 'vca-KQ866') = 1,
+  'KQ866-1 certyfikat: lista, licznik i facety znajdują ofertę (bez firmy niezweryfikowanej)');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'WOZEK widlowy kq866') = 'kq866-skill'
+  and public.get_public_jobs_count('pl', 'WOZEK widlowy kq866') = 1,
+  'KQ866-2 umiejętność: bez wielkości liter i diakrytyków');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'kat. ce kq866') = 'kq866-req'
+  and pg_temp.kq_slugs('nl', 'kat. ce kq866') = 'kq866-req',
+  'KQ866-3 wymaganie w języku oferty: strona pl i strona nl (brak wymagań nl = język oferty)');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'tachograph card kq866') = ''
+  and public.get_public_jobs_count('pl', 'tachograph card kq866') = 0
+  and pg_temp.kq_slugs('en', 'tachograph card kq866') = 'kq866-reqen'
+  and public.get_public_jobs_count('en', 'tachograph card kq866') = 1,
+  'KQ866-4 wymaganie tylko w języku en: niewidoczne na stronie pl nie daje trafienia, na en daje');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'magazynier kq866') = 'kq866-skill,kq866-vca'
+  and pg_temp.kq_slugs('pl', 'kq866') = 'kq866-req,kq866-reqen,kq866-skill,kq866-vca'
+  and public.get_public_jobs_count('pl', 'kq866') = 4,
+  'KQ866-5 tytuł bez zmian; słowo z tytułu i kwalifikacji = suma zbiorów bez dubli');
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'kq866%') = '',
+  'KQ866-5b znak % jest literałem także w kwalifikacjach');
+reset role;
+set role service_role;
+select pg_temp.assert((select count(*) from public.saved_search_jobs_after(
+    p_locale => 'pl', p_keyword => 'vca-kq866', p_city => null, p_categories => null, p_locations => null,
+    p_contract_types => null, p_salary_min => null, p_salary_max => null, p_accommodation => null,
+    p_immediate => null, p_no_language => null, p_since => null, p_salary_unit => 'month',
+    p_after_published_at => null, p_after_id => null, p_limit => 100)) = 1,
+  'KQ866-6 kopia filtrów dla alertów znajduje ofertę po certyfikacie');
+reset role;
+select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_candidates(text)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.job_keyword_qualification_match(uuid, text, text, text)', 'EXECUTE'),
+  'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
+
+savepoint kq866_old;
+\ir ../rollback/0214_keyword_job_qualifications.down.sql
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
+  and public.get_public_jobs_count('pl', 'wozek widlowy kq866') = 0
+  and pg_temp.kq_slugs('pl', 'magazynier kq866') = 'kq866-skill,kq866-vca',
+  'KQ866-N KONTROLA UJEMNA: definicje z 0213 szukają tylko w tytule');
+reset role;
+rollback to savepoint kq866_old;
+select pg_temp.assert(to_regprocedure('public.search_keyword_candidates(text)') is not null,
+  'KQ866-8 po cofnięciu savepointu stan 0214 zostaje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- PC1119. Miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119, #1076/M-4,
 --         migracja 0212): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
 --         rozpoznanego miasta; facet lokalizacji w języku widoku (location_names), tylko gdy
