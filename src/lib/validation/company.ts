@@ -4,6 +4,7 @@ import { routing } from '@/i18n/routing';
 import { COMPANY_DESCRIPTION_MAX } from '@/lib/company-description';
 import { COMPANY_URL_MAX_LENGTH, isPublicHttpsUrl } from '@/lib/company-links';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
+import { NO_CONTROL_CHARS_REGEX } from '@/lib/validation/text';
 
 /**
  * Walidacja danych firmy pracodawcy (Etap 4).
@@ -26,7 +27,10 @@ const nameSchema = z
   // Pusty string (formularz wysyła '') → „wymagane", „za krótka" dopiero dla 1 znaku (#367).
   .min(1, 'company.error.nameRequired')
   .min(2, 'company.error.nameTooShort')
-  .max(120, 'company.error.nameTooLong');
+  .max(120, 'company.error.nameTooLong')
+  // #1244: nazwa trafia do tematu e-maila (zaproszenie do zespołu) — bez CR/LF i innych znaków
+  // sterujących; lustro CHECK `companies_name_no_control` (0206).
+  .regex(NO_CONTROL_CHARS_REGEX, 'company.error.nameInvalid');
 
 // Lenient: pozwala na 2-literowy prefiks kraju + cyfry/kropki/spacje/myślniki (BE0123.456.789,
 // BE 0123456789, 0123456789). Puste = brak numeru. Twarda walidacja KBO/BCE = weryfikacja admina.
@@ -85,7 +89,9 @@ export const companyDescriptionSchema = z.object({
     .string({ required_error: 'company.error.descriptionRequired' })
     .trim()
     .max(COMPANY_DESCRIPTION_MAX, 'company.error.descriptionTooLong')
-    .refine((v) => !containsPersonalIdentifier(v), 'company.error.descriptionSensitive'),
+    .refine((v) => !containsPersonalIdentifier(v), 'company.error.descriptionSensitive')
+    // NUL baza odrzuca błędem technicznym — komunikat przy polu (#1108).
+    .refine((v) => !v.includes('\u0000'), 'company.error.textInvalid'),
   /**
    * Język opisu (0201): zgłaszany razem z propozycją i zatwierdzany z nią; pusty = nie wskazano.
    * Tekst równy zatwierdzonemu = sama zmiana języka zatwierdzonego opisu (bez przeglądu).

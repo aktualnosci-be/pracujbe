@@ -1,5 +1,7 @@
 import { Resend } from 'resend';
 
+import { toSingleLineHeader } from '@/lib/validation/text';
+
 import { MailSendError, type MailErrorCode, type MailTransport } from './types';
 
 /**
@@ -56,7 +58,8 @@ export function resendTransport(apiKey: string): MailTransport {
       if (options.signal?.aborted) throw new MailSendError('provider_unavailable');
       const { headers, ...rest } = message;
       const result = await resend.emails.send(
-        { ...rest, ...(headers && Object.keys(headers).length > 0 ? { headers } : {}) },
+        // #1244: temat jednowierszowy także dla tematów spoza `renderEmail` (kampanie).
+        { ...rest, subject: toSingleLineHeader(rest.subject), ...(headers && Object.keys(headers).length > 0 ? { headers } : {}) },
         { idempotencyKey: options.idempotencyKey },
       );
       // Komunikat dostawcy może zawierać adres odbiorcy — nie przenosimy go dalej, tylko kod.

@@ -92,7 +92,7 @@ beforeEach(() => {
   state.production = true;
   jobs.getCategoryCounts.mockResolvedValue({ construction: 3, warehouse: 1 });
   jobs.getCityCounts.mockImplementation(async (_l: string, keys: string[]) =>
-    Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 2 : 0])),
+    Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 3 : 0])),
   );
   jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
   jobs.getJobsCount.mockResolvedValue(2);
@@ -259,6 +259,9 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
       expect(urls).toContain(`${SITE}/${locale}`);
       expect(urls).toContain(`${SITE}/${locale}/praca`);
       expect(urls).toContain(`${SITE}/${locale}/praca/kategoria/construction`);
+      // #907: nawigator „Jak zacząć pracę w Belgii?” — wybór regionu i strona regionu.
+      expect(urls).toContain(`${SITE}/${locale}/poradniki/jak-zaczac-prace`);
+      expect(urls).toContain(`${SITE}/${locale}/poradniki/jak-zaczac-prace/flandria`);
     }
     expect(urls.some((url) => url.includes('/poradniki/'))).toBe(true);
     // Kontrola ujemna: stare `id === 0` dawało dla '0' partię ofert (-1) — oferty, getJobs

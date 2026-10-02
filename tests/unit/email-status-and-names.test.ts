@@ -86,19 +86,19 @@ const NAMELESS = {
   offerAccepted: {
     data: { candidateName: '—', jobTitle: 'Magazynier', actionUrl: 'https://pracuj.be/x' },
     expected: {
-      pl: 'Twoja oferta została przyjęta',
-      nl: 'Je aanbod is aanvaard',
-      fr: 'Votre offre a été acceptée',
-      en: 'Your offer was accepted',
+      pl: 'Twoja propozycja została przyjęta',
+      nl: 'Je voorstel is aanvaard',
+      fr: 'Votre proposition a été acceptée',
+      en: 'Your proposal was accepted',
     },
   },
   offerDeclined: {
     data: { candidateName: null, jobTitle: 'Magazynier', actionUrl: 'https://pracuj.be/x' },
     expected: {
-      pl: 'Twoja oferta została odrzucona',
-      nl: 'Je aanbod is afgewezen',
-      fr: 'Votre offre a été déclinée',
-      en: 'Your offer was declined',
+      pl: 'Twoja propozycja została odrzucona',
+      nl: 'Je voorstel is afgewezen',
+      fr: 'Votre proposition a été refusée',
+      en: 'Your proposal was declined',
     },
   },
   newMessage: {

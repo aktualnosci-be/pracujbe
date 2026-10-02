@@ -18,6 +18,7 @@ import {
 import {
   hasSavedSearchFilters,
   parseJobListQuery,
+  savedSearchExceedsLimits,
   savedSearchFiltersFromQuery,
   savedSearchQueryString,
 } from '@/lib/job-list-query';
@@ -489,6 +490,7 @@ export default async function JobsListPage({
               locale={locale}
               filters={savedSearchFilters}
               query={savedSearchQueryString(listQuery)}
+              exceedsLimits={savedSearchExceedsLimits(savedSearchFilters, savedSearchQueryString(listQuery))}
               name={chips
                 .filter((chip) => chip.id !== 'date')
                 .map((chip) => chip.label)

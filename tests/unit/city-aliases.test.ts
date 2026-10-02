@@ -29,18 +29,18 @@ describe('city aliases', () => {
     expect(resolveLocationKey('Liège')).toBe('liege');
     expect(resolveLocationKey('Brussels-Capital')).toBeNull();
     expect(resolveLocationKey('Brus')).toBeNull();
-    expect(resolveLocationKey('Namur')).toBeNull();
+    expect(resolveLocationKey('Lokeren')).toBeNull();
   });
 
   it('expands a selected city to every alias and leaves unknown names as they are', () => {
-    expect(new Set(expandLocationAliases(['Bruksela', 'Namur']))).toEqual(
-      new Set(['Bruksela', 'Brussel', 'Bruxelles', 'Brussels', 'Namur']),
+    expect(new Set(expandLocationAliases(['Bruksela', 'Lokeren']))).toEqual(
+      new Set(['Bruksela', 'Brussel', 'Bruxelles', 'Brussels', 'Lokeren']),
     );
     expect(new Set(cityAliases('liege'))).toEqual(new Set(['Liège', 'Luik']));
   });
 
   it('shows the city in the page language without duplicates', () => {
-    expect(localizeLocations(['Bruksela', 'Brussels', 'Namur'], 'nl')).toEqual(['Brussel', 'Namur']);
+    expect(localizeLocations(['Bruksela', 'Brussels', 'Lokeren'], 'nl')).toEqual(['Brussel', 'Lokeren']);
   });
 
   it('merges facet variants of one city and counts per key with the exact-alias rule', () => {
@@ -48,11 +48,11 @@ describe('city aliases', () => {
       { city: 'Brussels', count: 3 },
       { city: 'Bruxelles', count: 2 },
       { city: 'Luik', count: 1 },
-      { city: 'Namur', count: 4 },
+      { city: 'Lokeren', count: 4 },
     ];
     expect(mergeLocationFacets(facets, 'pl')).toEqual([
       { city: 'Bruksela', count: 5 },
-      { city: 'Namur', count: 4 },
+      { city: 'Lokeren', count: 4 },
       { city: 'Liège', count: 1 },
     ]);
     expect(countByLocationKey(facets, ['brussels', 'liege', 'ghent'])).toEqual({

@@ -29,10 +29,14 @@ const BARE_DOMAIN_TLDS =
   'com|net|org|info|biz|eu|io|co|app|dev|shop|online|store|pro|me|tv|name|xyz|gov|edu|int|mil|' +
   'be|nl|fr|de|pl|uk|ie|es|it|pt|lu|at|ch|dk|se|no|fi|gr|cz|sk|hu|ro|bg|hr|si|lt|lv|ee';
 
+// Etykiety domeny mają górne granice (≤ 63 znaki, ≤ 20 etykiet, TLD ≤ 63) — bez nich ciąg
+// „a.a.a.…” bez ukośnika i znanej końcówki dawał złożoność kwadratową: każdy początek słowa
+// przechodził cały ciąg, zanim dopasowanie się nie powiodło (#1108). Prawdziwe domeny mieszczą
+// się w limitach (RFC 1035), więc wynik dla nich się nie zmienia.
 const URL_RE = new RegExp(
   '\\b(?:(?:https?|ftp)://|www\\.)[^\\s<>"\'`]+' +
-    '|\\b(?:[a-z0-9-]+\\.)+[a-z]{2,}/[^\\s<>"\'`]*' +
-    `|\\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+(?:${BARE_DOMAIN_TLDS})\\b(?::\\d{2,5})?`,
+    '|\\b(?:[a-z0-9-]{1,63}\\.){1,20}[a-z]{2,63}/[^\\s<>"\'`]*' +
+    `|\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.){1,20}(?:${BARE_DOMAIN_TLDS})\\b(?::\\d{2,5})?`,
   'gi',
 );
 // Znaki sterujące (poza spacjami, które i tak zwijamy) i znaki kierunku tekstu.
