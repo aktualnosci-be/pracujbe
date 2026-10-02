@@ -13,11 +13,13 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0980 → 0204 → 0190 → 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
+-- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0980 → 0220 → 0204 → 0190 → 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
 -- 0204 (#1211, numer tymczasowy) stoi na 0171 (strażnik trybu szablonów) — cofana jako pierwsza.
 \ir ../rollback/0204_classifieds_message_templates_off.down.sql
--- 0980 (#711) nadpisuje ai_budget_reserve z 0176 — cofana przed 0176.
+-- 0980 (#711) nadpisuje ai_budget_reserve z 0220 — cofana przed 0220.
 \ir ../rollback/0980_ai_budget_job_search_filters.down.sql
+-- 0220 (#773) nadpisuje ai_budget_reserve z 0176 — cofana przed 0176.
+\ir ../rollback/0220_ai_job_explain.down.sql
 -- 0190 (#740) nadpisuje claim_translation_jobs z 0176 (nowa kolumna wyniku) — cofana przed 0176.
 \ir ../rollback/0190_translation_protected_terms.down.sql
 -- 0177 (usunięcie schematu billingu) stoi na 0171 (ops_metrics) — cofana po 0190.

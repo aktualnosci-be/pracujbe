@@ -26574,6 +26574,51 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- AIX773. „Wyjaśnij ofertę” (#773, 0220): funkcja `job_offer_explain` w budżecie AI —
+--         rezerwacja i rozliczenie działają, limit wspólny z innymi funkcjami, klient bez
+--         dostępu, CHECK rejestru zna funkcję. Kontrole ujemne: nazwa spoza listy odrzucona
+--         (RPC i CHECK); rollback 0220 = odmowa (supabase/tests/ai-job-explain-rollback.sql).
+--         Transakcja cofana — rejestr bez wierszy tej funkcji (rollback 0176/0220 przywraca CHECK).
+-- ============================================================================
+reset role; reset app.current_uid;
+begin;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIX773-1 rezerwacja tylko dla service_role');
+-- Limit wspólny: wydatki innych funkcji z wcześniejszych sekcji się liczą — limity = wydatek + 1000.
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(public.ai_budget_day(), public.ai_budget_day()) + 1000
+ where period = 'day';
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(date_trunc('month', public.ai_budget_day())::date, public.ai_budget_day()) + 1000
+ where period = 'month';
+set local role service_role;
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 999) as aix_r1 \gset
+select pg_temp.assert((select feature = 'job_offer_explain' and model = 'gpt-6-luna' and status = 'reserved'
+                         from public.ai_usage_ledger where id = :'aix_r1'),
+  'AIX773-2 rezerwacja funkcji job_offer_explain zapisana w rejestrze');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''gpt-6-luna'', 2)',
+  'AI_BUDGET_EXCEEDED', 'AIX773-3 otwarta rezerwacja wyjaśnienia liczy się do wspólnego limitu');
+select pg_temp.assert(public.ai_budget_settle(:'aix_r1', 'ok', 900, 300, 10),
+  'AIX773-4 rozliczenie wyjaśnienia rzeczywistym kosztem');
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'gpt-6-luna', 2) is not null,
+  'AIX773-4b po rozliczeniu limit znów dostępny');
+-- Kontrola ujemna: allow-lista nie przepuszcza dowolnej nazwy (literówka funkcji).
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_offer_explainer'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIX773-5 funkcja spoza listy odrzucona');
+reset role;
+select pg_temp.expect_error(
+  $$insert into public.ai_usage_ledger (feature, model, reserved_micro_usd, usage_day)
+    values ('job_offer_explainer', 'gpt-6-luna', 1, current_date)$$,
+  'ai_usage_ledger_feature', 'AIX773-6 CHECK rejestru odrzuca nazwę spoza listy');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- AIS711. Wyszukiwanie opisem (#711, 0980): funkcja AI `job_search_filters` w globalnym budżecie.
 --   Rezerwacja dla nowej funkcji działa (service_role), klient nadal bez dostępu, rejestr
 --   przyjmuje identyfikator. Kontrola ujemna: lista funkcji z 0176 (rollback 0980) odrzuca

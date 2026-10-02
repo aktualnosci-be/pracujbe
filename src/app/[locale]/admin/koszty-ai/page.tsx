@@ -43,6 +43,7 @@ const FEATURE_KEY: Record<AiFeatureId, string> = {
   cv_profile_import: 'aiCostsFeatureCvImport',
   job_fraud_check: 'aiCostsFeatureFraudCheck',
   candidate_profile_translation: 'aiCostsFeatureProfileTranslation',
+  job_offer_explain: 'aiCostsFeatureExplain',
   job_search_filters: 'aiCostsFeatureSearchFilters',
 };
 

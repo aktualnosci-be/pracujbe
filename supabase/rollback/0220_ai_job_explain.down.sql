@@ -1,16 +1,17 @@
--- 0980 (numer tymczasowy — nadaje integrator): budżet AI dla wyszukiwania opisem (#711).
+-- =============================================================================
+-- Rollback 0220 — funkcja AI `job_offer_explain` (#773). NUMER TYMCZASOWY.
+-- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
+-- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
+-- (supabase/tests/ai-job-explain-rollback.sql wykonuje go w transakcji i cofa).
 --
--- Nowa funkcja AI `job_search_filters` (src/lib/ai-search/, inwentarz src/lib/ai/inventory.ts)
--- przechodzi przez globalny budżet kosztów (#36, `withAiBudget`). Lista funkcji w CHECK-u rejestru
--- i w `ai_budget_reserve` = `AI_FEATURE_IDS` (test `ai-budget.test.ts` czyta najnowszą migrację).
--- Definicja `ai_budget_reserve` = 0220 (0176 + `job_offer_explain`) + nowy identyfikator; nic poza listą się nie zmienia.
--- Lista zawiera też `job_offer_explain` (#773, migracja 0220 — wcześniejsza migracja tej samej listy),
--- żeby ta migracja, stosowana po niej, nie usunęła tamtej funkcji z budżetu.
--- Rollback: supabase/rollback/0980_ai_budget_job_search_filters.down.sql.
+-- Przywraca listę funkcji budżetu AI z 0176 (treść 1:1). Wiersze rejestru z funkcją
+-- `job_offer_explain` blokują przywrócenie CHECK-u — wtedy rollback przerywa się (dane rozliczeń
+-- nie są kasowane po cichu).
+-- =============================================================================
 
 alter table public.ai_usage_ledger drop constraint if exists ai_usage_ledger_feature;
 alter table public.ai_usage_ledger add constraint ai_usage_ledger_feature
-  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_offer_explain', 'job_search_filters'));
+  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation'));
 
 create or replace function public.ai_budget_reserve(
   p_feature text,
@@ -29,7 +30,7 @@ declare
   v_month_limit bigint;
   v_id uuid;
 begin
-  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_offer_explain', 'job_search_filters') then
+  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation') then
     raise exception 'VALIDATION_FAILED: feature' using errcode = '22023';
   end if;
   if p_model is null or p_model !~ '^[a-z0-9][a-z0-9.-]{2,63}$' then
