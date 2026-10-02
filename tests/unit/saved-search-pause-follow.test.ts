@@ -27,7 +27,7 @@ import { pauseDateRange } from '@/lib/datetime';
 const USER = '11111111-1111-4111-8111-111111111111';
 const COMPANY = '22222222-2222-4222-8222-222222222222';
 const MIGRATION = readFileSync(
-  resolve(__dirname, '../../supabase/migrations/0969_saved_search_pause_company_follow.sql'),
+  resolve(__dirname, '../../supabase/migrations/0215_saved_search_pause_company_follow.sql'),
   'utf8',
 );
 
@@ -136,7 +136,7 @@ describe('obserwowanie firmy (#855)', () => {
   });
 });
 
-describe('migracja 0969: kontrakt', () => {
+describe('migracja 0215: kontrakt', () => {
   it('worker pomija pauzę i liczy nowości od jej końca; obserwacja po company_id', () => {
     expect(MIGRATION).toContain('and (ap.paused_until is null or ap.paused_until <= v_run_at)');
     expect(MIGRATION).toContain("coalesce(v_search.paused_until, '-infinity'::timestamptz)");

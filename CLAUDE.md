@@ -1558,7 +1558,7 @@ publiczna, akcje/strony/trasy bez bramki trybu, `/api/maintenance` woła worker 
 profilem: zapis, nazwa, alert, digest, wyłączenie z linku; kontrola ujemna: wymóg onboardingu).
 E2E `tests/e2e-real/saved-search-classifieds.spec.ts` (`E2E_PORTAL_LEGAL_MODE=`, mutacja
 `saved-search-requires-onboarding` = czerwony).
-Pauza alertów i obserwowanie firmy (#810, #855, migracja `0969` — numer tymczasowy, bez zmiany
+Pauza alertów i obserwowanie firmy (#810, #855, migracja `0215` — numer tymczasowy, bez zmiany
 `get_public_jobs` ani `saved_search_jobs_after`): jedna czasowa pauza dla konta (`saved_search_alert_pauses`,
 RPC `set_saved_search_alerts_pause(date)`: jutro..+366 dni, Europe/Brussels; `null` = wznów od razu). Worker
 `process_saved_search_alerts` pomija konta w pauzie (wyszukiwanie zostaje do wykonania), a po jej końcu liczy
@@ -1574,10 +1574,10 @@ kategoria `job_matches` i pula marketingowa jak `jobMatch`, link i `List-Unsubsc
 obserwację). Przycisk „Obserwuj firmę” (`FollowCompanyButton`, wyspa na ISR-owym
 profilu `/pracodawcy/<slug>`: gość = link logowania z powrotem, pracodawca/demo nic); firma nie ma odczytu
 obserwujących. Dowód: `rls.sql` sekcje PS969/FC969 (kontrole ujemne na definicji workera: bez klauzuli pauzy,
-bez dolnej granicy, bez filtra firmy, bez klauzuli pauzy w kolejce), rollback `0969_…down.sql`
+bez dolnej granicy, bez filtra firmy, bez klauzuli pauzy w kolejce), rollback `0215_…down.sql`
 (`saved-search-pause-follow-rollback.sql` w `test-rls.sh`), unit `saved-search-pause-follow`,
 `saved-search-pause-follow-ui`, `saved-search-followups`. Digest zakolejkowany przed pauzą jest wygaszany
-(`suppressed_alert_paused`) przy claimie i tuż przed wysyłką — `email_delivery_suppression_reason` w 0969 bazuje na
+(`suppressed_alert_paused`) przy claimie i tuż przed wysyłką — `email_delivery_suppression_reason` w 0215 bazuje na
 definicji z 0186 (oba szablony alertu, z niepotwierdzonym adresem marketingu #1038). **Otwarte:** wypisanie z alertów firmy w jednym kliknięciu z pauzą.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —

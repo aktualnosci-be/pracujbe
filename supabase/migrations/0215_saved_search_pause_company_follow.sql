@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0969 (numer tymczasowy) — czasowa pauza alertów i obserwowanie firmy (#810, #855)
+-- 0215 (numer tymczasowy) — czasowa pauza alertów i obserwowanie firmy (#810, #855)
 --
 -- Decyzja właściciela: konto kandydata = alerty + dziennik aplikacji; zapisane wyszukiwania
 -- działają w trybie ogłoszeniowym (bez profilu kandydata, bez dopasowań).
@@ -25,7 +25,7 @@
 --    alertu przy pauzie konta (`suppressed_alert_paused`) — także zakolejkowane PRZED pauzą (#810) —
 --    i przy wyłączonym alercie.
 --
--- Rollback: supabase/rollback/0969_saved_search_pause_company_follow.down.sql
+-- Rollback: supabase/rollback/0215_saved_search_pause_company_follow.down.sql
 -- =============================================================================
 
 -- --- 1. Pauza alertów -------------------------------------------------------------------
@@ -204,7 +204,7 @@ begin
     where s.alerts_enabled
       and s.next_run_at <= v_run_at
       and p.role = 'candidate' and p.deleted_at is null
-      -- 0969 (#810): konto w pauzie nie dostaje alertów; wyszukiwanie zostaje „do wykonania”.
+      -- 0215 (#810): konto w pauzie nie dostaje alertów; wyszukiwanie zostaje „do wykonania”.
       and (ap.paused_until is null or ap.paused_until <= v_run_at)
     order by s.next_run_at
     limit least(greatest(coalesce(p_limit, 200), 1), 1000)
@@ -231,7 +231,7 @@ begin
       )
       select array_agg(job_id) into v_new from inserted;
     else
-      -- 0969 (#855): obserwowana firma — nowe, publiczne oferty po `company_id`.
+      -- 0215 (#855): obserwowana firma — nowe, publiczne oferty po `company_id`.
       with found as (
         select j.id
         from public.jobs j
@@ -291,7 +291,7 @@ begin
           jsonb_build_object('searchName', v_search.name, 'count', v_count,
                              'jobs', v_jobs, 'query', v_search.query));
       else
-        -- 0969 (#855): osobny szablon „Nowe oferty firmy …” (ta sama kategoria `job_matches`,
+        -- 0215 (#855): osobny szablon „Nowe oferty firmy …” (ta sama kategoria `job_matches`,
         -- ten sam token wyłączenia alertu); nazwa firmy z bazy, nie z nazwy zapisanej przy obserwowaniu.
         perform public.enqueue_email(
           v_search.profile_id, 'followedCompanyJobs', 'saved_search', v_search.id, v_key,
@@ -380,7 +380,7 @@ create or replace function public.email_delivery_suppression_reason(
             where s.id = p_entity_id
               and s.profile_id is not distinct from p_profile_id
               and s.alerts_enabled) then 'suppressed_alert_disabled'
-    -- 0969 (#810): pauza alertów konta trwa — digest zakolejkowany wcześniej nie wychodzi.
+    -- 0215 (#810): pauza alertów konta trwa — digest zakolejkowany wcześniej nie wychodzi.
     when p_template in ('jobMatch', 'followedCompanyJobs') and p_entity_type = 'saved_search'
          and exists (
            select 1 from public.saved_search_alert_pauses ap

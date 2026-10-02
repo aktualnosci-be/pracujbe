@@ -121,7 +121,7 @@ export function utcToAppLocalInput(iso: string | null | undefined): string {
 
 /**
  * Najwcześniejszy i najpóźniejszy dzień wznowienia pauzy alertów (#810) jako `YYYY-MM-DD` w
- * Europe/Brussels: jutro .. +366 dni — te same granice co `set_saved_search_alerts_pause` (0969).
+ * Europe/Brussels: jutro .. +366 dni — te same granice co `set_saved_search_alerts_pause` (0215).
  */
 export function pauseDateRange(now: Date = new Date()): { min: string; max: string } {
   const ymd = new Intl.DateTimeFormat('en-CA', {

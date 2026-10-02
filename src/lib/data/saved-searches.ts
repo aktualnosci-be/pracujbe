@@ -86,7 +86,7 @@ export async function loadMySavedSearches(): Promise<SavedSearchesLoad> {
 }
 
 /**
- * Czasowa pauza alertów konta (#810, 0969) — odczyt pod sesją (RLS `saved_search_alert_pauses_select_own`).
+ * Czasowa pauza alertów konta (#810, 0215) — odczyt pod sesją (RLS `saved_search_alert_pauses_select_own`).
  * `pausedUntil` = koniec TRWAJĄCEJ pauzy (ISO) albo null (brak/zakończona). Błąd odczytu = jawny `error`,
  * nie „brak pauzy” (kandydat nie może uznać, że alerty działają, gdy nie znamy stanu).
  */
@@ -115,7 +115,7 @@ export async function loadMyAlertsPause(): Promise<AlertsPauseLoad> {
 }
 
 /**
- * Obserwowane firmy kandydata (#855, 0969): wyszukiwania z kluczem firmy → adres profilu.
+ * Obserwowane firmy kandydata (#855, 0215): wyszukiwania z kluczem firmy → adres profilu.
  * Klucz mapy = id wyszukiwania; `slug` null = profil niedostępny (firma niezweryfikowana/usunięta).
  * Awaria odczytu nie blokuje listy — wyszukiwania pokazują się bez odnośnika do profilu.
  */

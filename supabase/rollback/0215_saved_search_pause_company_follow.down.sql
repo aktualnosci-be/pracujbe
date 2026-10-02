@@ -1,8 +1,8 @@
 -- =============================================================================
--- Rollback 0969 (pauza alertów i obserwowanie firm) — przywraca worker z 0211 (0138 + termin bez dryfu) i usuwa RPC,
+-- Rollback 0215 (pauza alertów i obserwowanie firm) — przywraca worker z 0211 (0138 + termin bez dryfu) i usuwa RPC,
 -- tabelę pauz oraz kolumnę `saved_searches.company_id` (obserwacje firm są usuwane; zwykłe
 -- zapisane wyszukiwania zostają bez zmian).
--- Przywraca też definicje kolejki e-mail sprzed 0969: `email_preference_category`/`email_send_pool`
+-- Przywraca też definicje kolejki e-mail sprzed 0215: `email_preference_category`/`email_send_pool`
 -- (0087) i `email_delivery_suppression_reason` (0186, bez przyczyny `suppressed_alert_paused`).
 -- =============================================================================
 

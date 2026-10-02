@@ -131,7 +131,7 @@ function latestDefinition(fn: string): string {
   return readFileSync(join(dir, defining[defining.length - 1]!), 'utf8');
 }
 
-describe('lustro SQL ↔ TS (migracje 0087, 0969)', () => {
+describe('lustro SQL ↔ TS (migracje 0087, 0215)', () => {
   const sqlCategory = latestDefinition('email_preference_category');
   const sqlPool = latestDefinition('email_send_pool');
 

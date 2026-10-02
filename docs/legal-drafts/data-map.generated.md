@@ -1179,15 +1179,15 @@ Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
 
 ### `public.saved_search_alert_pauses`
 
-- **Migracja:** `supabase/migrations/0969_saved_search_pause_company_follow.sql`
+- **Migracja:** `supabase/migrations/0215_saved_search_pause_company_follow.sql`
 - **Czynności:** Dopasowanie i zapisane wyszukiwania, E-maile i powiadomienia
 - **Osoby:** Kandydaci (konto)
-- **Uwaga:** Czasowa pauza alertów o nowych ofertach (#810, 0969): jeden wiersz na konto, sama data wznowienia.
+- **Uwaga:** Czasowa pauza alertów o nowych ofertach (#810, 0215): jeden wiersz na konto, sama data wznowienia.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0969_saved_search_pause_company_follow.sql` |
-| `paused_until` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0969_saved_search_pause_company_follow.sql` |
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0215_saved_search_pause_company_follow.sql` |
+| `paused_until` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0215_saved_search_pause_company_follow.sql` |
 | `updated_at` | nie dotyczy: Czas ostatniej zmiany pauzy alertów. | — |
 
 ### `public.saved_search_alerts`
@@ -1214,7 +1214,7 @@ Tabele w migracjach: 114; z danymi osobowymi: 78; bez danych osobowych: 36.
 | `filters` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
 | `query` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
 | `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
-| `company_id` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0969_saved_search_pause_company_follow.sql` |
+| `company_id` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0215_saved_search_pause_company_follow.sql` |
 | `filters_hash` | nie dotyczy: Skrót filtrów do deduplikacji wyszukiwań — nie identyfikuje osoby poza wierszem. | — |
 
 ### `public.screening_question_reviews`

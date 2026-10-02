@@ -23238,22 +23238,22 @@ reset role;
 rollback;
 
 -- ============================================================================
--- PS969 / FC969 — pauza alertów (#810) i obserwowanie firmy (#855), migracja 0969.
+-- PS969 / FC969 — pauza alertów (#810) i obserwowanie firmy (#855), migracja 0215.
 -- Działa w trybie ogłoszeniowym (bez profilu kandydata). Kontrole ujemne: definicja
 -- workera z usuniętą klauzulą pauzy / dolną granicą / filtrem firmy (zmiana cofana).
 -- ============================================================================
 \echo '--- PS969 pauza alertów i obserwowanie firmy w trybie ogłoszeniowym ---'
-\set PSA 'f0969000-0000-4000-8000-0000000000a1'
-\set PSB 'f0969000-0000-4000-8000-0000000000a2'
-\set PSE 'f0969000-0000-4000-8000-0000000000b1'
-\set PSC1 'f0969000-0000-4000-8000-0000000000c1'
-\set PSC2 'f0969000-0000-4000-8000-0000000000c2'
-\set PSC3 'f0969000-0000-4000-8000-0000000000c3'
-\set PSJ1 'f0969000-0000-4000-8000-0000000000d1'
-\set PSJ2 'f0969000-0000-4000-8000-0000000000d2'
-\set PSJ3 'f0969000-0000-4000-8000-0000000000d3'
-\set PSJ4 'f0969000-0000-4000-8000-0000000000d4'
-\set PSJ5 'f0969000-0000-4000-8000-0000000000d5'
+\set PSA 'f0215000-0000-4000-8000-0000000000a1'
+\set PSB 'f0215000-0000-4000-8000-0000000000a2'
+\set PSE 'f0215000-0000-4000-8000-0000000000b1'
+\set PSC1 'f0215000-0000-4000-8000-0000000000c1'
+\set PSC2 'f0215000-0000-4000-8000-0000000000c2'
+\set PSC3 'f0215000-0000-4000-8000-0000000000c3'
+\set PSJ1 'f0215000-0000-4000-8000-0000000000d1'
+\set PSJ2 'f0215000-0000-4000-8000-0000000000d2'
+\set PSJ3 'f0215000-0000-4000-8000-0000000000d3'
+\set PSJ4 'f0215000-0000-4000-8000-0000000000d4'
+\set PSJ5 'f0215000-0000-4000-8000-0000000000d5'
 reset role; reset app.current_uid;
 set role service_role;
 select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql PS969', 'RECRUITMENT');
@@ -23386,14 +23386,14 @@ select pg_temp.assert(not exists (select 1 from public.saved_search_alert_pauses
 delete from public.saved_search_alert_pauses where profile_id = :'PSA';
 delete from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch';
 set role authenticated; set app.current_uid = :'PSE'; select pg_temp.assert_client_role();
-select pg_temp.expect_error($$select * from public.follow_company('f0969000-0000-4000-8000-0000000000c1', 'pl')$$,
+select pg_temp.expect_error($$select * from public.follow_company('f0215000-0000-4000-8000-0000000000c1', 'pl')$$,
   'PERMISSION_DENIED', 'FC969-1a pracodawca nie obserwuje firm');
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
 select saved_search_id as fc1, created as fc1c from public.follow_company(:'PSC1'::uuid, 'nl') \gset
 select created as fc1d from public.follow_company(:'PSC1'::uuid, 'nl') \gset
 select pg_temp.assert(:'fc1c'::boolean and not :'fc1d'::boolean, 'FC969-1b druga obserwacja tej samej firmy = ten sam wiersz');
-select pg_temp.expect_error($$select * from public.follow_company('f0969000-0000-4000-8000-0000000000c3', 'nl')$$,
+select pg_temp.expect_error($$select * from public.follow_company('f0215000-0000-4000-8000-0000000000c3', 'nl')$$,
   'NOT_FOUND', 'FC969-1c firma niezweryfikowana nie jest obserwowalna');
 select pg_temp.expect_error($$select * from public.follow_company(gen_random_uuid(), 'nl')$$,
   'NOT_FOUND', 'FC969-1d nieistniejąca firma');
@@ -23410,7 +23410,7 @@ select pg_temp.assert((select count(*) from public.get_my_followed_companies()) 
   and not exists (select 1 from public.saved_searches where id = :'fc1'),
   'FC969-1g cudzej obserwacji nie widać (firma nie ma żadnego odczytu obserwujących)');
 select public.set_company_block(:'PSC2'::uuid, true);
-select pg_temp.expect_error($$select * from public.follow_company('f0969000-0000-4000-8000-0000000000c2', 'en')$$,
+select pg_temp.expect_error($$select * from public.follow_company('f0215000-0000-4000-8000-0000000000c2', 'en')$$,
   'NOT_FOUND', 'FC969-1h firma zablokowana przez kandydata nie jest obserwowalna');
 reset role; reset app.current_uid;
 

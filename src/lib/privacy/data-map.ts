@@ -528,7 +528,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate'],
     columns: { profile_id: 'reference', paused_until: 'preferences' },
     notPersonal: { updated_at: 'Czas ostatniej zmiany pauzy alertów.' },
-    note: 'Czasowa pauza alertów o nowych ofertach (#810, 0969): jeden wiersz na konto, sama data wznowienia.',
+    note: 'Czasowa pauza alertów o nowych ofertach (#810, 0215): jeden wiersz na konto, sama data wznowienia.',
   },
   'public.candidate_application_journal': {
     activities: ['candidate-profile', 'data-rights'],
