@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
 import { z } from 'zod/v3';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -199,7 +199,7 @@ export async function submitGuestApplication(
       if (questionId) return { ok: false, error: 'SCREENING_ANSWER_REQUIRED', questionId };
       if (message.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
     }
-    captureError(e, { area: 'guestApply.submit' });
+    captureActionError(e, 'guestApply.submit');
     return { ok: false, error: 'INTERNAL' };
   }
 }
@@ -243,7 +243,7 @@ export async function confirmGuestApplication(locale: string): Promise<GuestConf
     if (isDatabaseError(e) && databaseErrorMessage(e).includes('RECRUITMENT_DISABLED')) {
       return { ok: false, error: 'RECRUITMENT_DISABLED' };
     }
-    captureError(e, { area: 'guestApply.confirm' });
+    captureActionError(e, 'guestApply.confirm');
     return { ok: false, error: 'INTERNAL' };
   }
 }
@@ -278,7 +278,7 @@ export async function claimGuestApplication(locale: string): Promise<GuestClaimR
       if (message.includes('PERMISSION_DENIED')) return { ok: false, error: 'PERMISSION_DENIED' };
       if (message.includes('NOT_FOUND')) return { ok: false, error: 'NOT_FOUND' };
     }
-    captureError(error, { area: 'guestApply.claim' });
+    captureActionError(error, 'guestApply.claim');
     return { ok: false, error: 'INTERNAL' };
   }
   try {

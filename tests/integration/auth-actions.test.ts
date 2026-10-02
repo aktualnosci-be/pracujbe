@@ -203,8 +203,9 @@ describe('konta portalu na PostgreSQL — Server Actions', () => {
     browser.locale = 'nl';
     expect(await outcome(() => actions.registerEmployer({ ...form(email, 'nl'), companyName: 'Bouw NV' })))
       .toEqual({ redirect: '/nl/potwierdzenie' });
-    // Przed potwierdzeniem: brak sesji i logowanie odmawia z komunikatem „potwierdź e-mail”.
-    expect(browser.jar.size).toBe(0);
+    // Przed potwierdzeniem: brak sesji (jest tylko znacznik przeglądarki rejestracji, #1090)
+    // i logowanie odmawia z komunikatem „potwierdź e-mail”.
+    expect([...browser.jar.keys()]).toEqual(['pb_signup_browser']);
     expect(await actions.signIn({ email, password: PASSWORD })).toEqual({ ok: false, error: 'AUTH_EMAIL_NOT_CONFIRMED' });
 
     const links = await deliver(email);
@@ -270,6 +271,24 @@ describe('konta portalu na PostgreSQL — Server Actions', () => {
     expect(browser.jar.size).toBe(0);
     expect(await activeSessions()).toBe(before);
     await admin.query('UPDATE public.profiles SET is_active=true WHERE id=(SELECT id FROM auth.users WHERE email=$1)', [email]);
+  });
+
+  it('#1090: link otwarty w innej przeglądarce potwierdza adres bez sesji; logowanie ręczne działa', async () => {
+    const email = 'other-browser@example.invalid';
+    browser.locale = 'pl';
+    await outcome(() => actions.registerCandidate(form(email, 'pl'), null));
+    const [link] = await deliver(email);
+    // Inna przeglądarka: bez znacznika rejestracji i bez sesji.
+    browser.jar.clear();
+    expect(await outcome(() => actions.confirmEmail(tokenOf(link!)))).toEqual({ redirect: '/pl/logowanie' });
+    expect(browser.jar.size).toBe(0);
+    expect(await identity()).toBeNull();
+    const row = (await admin.query(`SELECT u.email_verified,
+        (SELECT count(*)::int FROM auth.sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS sessions
+        FROM auth.users u WHERE u.email = $1`, [email])).rows[0];
+    expect(row).toEqual({ email_verified: true, sessions: 0 });
+    expect(await outcome(() => actions.signIn({ email, password: PASSWORD }))).toEqual({ redirect: '/pl/candidate' });
+    expect(await identity()).toMatchObject({ role: 'candidate' });
   });
 
   it('reset: neutralny wynik, list w języku ODBIORCY, token raz, sesje unieważnione, nowe hasło działa', async () => {

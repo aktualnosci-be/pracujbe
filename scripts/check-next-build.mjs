@@ -39,6 +39,8 @@ const expectedStatic = [
   "/pl",
   "/pl/poradniki",
   "/pl/poradniki/umowa-interim-co-warto-wiedziec",
+  "/pl/poradniki/jak-zaczac-prace",
+  "/pl/poradniki/jak-zaczac-prace/bruksela",
   "/pl/praca",
   "/pl/praca/kategoria/construction",
   "/pl/praca/miasto/brussels",
