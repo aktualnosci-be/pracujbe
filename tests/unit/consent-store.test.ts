@@ -121,7 +121,7 @@ describe('getConsent — tylko ważna zgoda w bieżącej wersji polityki', () =>
 describe('saveConsent / updateConsent', () => {
   it('cookie zapisane z wersją polityki i czasem życia 180 dni; log serwerowy z kategoriami i źródłem', () => {
     const cookieSetter = vi.spyOn(document, 'cookie', 'set');
-    consent.saveConsent(consent.necessaryOnly(), 'cookie_settings');
+    consent.saveConsent(consent.necessaryOnly(), 'cookie_settings', 'fr');
 
     const written = cookieSetter.mock.calls.map(([v]) => v).find((v) => v.startsWith('pracujbe_consent='));
     cookieSetter.mockRestore();
@@ -131,6 +131,7 @@ describe('saveConsent / updateConsent', () => {
       { necessary: true, preferences: false, analytics: false },
       'cookie_settings',
       '2.0',
+      'fr',
     );
   });
 
@@ -158,5 +159,15 @@ describe('saveConsent / updateConsent', () => {
     window.removeEventListener(store.CONSENT_CHANGE_EVENT, onEvent);
     store.updateConsent(consent.necessaryOnly());
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('#672: updateConsent przekazuje język banera do serwerowego receiptu', () => {
+    store.updateConsent(consent.necessaryOnly(), 'cookie_banner', 'nl');
+    expect(recordConsent).toHaveBeenLastCalledWith(
+      { necessary: true, preferences: false, analytics: false },
+      'cookie_banner',
+      '2.0',
+      'nl',
+    );
   });
 });

@@ -50,7 +50,7 @@ beforeEach(() => {
 
 describe('recordConsent', () => {
   it('wysyła kategorie, źródło, visitor_id, zaufany IP (X-Real-IP), user-agent i wersję', async () => {
-    expect(await recordConsent(CATEGORIES, 'cookie_settings', '2026-01')).toEqual({ ok: true });
+    expect(await recordConsent(CATEGORIES, 'cookie_settings', '2026-01', 'nl')).toEqual({ ok: true });
     expect(sentArgs()).toEqual({
       p_categories: CATEGORIES,
       p_source: 'cookie_settings',
@@ -58,6 +58,7 @@ describe('recordConsent', () => {
       p_ip: '203.0.113.7',
       p_user_agent: 'Mozilla/5.0 test',
       p_version: '2026-01',
+      p_locale: 'nl',
     });
     // Zalogowany: transakcja sesji (auth.uid() = konto), jsonb jako JSON.
     expect(fakeDb.callsTo('record_consent')[0]!.as).toBe(USER);
@@ -66,6 +67,20 @@ describe('recordConsent', () => {
   it('bez wersji (wołający nie ją podał) → p_version null, RPC dobiera bieżącą', async () => {
     await recordConsent(CATEGORIES, 'cookie_banner');
     expect(sentArgs().p_version).toBeNull();
+  });
+
+  it('#672: język banera trafia do RPC; brak albo język spoza listy → p_locale null', async () => {
+    for (const locale of ['pl', 'nl', 'fr', 'en']) {
+      fakeDb.calls.length = 0;
+      await recordConsent(CATEGORIES, 'cookie_banner', '2.0', locale);
+      expect(sentArgs().p_locale).toBe(locale);
+    }
+    // Kontrola ujemna: dowolny tekst klienta nie trafia do bazy jako język.
+    for (const locale of [undefined, 'de', 'PL', "pl'; drop table consents;--", '']) {
+      fakeDb.calls.length = 0;
+      await recordConsent(CATEGORIES, 'cookie_banner', '2.0', locale);
+      expect(sentArgs().p_locale).toBeNull();
+    }
   });
 
   it('kontrola ujemna (#588): sfałszowany X-Forwarded-For nie zastępuje brakującego X-Real-IP', async () => {

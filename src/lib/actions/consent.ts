@@ -7,6 +7,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { jsonArg, rpc } from '@/lib/db/sql';
 import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { isLocale } from '@/i18n/routing';
 import type { ConsentCategories, ConsentCategory, ConsentSource } from '@/lib/consent';
 
 /**
@@ -56,11 +57,16 @@ function loggedCategories(categories: ConsentCategories | null | undefined): Con
  * `version` (opcjonalna, z `ConsentRecord.v` w `src/lib/consent.ts`) to wersja polityki
  * cookies FAKTYCZNIE pokazana użytkownikowi w przeglądarce. RPC (0142) przyjmie ją tylko,
  * jeśli istnieje w `consent_versions` — inaczej po cichu użyje bieżącej wersji, jak przed 0142.
+ *
+ * `locale` (opcjonalny) to język, w którym baner pokazał politykę (#672). Ta sama wersja może
+ * mieć osobne wiersze `consent_versions` dla każdego języka — RPC (0225) wybiera wiersz w tym
+ * języku, potem wspólny (bez języka), potem `en`. Wartość spoza obsługiwanych języków = brak.
  */
 export async function recordConsent(
   categories: ConsentCategories,
   source: string,
   version?: string,
+  locale?: string,
 ): Promise<{ ok: boolean }> {
   if (!isPortalDataConfigured()) return { ok: false };
 
@@ -83,6 +89,7 @@ export async function recordConsent(
         p_ip: trustedClientIp(hdrs),
         p_user_agent: hdrs.get('user-agent') ?? null,
         p_version: version ?? null,
+        p_locale: isLocale(locale) ? locale : null,
       }),
     );
     return { ok: true };
