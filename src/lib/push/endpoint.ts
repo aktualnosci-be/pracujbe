@@ -1,5 +1,5 @@
 /**
- * Dozwolone usługi push przeglądarek (#724) — lustro `public.push_endpoint_allowed` (0983).
+ * Dozwolone usługi push przeglądarek (#724) — lustro `public.push_endpoint_allowed` (0219).
  *
  * Endpoint subskrypcji podaje przeglądarka, a serwer wysyła na niego żądanie HTTP — dowolny adres
  * byłby ścieżką do SSRF (sieć wewnętrzna, metadane chmury). Przyjmujemy więc wyłącznie znane

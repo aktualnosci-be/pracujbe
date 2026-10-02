@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0983_web_push_subscriptions.sql  (numer tymczasowy — ostateczny nada integrator)
+-- 0219_web_push_subscriptions.sql  (numer tymczasowy — ostateczny nada integrator)
 -- Web Push dla alertów zapisanych wyszukiwań (#724).
 --
 -- Decyzja produktowa: portal ogłoszeniowy (#1128) — kanał push obejmuje WYŁĄCZNIE alerty
@@ -37,7 +37,7 @@
 -- 6. `purge_push_data` (service_role, `/api/maintenance`) — wysyłki starsze niż 7 dni,
 --    urządzenia unieważnione ponad 30 dni temu. Usunięcie konta = kaskada z `profiles`.
 --
--- Rollback: supabase/rollback/0983_web_push_subscriptions.down.sql
+-- Rollback: supabase/rollback/0219_web_push_subscriptions.down.sql
 -- =============================================================================
 
 -- 0. Jedno źródło reguł ---------------------------------------------------------

@@ -8,11 +8,11 @@ import { deviceLabelFromUserAgent, isAllowedPushEndpoint, PUSH_ENDPOINT_PATTERNS
 /**
  * #724 — endpoint subskrypcji tylko z listy dozwolonych usług push (ochrona przed SSRF: serwer
  * wysyła żądanie na adres podany przez przeglądarkę). Lista TS = lista w `push_endpoint_allowed`
- * (0983) 1:1; kontrole ujemne: adres wewnętrzny, host z dozwolonym prefiksem, port, http,
+ * (0219) 1:1; kontrole ujemne: adres wewnętrzny, host z dozwolonym prefiksem, port, http,
  * dane logowania, host w ścieżce, znaki sterujące.
  */
 
-const MIGRATION = readFileSync('supabase/migrations/0983_web_push_subscriptions.sql', 'utf8');
+const MIGRATION = readFileSync('supabase/migrations/0219_web_push_subscriptions.sql', 'utf8');
 
 describe('lista dozwolonych usług push', () => {
   it('wzorce TS = wzorce funkcji SQL (jedno źródło reguły)', () => {

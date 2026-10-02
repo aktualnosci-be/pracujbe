@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0983_web_push_subscriptions.sql (#724) — usuwa kanał Web Push.
+-- Rollback 0219_web_push_subscriptions.sql (#724) — usuwa kanał Web Push.
 -- Urządzenia i kolejka wysyłek znikają; `notification_preferences.push_enabled` zostaje
 -- (kolumna z 0006), ale wraca na false, bo bez rejestru urządzeń nie opisuje żadnego stanu.
 -- =============================================================================

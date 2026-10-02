@@ -263,7 +263,7 @@ export const PROCESSORS: readonly Processor[] = [
       'WEB_PUSH_ENABLED + klucze VAPID (WEB_PUSH_VAPID_*) oraz urządzenie zarejestrowane przez kandydata po zgodzie przeglądarki (domyślnie wyłączone).',
     codeRefs: ['src/lib/push/send.ts', 'src/lib/push/encrypt.ts', 'src/lib/push/endpoint.ts', 'src/lib/push/worker.ts'],
     notes: [
-      'Tylko alerty zapisanych wyszukiwań (push_notification_allowed, 0983); bez nazwy wyszukiwania, filtrów, tytułów ofert i danych osobowych w treści.',
+      'Tylko alerty zapisanych wyszukiwań (push_notification_allowed, 0219); bez nazwy wyszukiwania, filtrów, tytułów ofert i danych osobowych w treści.',
       'Endpoint tylko z listy dozwolonych usług (push_endpoint_allowed); 404/410 unieważnia urządzenie.',
     ],
     ...UNKNOWN,

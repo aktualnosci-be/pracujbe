@@ -2875,7 +2875,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Dowód: unit `notifications-list` (rerender z nowym `initialPage`; kontrola ujemna: identyczny
   obiekt props po raz drugi nic nie zmienia).
 
-- [x] Web Push alertów zapisanych wyszukiwań (#724, migracja `0983` — numer tymczasowy; za flagą
+- [x] Web Push alertów zapisanych wyszukiwań (#724, migracja `0219` — numer tymczasowy; za flagą
   `WEB_PUSH_ENABLED` + klucze VAPID `WEB_PUSH_VAPID_*` ze zmiennych środowiska, domyślnie wyłączone;
   klucze: `node scripts/push/generate-vapid-keys.mjs`). Decyzja produktowa: portal ogłoszeniowy —
   push WYŁĄCZNIE dla `job_match`/`saved_search` (`push_notification_allowed`, propozycje i wiadomości
@@ -2895,7 +2895,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja `PushNotificationsSettings` w `/candidate/ustawienia` tylko przy włączonej funkcji — zgoda
   przeglądarki dopiero po kliknięciu, stany: brak obsługi, zablokowane, włączone/wyłączone, lista
   urządzeń z usuwaniem. Formularz preferencji bierze `push_enabled` z bazy. Dowód: `rls.sql` sekcja
-  WP724 (kontrole ujemne: bramka typu, trigger), rollback `0983_…down.sql` (`web-push-rollback.sql`),
+  WP724 (kontrole ujemne: bramka typu, trigger), rollback `0219_…down.sql` (`web-push-rollback.sql`),
   unit `web-push-crypto`, `web-push-endpoint`, `web-push-worker`, `web-push-actions`,
   `web-push-service-worker`, `push-notifications-settings`. **Otwarte:** metryki dostarczalności
   w `/admin/operacje`, push w eksporcie danych konta (#486), E2E z prawdziwą przeglądarką.

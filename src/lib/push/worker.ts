@@ -8,7 +8,7 @@ import { buildSavedSearchPushMessage } from '@/lib/push/message';
 import { sendWebPush, type PushSendOptions } from '@/lib/push/send';
 
 /**
- * Worker kolejki Web Push (#724, 0983) — wołany z `/api/maintenance` po alertach zapisanych
+ * Worker kolejki Web Push (#724, 0219) — wołany z `/api/maintenance` po alertach zapisanych
  * wyszukiwań. Bez flagi/kluczy VAPID nie pobiera kolejki (`skipped`). Każda wysyłka:
  * claim (dzierżawa, język odbiorcy) → szyfrowanie i POST do usługi push → `finish_push_delivery`
  * (`sent` / `gone` dla 404/410 → urządzenie unieważnione / `retry` z Retry-After / `failed`).

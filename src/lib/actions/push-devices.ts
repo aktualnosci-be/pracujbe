@@ -20,7 +20,7 @@ import {
 } from '@/lib/push/endpoint';
 
 /**
- * Server Actions urządzeń Web Push (#724, 0983) — rejestracja bieżącego urządzenia po zgodzie
+ * Server Actions urządzeń Web Push (#724, 0219) — rejestracja bieżącego urządzenia po zgodzie
  * przeglądarki, wycofanie bieżącego i usunięcie dowolnego własnego urządzenia z listy.
  *
  * Kolejność: flaga funkcji (wyłączona = `NOT_FOUND`, bez bazy) → walidacja Zod (endpoint z listy

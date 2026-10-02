@@ -26574,7 +26574,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- WP724. Web Push alertów zapisanych wyszukiwań (0983, #724)
+-- WP724. Web Push alertów zapisanych wyszukiwań (0219, #724)
 -- Rejestr urządzeń kandydata (RPC-only, odczyt własny), lista dozwolonych usług push (bez
 -- dowolnych adresów — SSRF), kolejka tylko dla `job_match`/`saved_search`, dzierżawa, 404/410
 -- unieważnia urządzenie, wycofanie wygasza kolejkę, przejęcie urządzenia przez inne konto,

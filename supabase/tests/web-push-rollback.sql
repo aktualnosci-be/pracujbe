@@ -1,5 +1,5 @@
 -- =============================================================================
--- WP724-R — rollback migracji 0983 (#724). Uruchamiany przez scripts/test-rls.sh po
+-- WP724-R — rollback migracji 0219 (#724). Uruchamiany przez scripts/test-rls.sh po
 -- rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -11,7 +11,7 @@ begin
 end $$;
 
 begin;
-\ir ../rollback/0983_web_push_subscriptions.down.sql
+\ir ../rollback/0219_web_push_subscriptions.down.sql
 select pg_temp.assert(to_regclass('public.push_subscriptions') is null
   and to_regclass('public.push_deliveries') is null
   and to_regprocedure('public.register_push_subscription(text, text, text, text)') is null
@@ -24,4 +24,4 @@ rollback;
 select pg_temp.assert(to_regclass('public.push_subscriptions') is not null
   and exists (select 1 from pg_trigger where tgname = 'trg_notifications_push_enqueue'),
   'WP724-R2 rollback testu cofnięty');
-\echo 'WP724-R rollback 0983: PASS'
+\echo 'WP724-R rollback 0219: PASS'

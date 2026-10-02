@@ -156,7 +156,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'email-notifications': {
     name: 'E-maile i powiadomienia',
-    inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, Web Push alertów zapisanych wyszukiwań (rejestr urządzeń i kolejka wysyłek, 0983), preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
+    inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, Web Push alertów zapisanych wyszukiwań (rejestr urządzeń i kolejka wysyłek, 0219), preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'browser-push'],
     retentionInCode: 'push_deliveries usuwane po 7 dniach, urządzenia wycofane po 30 dniach (purge_push_data, /api/maintenance); email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md).',
   },
@@ -436,7 +436,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       revoked_at: 'Czas unieważnienia urządzenia.',
       revoked_reason: 'Powód unieważnienia (user / gone / failed).',
     },
-    note: 'Urządzenia Web Push kandydata (0983, #724): zgrubna etykieta (przeglądarka · system), bez pełnego User-Agent; usunięcie konta = kaskada.',
+    note: 'Urządzenia Web Push kandydata (0219, #724): zgrubna etykieta (przeglądarka · system), bez pełnego User-Agent; usunięcie konta = kaskada.',
   },
   'public.push_deliveries': {
     activities: ['email-notifications'],
@@ -450,7 +450,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       last_error: 'Stały kod ostatniego błędu (bez treści odpowiedzi dostawcy).',
       sent_at: 'Czas wysłania.',
     },
-    note: 'Kolejka wysyłek push (0983): bez treści powiadomienia; usuwana po 7 dniach.',
+    note: 'Kolejka wysyłek push (0219): bez treści powiadomienia; usuwana po 7 dniach.',
   },
 
   // --- Pliki ------------------------------------------------------------------------------

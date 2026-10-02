@@ -89,7 +89,7 @@ export async function updateNotificationPreferences(
     const recruitment = isRecruitmentEnabled();
     await withPortalTransaction(me, async (tx) => {
       // #724: `push_enabled` zmieniają wyłącznie RPC urządzeń Web Push (rejestracja / wycofanie
-      // ostatniego urządzenia, 0983) — formularz nie ma tej kontrolki, a nieaktualna wartość
+      // ostatniego urządzenia, 0219) — formularz nie ma tej kontrolki, a nieaktualna wartość
       // z otwartej karty nie może wyłączyć push zarejestrowanego w międzyczasie. Wartość bierzemy
       // z bazy w tej samej transakcji (`FOR UPDATE`), nie z wejścia klienta.
       const row = await queryOne<{

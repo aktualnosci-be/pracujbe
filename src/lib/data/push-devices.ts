@@ -7,7 +7,7 @@ import { queryRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
 
 /**
- * Urządzenia Web Push zalogowanego kandydata (#724, 0983) — odczyt pod sesją (RLS
+ * Urządzenia Web Push zalogowanego kandydata (#724, 0219) — odczyt pod sesją (RLS
  * `push_subscriptions_select_own`), tylko aktywne. Endpoint (adres usługi push) nie trafia do
  * HTML: przeglądarka rozpoznaje „to urządzenie” po skrócie SHA-256 swojego endpointu
  * (`endpointHash`, liczonym tak samo przez `crypto.subtle` w komponencie).

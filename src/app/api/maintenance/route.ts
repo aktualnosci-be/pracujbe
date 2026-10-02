@@ -35,7 +35,7 @@ import {
  * ofert per wyszukiwanie najwyżej raz na dobę/tydzień, bez ponownej wysyłki tej samej oferty;
  * e-maile trafiają do outboxa (`enqueue_email`), wysyła je `/api/email/process`.
  * #724: Web Push alertów (`processPushQueue`, za `WEB_PUSH_ENABLED`) i retencja kanału push
- * (`purge_push_data`, 0983) zaraz po digestach.
+ * (`purge_push_data`, 0219) zaraz po digestach.
  * #98: retencja aplikacji bez konta (`purge_guest_application_requests`, 0095) — usuwa
  * niepotwierdzone zgłoszenia 7 dni po ostatnim linku i duplikaty 7 dni po potwierdzeniu (razem
  * z ich e-mailami) i zeruje tokeny przejęcia po wygaśnięciu 30-dniowego okna.
@@ -227,7 +227,7 @@ async function run(request: Request): Promise<Response> {
     expiredJobs === null
       ? 0
       : await task('savedSearchAlerts', 'process_saved_search_alerts', { p_limit: 500 });
-  // #724 (0983): Web Push alertów — zaraz po digestach (te same powiadomienia). Bez flagi
+  // #724 (0219): Web Push alertów — zaraz po digestach (te same powiadomienia). Bez flagi
   // `WEB_PUSH_ENABLED` i kluczy VAPID worker nie pobiera kolejki (`skipped: disabled`).
   let push: PushQueueRun | null = null;
   try {
