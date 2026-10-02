@@ -16,7 +16,7 @@ function job(i: number): ClaimedTranslationJob {
   return {
     job_id: `job-${i}`,
     lease_id: `lease-${i}`,
-    lease_expires_at: '2026-09-25T00:00:00Z',
+    lease_expires_at: new Date(Date.now() + 300_000).toISOString(),
     attempt: 1,
     entity_type: 'job',
     entity_id: 'entity-1',

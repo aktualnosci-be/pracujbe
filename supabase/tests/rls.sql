@@ -6986,12 +6986,14 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
--- Encje TR31 to identyfikatory bez wiersza w jobs: od 0133 aktywne oferty z fixture'ów same
--- trafiają do kolejki (triggery), więc sekcja rdzenia używa własnych encji i wygasza ich zadania.
+-- Encje TR31 to SZKICE ofert (od 0223 źródło wymaga istniejącej encji, #754): szkic nie jest
+-- publiczny, więc triggery 0146 nie kolejkują go same — sekcja rdzenia steruje kolejką wprost.
 \set TRJA 'f0310000-0000-0000-0000-0000000000a1'
 \set TRJB 'f0310000-0000-0000-0000-0000000000b1'
 reset role; reset app.current_uid;
 select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJA', :'COMPA', :'EMPA', 'draft-tr31-a', 'Magazynier TR31', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 \set TRF1 '{"title":"Magazynier  ","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
 \set TRF1WS '{"title":"  Magazynier","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.  ","requirements.0":"Certyfikat VCA","empty":"   "}'
 \set TRF2 '{"title":"Magazynier (zmiana nocna)","description":"Praca w magazynie od 22:00, stawka 17,00 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
@@ -7207,6 +7209,8 @@ reset role;
 -- Ten sam scenariusz co TR31-7 na podmienionej funkcji w cofanej transakcji — asercja z TR31-7d
 -- byłaby czerwona, więc to kontrola rewizji (a nie przypadek) chroni przekład.
 begin;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJB', :'COMPA', :'EMPA', 'draft-tr31-b', 'Magazynier TR31 B', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 create or replace function public.complete_translation_job(
   p_job_id uuid, p_lease_id uuid, p_fields jsonb, p_model text default null,
   p_input_tokens integer default 0, p_output_tokens integer default 0
@@ -7279,6 +7283,8 @@ select pg_temp.assert((select status = 'retry' from public.translation_jobs wher
   'TR31-13Nb kontrola ujemna cofnięta');
 drop table tr13_log;
 select public.deactivate_translation_source('job', :'JOBB', true) >= 0 as tr13_purged \gset
+reset role;
+delete from public.jobs where id = :'TRJA';
 
 -- ============================================================================
 -- SR497. Kontrola treści pytań screeningowych przed publikacją (0103, #497): detektor w bazie
@@ -12845,7 +12851,7 @@ reset role; drop table tr33_claim;
 -- TR33-6: korekta ręczna (fr) przetrwa kolejną edycję — AI jej nie nadpisze (wynik = proposal).
 set role service_role;
 select public.save_manual_translation('job', :'TRJ1', 'fr',
-  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'EMPA') as tr33_manual \gset
+  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'ADMIN') as tr33_manual \gset
 reset role;
 update public.job_translations set title = 'Magazijnmedewerker (nacht)' where job_id = :'TRJ1' and locale = 'nl';
 select id as tr33_rev3, fields::text as tr33_f3 from public.translation_source_revisions
@@ -12857,7 +12863,7 @@ set role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tr33_fr3', :'tr33_fr3_lease', :'tr33_f3'::jsonb) = 'proposal',
   'TR33-6 wynik AI przy korekcie ręcznej = proposal');
 reset role;
-select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'EMPA'
+select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'ADMIN'
   from public.translation_documents where entity_id = :'TRJ1' and locale = 'fr'),
   'TR33-6b korekta ręczna nietknięta po edycji oferty');
 drop table tr33_claim;
@@ -13046,6 +13052,9 @@ rollback;
 
 -- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
 -- przy tej samej treści = nowa rewizja; bez nazw (5/6 argumentów) jak w 0145.
+-- TPE1 = szkic (od 0223 źródło wymaga istniejącej encji, #754).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TPE1', :'TPCO', 'draft-tp740-e1', 'Magazynier', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl');
 set role service_role;
 select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
     'tr-v1', 0, array[' Beta ', 'Alfa', 'Alfa', '', null]))->>'status') = 'created', 'TP740-3 rewizja z nazwami');
@@ -13087,6 +13096,7 @@ select pg_temp.assert(
   'TP740-6 RPC tylko dla serwera, stara sygnatura usunięta, pipeline v2');
 
 select count(public.deactivate_translation_source('job', :'TPE1'::uuid, true));
+delete from public.jobs where id = :'TPE1';
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
@@ -20320,12 +20330,15 @@ select pg_temp.assert(exists (select 1 from public.candidate_skills where candid
   'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
 
 \echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0176, #1152, #1153) ---'
--- Start i koniec w RECRUITMENT. Encje kolejki = identyfikatory bez wierszy w jobs (jak TR31).
-\set CLAIP1 'c1a10176-0000-0000-0000-0000000000c1'
+-- Start i koniec w RECRUITMENT. Encje kolejki (od 0223 muszą istnieć, #754): CLAIP1 = profil
+-- kandydata CANDA, CLAIJ1 = szkic oferty; CLAIP2 bez wiersza (odrzuca go strażnik trybu).
 \set CLAIP2 'c1a10176-0000-0000-0000-0000000000c2'
 \set CLAIJ1 'c1a10176-0000-0000-0000-0000000000d1'
 \set CLAIF '{"title":"Magazynier","description":"Szukam pracy na zmianie nocnej."}'
 reset role; reset app.current_uid;
+select id as "CLAIP1" from public.candidate_profiles where profile_id = :'CANDA' \gset
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'CLAIJ1', :'COMPA', 'draft-claib-j1', 'Magazynier CLAIB', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 select set_config('pracujbe.allow_recruitment_write', '', false);
 
 -- Stan sprzed trybu: w RECRUITMENT profil kandydata trafia do kolejki (zadania nl/fr/en).
@@ -20406,6 +20419,7 @@ select count(public.deactivate_translation_source(entity_type, entity_id, false)
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
+delete from public.jobs where id = :'CLAIJ1';
 
 \echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0185, #1033/#1034/#1089/#1091/#1090) ---'
 -- Sekcja niezależna od trybu portalu (rekordy procesu wstawia superuser ze znacznikiem seedu).
@@ -26571,6 +26585,142 @@ select pg_temp.assert((select name from public.companies where id = :'CCC') like
   'CC1244-N2 kontrola ujemna: bez CHECK nazwa firmy przyjmuje CR/LF');
 rollback to savepoint cc_neg;
 rollback;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- =============================================================================
+-- TQ952 (0223 — numer tymczasowy; #644, #754, #755): integralność kolejki tłumaczeń.
+--   #644: dzierżawa ważna tylko do lease_expires_at (complete/fail/defer po terminie =
+--         stale_lease, nawet bez ponownego przejęcia);
+--   #754: źródło tylko dla istniejącej, nieusuniętej encji właściwego typu; ukrycie źródła
+--         encji, której nie ma, usuwa je;
+--   #755: korekta ręczna wymaga autora z uprawnieniem do encji.
+-- Cała sekcja w cofanej transakcji; kontrole ujemne na definicjach sprzed 0223 (\ir rollbacku).
+-- =============================================================================
+\set TQJ  'f0223000-0000-0000-0000-0000000000a1'
+\set TQJD 'f0223000-0000-0000-0000-0000000000a2'
+\set TQX  'f0223000-0000-0000-0000-0000000000ff'
+\set TQF  '{"title":"Magazynier","description":"Praca w magazynie od 8:00."}'
+\set TQOUT '{"title":"Warehouse worker","description":"Warehouse work from 8:00."}'
+reset role; reset app.current_uid;
+begin;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'TQJ', :'COMPA', :'EMPA', 'draft-tq952', 'Magazynier TQ', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
+  (:'TQJD', :'COMPA', :'EMPA', 'draft-tq952-d', 'Magazynier TQ D', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+update public.jobs set deleted_at = now() where id = :'TQJD';
+select id as tq_cpb from public.candidate_profiles where profile_id = :'CANDB' \gset
+
+-- TQ952-1 (#754): nieistniejąca, usunięta albo pomylona encja = NOT_FOUND, bez żadnego wiersza.
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQX', :'TQF'),
+  'NOT_FOUND', 'TQ952-1 nieistniejąca oferta odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('candidate_profile', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQX', :'TQF'),
+  'NOT_FOUND', 'TQ952-1b nieistniejący profil kandydata odrzucony');
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQJD', :'TQF'),
+  'NOT_FOUND', 'TQ952-1c usunięta oferta odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('candidate_profile', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'TQJ', :'TQF'),
+  'NOT_FOUND', 'TQ952-1d oferta podana jako profil kandydata odrzucona');
+select pg_temp.expect_error(format($q$select public.record_translation_source('job', %L, 'pl', %L::jsonb, 'tr-v1')$q$, :'tq_cpb', :'TQF'),
+  'NOT_FOUND', 'TQ952-1e profil kandydata podany jako oferta odrzucony');
+select pg_temp.expect_error($q$select public.deactivate_translation_source('offer', gen_random_uuid(), false)$q$,
+  'VALIDATION_FAILED: entity_type', 'TQ952-1f deaktywacja nieznanego typu odrzucona');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id in (:'TQX', :'TQJD', :'tq_cpb'))
+  and not exists (select 1 from public.translation_sources where entity_type = 'candidate_profile' and entity_id = :'TQJ'),
+  'TQ952-1g odrzucone zapisy nie zostawiają głowy, rewizji ani zadań');
+set local role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TQJ', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'jobsQueued')::int = 3,
+  'TQ952-1h istniejąca oferta: źródło i trzy zadania');
+select pg_temp.assert(((public.record_translation_source('candidate_profile', :'tq_cpb', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'TQ952-1i istniejący profil kandydata: źródło');
+reset role;
+
+-- TQ952-2 (#644): dzierżawa po terminie bez ponownego przejęcia — stary worker nie zapisze wyniku.
+create temp table tq_claim on commit drop as select * from public.claim_translation_jobs(100, 300) where entity_id = :'TQJ';
+grant select on tq_claim to service_role;
+select job_id as tq_nl, lease_id as tq_nl_lease from tq_claim where target_locale = 'nl' \gset
+select job_id as tq_fr, lease_id as tq_fr_lease from tq_claim where target_locale = 'fr' \gset
+select job_id as tq_en, lease_id as tq_en_lease from tq_claim where target_locale = 'en' \gset
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id in (:'tq_nl', :'tq_fr', :'tq_en');
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tq_nl', :'tq_nl_lease', :'TQOUT'::jsonb) = 'stale_lease',
+  'TQ952-2 wynik po terminie dzierżawy (bez reclaimu) = stale_lease');
+select pg_temp.assert(public.fail_translation_job(:'tq_fr', :'tq_fr_lease', 'timeout', true) = 'stale_lease',
+  'TQ952-2b błąd po terminie dzierżawy = stale_lease');
+select pg_temp.assert(public.defer_translation_job(:'tq_en', :'tq_en_lease', 'budget_exceeded', 60) = 'stale_lease',
+  'TQ952-2c odroczenie po terminie dzierżawy = stale_lease');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TQJ')
+  and (select bool_and(status = 'leased' and attempts = 1) from public.translation_jobs where id in (:'tq_nl', :'tq_fr', :'tq_en')),
+  'TQ952-2d nic nie opublikowano, zadania czekają na ponowne przejęcie');
+create temp table tq_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300) where entity_id = :'TQJ';
+select lease_id as tq_nl_lease2, attempt as tq_nl_att from tq_claim2 where job_id = :'tq_nl' \gset
+select lease_id as tq_fr_lease2 from tq_claim2 where job_id = :'tq_fr' \gset
+set local role service_role;
+select pg_temp.assert(:tq_nl_att = 2 and public.complete_translation_job(:'tq_nl', :'tq_nl_lease', :'TQOUT'::jsonb) = 'stale_lease'
+  and public.complete_translation_job(:'tq_nl', :'tq_nl_lease2', :'TQOUT'::jsonb) = 'applied',
+  'TQ952-2e po reclaimie zapisuje tylko bieżąca dzierżawa');
+reset role;
+
+-- TQ952-3 (#755): korekta ręczna wymaga autora z uprawnieniem do encji.
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, null)$q$, :'TQJ', :'TQOUT'),
+  'VALIDATION_FAILED: author', 'TQ952-3 korekta bez autora odrzucona');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'TQX'),
+  'PERMISSION_DENIED', 'TQ952-3b nieistniejący autor odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'EMPB'),
+  'PERMISSION_DENIED', 'TQ952-3c pracownik innej firmy odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'CANDA'),
+  'PERMISSION_DENIED', 'TQ952-3d kandydat nie poprawia oferty');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('candidate_profile', %L, 'fr', %L::jsonb, %L)$q$, :'tq_cpb', :'TQOUT', :'CANDA'),
+  'PERMISSION_DENIED', 'TQ952-3e cudzy profil kandydata odrzucony');
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQX', :'TQOUT', :'ADMIN'),
+  'NOT_FOUND', 'TQ952-3f korekta nieistniejącej encji odrzucona');
+select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'fr', :'TQOUT'::jsonb, :'EMPA') = 1
+  and public.save_manual_translation('job', :'TQJ', 'fr', :'TQOUT'::jsonb, :'ADMIN') = 2
+  and public.save_manual_translation('candidate_profile', :'tq_cpb', 'fr', :'TQOUT'::jsonb, :'CANDB') = 1,
+  'TQ952-3g owner firmy, administrator i właściciel profilu zapisują korektę');
+reset role;
+update public.company_members set is_active = false where company_id = :'COMPA' and profile_id = :'EMPA';
+set local role service_role;
+select pg_temp.expect_error(format($q$select public.save_manual_translation('job', %L, 'fr', %L::jsonb, %L)$q$, :'TQJ', :'TQOUT', :'EMPA'),
+  'PERMISSION_DENIED', 'TQ952-3h członkostwo nieaktywne = brak uprawnienia');
+reset role;
+update public.company_members set is_active = true where company_id = :'COMPA' and profile_id = :'EMPA';
+select pg_temp.assert((select origin = 'manual' and manual_author = :'ADMIN' and manual_version = 2
+  from public.translation_documents where entity_id = :'TQJ' and locale = 'fr'), 'TQ952-3i autor ostatniej korekty zapisany');
+
+-- TQ952-4 (#754): ukrycie źródła encji, której już nie ma (soft-delete profilu), usuwa je.
+update public.candidate_profiles set deleted_at = now() where id = :'tq_cpb';
+set local role service_role;
+select public.deactivate_translation_source('candidate_profile', :'tq_cpb', false) as tq_deact \gset
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'tq_cpb')
+  and not exists (select 1 from public.translation_documents where entity_id = :'tq_cpb'),
+  'TQ952-4 źródło usuniętej encji usunięte (purge), nie tylko ukryte');
+
+-- TQ952-N (kontrole ujemne): definicje sprzed 0223.
+\ir ../rollback/0223_translation_queue_integrity.down.sql
+select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is null, 'TQ952-N0 rollback usuwa helper');
+set local role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TQX', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'TQ952-N1 kontrola ujemna: bez 0223 źródło nieistniejącej oferty powstaje');
+select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'nl', :'TQOUT'::jsonb, null) = 1,
+  'TQ952-N2 kontrola ujemna: bez 0223 korekta bez autora przechodzi');
+reset role;
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id = :'tq_fr';
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tq_fr', :'tq_fr_lease2', :'TQOUT'::jsonb) in ('applied', 'proposal'),
+  'TQ952-N3 kontrola ujemna: bez 0223 wynik po terminie dzierżawy jest zapisywany');
+reset role;
+rollback;
+select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is not null
+  and not exists (select 1 from public.jobs where id in (:'TQJ', :'TQJD'))
+  and not exists (select 1 from public.translation_sources where entity_id in (:'TQJ', :'TQX')),
+  'TQ952-R sekcja cofnięta, funkcje 0223 na miejscu');
 reset role; reset app.current_uid;
 
 -- ============================================================================

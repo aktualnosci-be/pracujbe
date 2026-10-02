@@ -2454,6 +2454,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
   (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
   unit `translation-worker`, `translation-job-sync`.
+  Integralność kolejki (#644/#754/#755, migracja `0223` — numer tymczasowy): dzierżawa ważna do
+  `lease_expires_at` — `complete/fail/defer_translation_job` po terminie = `stale_lease` także bez
+  ponownego przejęcia, a worker nie woła modelu przy zapasie dzierżawy < 90 s
+  (`MIN_LEASE_REMAINING_MS`, kod `lease_too_short`, zadanie wraca do puli); źródło tylko dla
+  istniejącej, nieusuniętej encji właściwego typu (`translation_entity_exists`: oferta + firma,
+  `candidate_profiles.id` + konto) — inaczej `NOT_FOUND`, ukrycie źródła encji, której nie ma,
+  = purge, sieroty usunięte jednorazowo; korekta ręczna wymaga autora (null =
+  `VALIDATION_FAILED: author`, autor = aktywny admin, recruiter+ firmy oferty albo właściciel
+  profilu, inaczej `PERMISSION_DENIED`). Walidator faktów (#1106): negacja także w zdaniach
+  z faktami przy innej liczbie zdań (kotwica = odcisk faktów zdania; łączenie/dzielenie zdań bez
+  fałszywych odrzuceń). Dowód: `rls.sql` sekcja TQ952 (kontrole ujemne na definicjach sprzed 0223),
+  rollback `0223_…down.sql` (`translation-queue-integrity-rollback.sql`), unit
+  `translation-facts`, `translation-worker`.
+
   Wyścig wznowienia oferty z zawieszeniem firmy (#802, migracja `0210`):
   `sync_job_translation_source` czyta firmę z `FOR SHARE OF c` — synchronizacja oferty czeka na
   zatwierdzenie zmiany statusu firmy i widzi `suspended` (źródło nieaktywne, zadania nie wracają);
@@ -2462,6 +2476,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   niepuste pola bez klucza w przekładzie; opis oferty i opis firmy w oryginale mają `lang` języka
   źródła. Dowód: `rls.sql` P2C994 (kontrola ujemna: sync z 0190 reaktywuje źródło), unit
   `job-machine-translation`, `job-detail-partial-translation-lang` (kontrole ujemne).
+
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
