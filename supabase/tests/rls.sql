@@ -25996,16 +25996,20 @@ select pg_temp.assert(:pf_t1 - :pf_t0 = 0,
   'PF1215-4c licznik bez słowa kluczowego nie czyta tłumaczeń, przeczytano ' || (:pf_t1 - :pf_t0));
 select pg_temp.assert(
   (select proconfig @> array['plan_cache_mode=force_custom_plan', 'jit=off'] and prolang = (select oid from pg_language where lanname = 'plpgsql')
-     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)'::regprocedure)
-  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer)', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)', 'EXECUTE'),
+     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])'::regprocedure)
+  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])', 'EXECUTE'),
   'PF1215-4d plpgsql SECURITY DEFINER z force_custom_plan i bez JIT; granty bez zmian');
 
 -- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
 savepoint pf1215_old;
+-- 0976 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
+-- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
+set constraints all immediate;
+\ir ../rollback/0976_job_benefits.down.sql
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.pf1215_snapshot() as pf_old_anon \gset
@@ -26036,7 +26040,7 @@ select pg_temp.assert(:'pf_new_saved' = :'pf_old_saved',
   'PF1215-3 saved_search_jobs_after (strona, kursor, filtry) = definicja z 0194');
 select pg_temp.assert(
   (select prolang = (select oid from pg_language where lanname = 'plpgsql')
-   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure),
+   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'::regprocedure),
   'PF1215-5 po cofnięciu savepointu stan 0213 zostaje');
 rollback;
 reset role; reset app.current_uid;
@@ -26122,6 +26126,10 @@ select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_
   'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
 
 savepoint kq866_old;
+-- 0976 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
+-- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
+set constraints all immediate;
+\ir ../rollback/0976_job_benefits.down.sql
 \ir ../rollback/0214_keyword_job_qualifications.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''
