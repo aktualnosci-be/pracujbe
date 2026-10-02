@@ -2471,6 +2471,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
   (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
   unit `translation-worker`, `translation-job-sync`.
+  Integralność kolejki (#644/#754/#755, migracja `0223` — numer tymczasowy): dzierżawa ważna do
+  `lease_expires_at` — `complete/fail/defer_translation_job` po terminie = `stale_lease` także bez
+  ponownego przejęcia, a worker nie woła modelu przy zapasie dzierżawy < 90 s
+  (`MIN_LEASE_REMAINING_MS`, kod `lease_too_short`, zadanie wraca do puli); źródło tylko dla
+  istniejącej, nieusuniętej encji właściwego typu (`translation_entity_exists`: oferta + firma,
+  `candidate_profiles.id` + konto) — inaczej `NOT_FOUND`, ukrycie źródła encji, której nie ma,
+  = purge, sieroty usunięte jednorazowo; korekta ręczna wymaga autora (null =
+  `VALIDATION_FAILED: author`, autor = aktywny admin, recruiter+ firmy oferty albo właściciel
+  profilu, inaczej `PERMISSION_DENIED`). Walidator faktów (#1106): negacja także w zdaniach
+  z faktami przy innej liczbie zdań (kotwica = odcisk faktów zdania; łączenie/dzielenie zdań bez
+  fałszywych odrzuceń). Dowód: `rls.sql` sekcja TQ952 (kontrole ujemne na definicjach sprzed 0223),
+  rollback `0223_…down.sql` (`translation-queue-integrity-rollback.sql`), unit
+  `translation-facts`, `translation-worker`.
+
   Wyścig wznowienia oferty z zawieszeniem firmy (#802, migracja `0210`):
   `sync_job_translation_source` czyta firmę z `FOR SHARE OF c` — synchronizacja oferty czeka na
   zatwierdzenie zmiany statusu firmy i widzi `suspended` (źródło nieaktywne, zadania nie wracają);
@@ -2479,6 +2493,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   niepuste pola bez klucza w przekładzie; opis oferty i opis firmy w oryginale mają `lang` języka
   źródła. Dowód: `rls.sql` P2C994 (kontrola ujemna: sync z 0190 reaktywuje źródło), unit
   `job-machine-translation`, `job-detail-partial-translation-lang` (kontrole ujemne).
+
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -2833,6 +2848,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wywołanego poza normalną interakcją użytkownika. Dowód: unit
   `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
   ujemna bez zapisu w toku, odblokowanie po błędzie).
+  Tylko oferty publiczne (#720, migracja `0224` — numer tymczasowy): `email_campaign_unavailable_slugs`
+  (warunki `campaign_job_source` z 0102: aktywna, nieusunięta, niewygasła, nie demo, firma
+  `verified`) — zapis rewizji i aktywacja odrzucają `CAMPAIGN_JOB_UNAVAILABLE: slugi` (edytor: błąd
+  przy polu sluga `campaignEditorErrorJobUnavailable`, aktywacja: komunikat
+  `campaignJobsUnavailableActivate`), `process_email_campaigns` pomija rewizję (bez rezerwacji
+  odbiorców), `email_delivery_send_check` wygasza zakolejkowany newsletter
+  (`suppressed_campaign_job_unavailable`), szczegół rewizji pokazuje ostrzeżenie ze slugami.
+  `enqueue_campaign_batch` bez zmian. Dowód: `rls.sql` sekcja GC746 (kontrola ujemna: definicje
+  0155/0111 zapisują i aktywują martwą ofertę), unit `campaign-job-availability`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -3880,7 +3904,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
-  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163; od `0224` — numer tymczasowy —
+  w partiach po 5000 z indeksem czasu i SKIP LOCKED, najwyżej 10 partii na przebieg, flaga
+  `technicalGcBacklog`, inbox liczony od zakończenia `updated_at` zamiast `seen_at` (#746/#722,
+  sekcja GC746 z kontrolami ujemnymi, `src/lib/maintenance/technical-gc.ts`)), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
@@ -4009,6 +4036,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `recordConsent`, zaktualizowany w tym samym PR). Dowód: `rls.sql` sekcja CVR142 (kontrole
   ujemne: nieistniejąca wersja nie trafia do receiptu, wersja nieopublikowana — przyszła lub szkic — też nie,
   authenticated nie dopisuje/nie nadpisuje receiptu cudzego konta).
+  Język receiptu (#672, migracja `0225` — numer tymczasowy): ta sama wersja może mieć osobne
+  wiersze `consent_versions` dla każdego języka, więc `recordConsent(…, version, locale)` dostaje
+  język banera (`useLocale` w `CookieConsent` → `updateConsent` → `saveConsent`; spoza
+  `routing.locales` = null), a `record_consent(…, p_locale)` wybiera deterministycznie: wiersz
+  w języku banera → wspólny (`locale is null`) → `en` → pozostałe alfabetycznie po kodzie, remis
+  dat po `id` — tak samo dla wersji z klienta i fallbacku do bieżącej. Dowód: `rls.sql` sekcja
+  CVL672 (kontrola ujemna: definicja z 0142 przypisuje receipt `pl` do wiersza `nl`), rollback
+  `0225_…down.sql` (`consent-receipt-locale-rollback.sql`), unit `consent-action`, `consent-store`,
+  E2E `cookie-consent-categories` (język w wywołaniu akcji).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
   Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta
