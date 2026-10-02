@@ -7674,6 +7674,12 @@ rollback;
 \set CMN5 'e0450000-0000-0000-0000-0000000000d5'
 \set CMW 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 \set CMJOBS '{"pl":{"jobs":[{"slug":"magazynier-gent","title":"Magazynier","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"magazijnier-gent","title":"Magazijnier","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"magasinier-gand","title":"Magasinier","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"warehouse-gent","title":"Warehouse worker","city":"Ghent","locale":"en","isDemo":false}]}}'
+-- 0224 (#720): oferty z treści kampanii muszą być publiczne — fikstura dla sekcji kampanii
+-- (CM45, AC45, AC155): aktywne oferty zweryfikowanej firmy o slugach z CMJOBS.
+insert into public.companies(id, name, status) values ('e0224000-0000-0000-0000-0000000000f0', 'Firma kampanii CM45', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+select gen_random_uuid(), 'e0224000-0000-0000-0000-0000000000f0', s, 'Oferta kampanii', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'
+  from unnest(array['magazynier-gent', 'magazijnier-gent', 'magasinier-gand', 'warehouse-gent']) s;
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CMA','cma@test.be','Cm A','{"role":"candidate","first_name":"Cm","last_name":"A","locale":"pl"}'),
@@ -16079,12 +16085,13 @@ select pg_temp.assert(
 -- KONTROLA UJEMNA: definicje sprzed 0163 — bez grantu service_role dostaje permission denied,
 -- a bez dolnej granicy argument 1 s kasuje trwające okno limitera.
 begin;
-revoke execute on function public.rate_limit_gc(integer) from service_role;
+revoke execute on function public.rate_limit_gc(integer, integer) from service_role;
 set local role service_role;
 select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied',
   'GC163-N1 bez grantu 0163 maintenance dostaje permission denied');
 reset role;
-create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400)
+-- (0224: sygnatura z limitem partii; treść = 0015 bez dolnej granicy)
+create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400, p_limit integer default 5000)
 returns integer language plpgsql security definer set search_path = public as $gcneg$
 declare v_deleted integer;
 begin
@@ -16101,6 +16108,243 @@ rollback;
 reset role;
 delete from public.rate_limits where key like 'gc193:%';
 delete from public.processed_webhooks where id like 'gc193:%';
+
+-- ============================================================================
+-- GC746. GC w partiach i retencja inboxu od zakończenia (0224, #746/#722) oraz kampanie
+--        tylko z ofertami publicznymi (#720).
+--   * rate_limit_gc / processed_webhooks_gc: limit partii (najstarsze pierwsze), indeks po
+--     kolumnie czasu, SKIP LOCKED (wiersz zablokowany przez rate_limit_hit nie wstrzymuje GC),
+--     inbox liczony od `updated_at` (zakończenie/ostatnia próba), nie od `seen_at`.
+--   * email_campaign_unavailable_slugs: każda oferta treści = aktywna, nieusunięta,
+--     niewygasła, nie demo, firma zweryfikowana; edytor, aktywacja, harmonogram i send_check.
+--   Kontrole ujemne: definicja 0195 (seen_at) kasuje świeżo zakończony wpis; definicja 0163
+--   (bez SKIP LOCKED) czeka na blokadę; definicje 0155/0111 zapisują/aktywują martwą ofertę.
+-- ============================================================================
+\echo '--- GC746 GC w partiach, oferty kampanii ---'
+reset role; reset app.current_uid;
+begin;
+insert into public.rate_limits(key, window_start, count, updated_at)
+select format('gc746:old:%s', lpad(n::text, 2, '0')), now() - interval '5 days', 1,
+       now() - interval '3 days' - make_interval(mins => n)
+  from generate_series(1, 12) n;
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc746:fresh', now(), 1, now());
+
+-- GC746-1: partia = limit, najstarsze najpierw; zaległość schodzi w kolejnych wywołaniach.
+set local role service_role;
+select pg_temp.assert(public.rate_limit_gc(86400, 5) = 5, 'GC746-1 rate_limit_gc usuwa najwyżej p_limit wierszy');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.rate_limits where key like 'gc746:old:%') = 7
+  and not exists (select 1 from public.rate_limits where key in ('gc746:old:12', 'gc746:old:08')),
+  'GC746-1b pierwsza partia = 5 najstarszych (najdłużej nieaktualizowanych)');
+set local role service_role;
+select pg_temp.assert(public.rate_limit_gc(86400, 5) = 5 and public.rate_limit_gc(86400, 5) = 2
+                      and public.rate_limit_gc(86400, 5) = 0,
+  'GC746-1c kolejne partie nadrabiają zaległość (5, 2, 0)');
+reset role;
+select pg_temp.assert(exists (select 1 from public.rate_limits where key = 'gc746:fresh'),
+  'GC746-1d trwające okno zostaje');
+
+-- GC746-2: plan używa indeksu po updated_at (rate_limits) i częściowego indeksu inboxu.
+set local enable_seqscan = off;
+create temp table gc746_plan(p text) on commit drop;
+do $$ declare v json; begin
+  execute 'explain (format json) select key from public.rate_limits where updated_at < now() order by updated_at limit 5' into v;
+  insert into gc746_plan values (v::text);
+  execute 'explain (format json) select id from public.processed_webhooks where status in (''completed'', ''failed'') and updated_at < now() order by updated_at limit 5' into v;
+  insert into gc746_plan values (v::text);
+end $$;
+set local enable_seqscan = on;
+select pg_temp.assert(
+  exists (select 1 from gc746_plan where p like '%idx_rate_limits_updated_at%')
+  and exists (select 1 from gc746_plan where p like '%idx_processed_webhooks_terminal_updated%'),
+  'GC746-2 predykat czasu ma indeks (rate_limits.updated_at, inbox: częściowy po stanach rozstrzygniętych)');
+
+-- GC746-3 (#722): wpis odebrany 40 dni temu, zakończony wczoraj (seria ponowień) zostaje;
+--          wpis zakończony 40 dni temu znika; processing nigdy.
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc746:retried', 'emaillabs', 'completed',  now() - interval '40 days', now() - interval '1 day'),
+  ('gc746:old-a',   'emaillabs', 'completed',  now() - interval '40 days', now() - interval '40 days'),
+  ('gc746:old-b',   'resend',    'failed',     now() - interval '41 days', now() - interval '39 days'),
+  ('gc746:old-c',   'resend',    'completed',  now() - interval '42 days', now() - interval '38 days'),
+  ('gc746:proc',    'emaillabs', 'processing', now() - interval '40 days', now() - interval '40 days');
+set local role service_role;
+select pg_temp.assert(public.processed_webhooks_gc(30, 2) = 2, 'GC746-3 processed_webhooks_gc usuwa najwyżej p_limit wpisów');
+select pg_temp.assert(public.processed_webhooks_gc(30, 2) = 1 and public.processed_webhooks_gc(30, 2) = 0,
+  'GC746-3b reszta zaległości w kolejnej partii');
+reset role;
+select pg_temp.assert(
+  (select array_agg(id order by id) from public.processed_webhooks where id like 'gc746:%')
+  = array['gc746:proc', 'gc746:retried'],
+  'GC746-3c retencja od zakończenia: świeżo zakończony (stary seen_at) i processing zostają');
+rollback;
+
+-- KONTROLA UJEMNA #722: definicja z 0195 (od seen_at) kasuje wpis zakończony wczoraj.
+begin;
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc746:retried', 'emaillabs', 'completed', now() - interval '40 days', now() - interval '1 day');
+create or replace function public.processed_webhooks_gc(p_older_than_days integer default 30, p_limit integer default 5000)
+returns integer language plpgsql security definer set search_path = public, pg_temp as $gcneg$
+declare v_deleted integer;
+begin
+  delete from public.processed_webhooks
+    where status in ('completed', 'failed')
+      and seen_at < now() - make_interval(days => greatest(coalesce(p_older_than_days, 30), 7));
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end $gcneg$;
+select public.processed_webhooks_gc(30);
+select pg_temp.assert(not exists (select 1 from public.processed_webhooks where id = 'gc746:retried'),
+  'GC746-N1 definicja z 0195 (seen_at) usuwa deduplikację zaraz po zakończeniu długo ponawianego zdarzenia');
+rollback;
+
+-- GC746-4: wiersz zablokowany przez równoległy rate_limit_hit nie wstrzymuje GC (SKIP LOCKED).
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc746:locked', now() - interval '5 days', 1, now() - interval '3 days'),
+  ('gc746:free',   now() - interval '5 days', 1, now() - interval '3 days');
+select pg_temp.remote_connect('gc746');
+select dbl.dblink_exec('gc746', 'begin');
+select * from dbl.dblink('gc746',
+  'select key from public.rate_limits where key = ''gc746:locked'' for update') as t(k text);
+begin;
+set local lock_timeout = '500ms';
+set local role service_role;
+select public.rate_limit_gc(86400, 5000) as gc746_n \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.rate_limits where key = 'gc746:locked')
+  and not exists (select 1 from public.rate_limits where key = 'gc746:free'),
+  'GC746-4 GC pomija zablokowany wiersz bez czekania, resztę usuwa');
+rollback;
+-- KONTROLA UJEMNA: jeden DELETE bez SKIP LOCKED (0163) czeka na blokadę → lock timeout.
+begin;
+set local lock_timeout = '300ms';
+select pg_temp.expect_error(
+  $q$delete from public.rate_limits where updated_at < now() - interval '1 day' and key like 'gc746:%'$q$,
+  'lock timeout', 'GC746-N2 DELETE bez SKIP LOCKED (0163) wstrzymuje się na wierszu limitera');
+rollback;
+select dbl.dblink_exec('gc746', 'rollback');
+select dbl.dblink_disconnect('gc746');
+delete from public.rate_limits where key like 'gc746:%';
+
+-- GC746-5: granty — klient nie wywoła nowych sygnatur ani funkcji ofert kampanii.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400, 10)', 'permission denied', 'GC746-5 authenticated nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30, 10)', 'permission denied', 'GC746-5b authenticated nie wywoła processed_webhooks_gc');
+select pg_temp.expect_error('select public.email_campaign_unavailable_slugs(''{}''::jsonb)', 'permission denied',
+  'GC746-5c authenticated nie wywoła email_campaign_unavailable_slugs');
+reset role; reset app.current_uid;
+
+-- GC746-6 (#720): oferty kampanii.
+\set GCCO   'e0224000-0000-0000-0000-0000000000c1'
+\set GCCOU  'e0224000-0000-0000-0000-0000000000c2'
+\set GCCAND 'e0224000-0000-0000-0000-0000000000a1'
+begin;
+insert into public.companies(id, name, status) values (:'GCCO', 'Firma GC746', 'verified'), (:'GCCOU', 'Firma GC746 U', 'pending');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, expires_at, is_demo, deleted_at) values
+  (gen_random_uuid(), :'GCCO',  'gc746-ok',         'OK',        'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, false, null),
+  (gen_random_uuid(), :'GCCO',  'gc746-expired',    'Wygasła',   'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', now() - interval '1 day', false, null),
+  (gen_random_uuid(), :'GCCO',  'gc746-paused',     'Pauza',     'warehouse', 'permanent', 'Gent', 'Flandria', 'paused', 'pl', null, false, null),
+  (gen_random_uuid(), :'GCCO',  'gc746-deleted',    'Usunięta',  'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, false, now()),
+  (gen_random_uuid(), :'GCCO',  'gc746-demo',       'Demo',      'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, true,  null),
+  (gen_random_uuid(), :'GCCOU', 'gc746-unverified', 'Bez wer.',  'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl', null, false, null);
+
+\set GCOK '{"pl":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"gc746-ok","title":"OK","city":"Ghent","locale":"en","isDemo":false}]}}'
+select pg_temp.assert(
+  public.email_campaign_unavailable_slugs(:'GCOK'::jsonb) = '{}'::text[]
+  and public.email_campaign_unavailable_slugs(jsonb_build_object('pl', jsonb_build_object('jobs', jsonb_build_array(
+        jsonb_build_object('slug', 'gc746-ok'), jsonb_build_object('slug', 'gc746-expired'),
+        jsonb_build_object('slug', 'gc746-paused'), jsonb_build_object('slug', 'gc746-deleted'),
+        jsonb_build_object('slug', 'gc746-demo'), jsonb_build_object('slug', 'gc746-unverified'),
+        jsonb_build_object('slug', 'gc746-missing'), jsonb_build_object('slug', 'gc746-expired')))))
+    = array['gc746-deleted', 'gc746-demo', 'gc746-expired', 'gc746-missing', 'gc746-paused', 'gc746-unverified'],
+  'GC746-6 niedostępne: brak sluga, wygasła, wstrzymana, usunięta, demo, firma niezweryfikowana (unikalne, posortowane)');
+
+-- GC746-7: edytor odrzuca rewizję z niedostępną ofertą, bez zapisu i audytu.
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''gc746-news'', jsonb_set(%L::jsonb, ''{fr,jobs,0,slug}'', ''"gc746-expired"''))',
+  gen_random_uuid(), :'GCOK'), 'CAMPAIGN_JOB_UNAVAILABLE: gc746-expired', 'GC746-7 edytor odrzuca wygasłą ofertę (slug w komunikacie)');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''gc746-news'', jsonb_set(%L::jsonb, ''{pl,jobs,0,slug}'', ''"gc746-missing"''))',
+  gen_random_uuid(), :'GCOK'), 'CAMPAIGN_JOB_UNAVAILABLE: gc746-missing', 'GC746-7b edytor odrzuca nieistniejący slug');
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'gc746-news', :'GCOK'::jsonb) as gc746_rev \gset
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.email_campaigns where slug = 'gc746-news') = 1,
+  'GC746-7c tylko poprawna rewizja zapisana');
+
+-- GC746-8: oferta wstrzymana między szkicem a aktywacją → aktywacja odrzucona; po wznowieniu działa.
+update public.jobs set status = 'paused' where slug = 'gc746-ok';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_activate_email_campaign(%L, ''draft'')', :'gc746_rev'),
+  'CAMPAIGN_JOB_UNAVAILABLE: gc746-ok', 'GC746-8 aktywacja odrzucona, gdy oferta przestała być publiczna');
+reset role;
+update public.jobs set status = 'active' where slug = 'gc746-ok';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'gc746_rev', 'draft');
+reset role;
+select pg_temp.assert((select status from public.email_campaigns where id = :'gc746_rev') = 'active',
+  'GC746-8b aktywacja po wznowieniu oferty');
+
+-- GC746-9: oferta wygasa po aktywacji → harmonogram nie wywołuje paczki tej rewizji
+--          (bez rezerwacji, status zostaje `active`, a nie `completed`).
+update public.jobs set expires_at = now() - interval '1 minute' where slug = 'gc746-ok';
+set local role service_role;
+select public.process_email_campaigns(500);
+reset role;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'gc746_rev') = 'active'
+  and not exists (select 1 from public.email_campaign_recipients where campaign_id = :'gc746_rev'),
+  'GC746-9 harmonogram pomija rewizję z ofertą niedostępną');
+
+-- GC746-10: list zakolejkowany wcześniej nie wychodzi po wygaśnięciu oferty.
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  (:'GCCAND', 'gc746@test.be', 'Gc C', '{"role":"candidate","first_name":"Gc","last_name":"C","locale":"pl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id = :'GCCAND';
+set local role authenticated; set local app.current_uid = :'GCCAND'; select pg_temp.assert_client_role();
+select public.set_notification_preferences(
+  '{"email_applications":true,"email_offers":true,"email_messages":true,"email_job_matches":true,"email_marketing":true,"push_enabled":false,"in_app_enabled":true}'::jsonb,
+  'pl', :'CMW');
+reset role; reset app.current_uid;
+insert into public.email_deliveries(id, profile_id, to_email, template, locale, status, entity_type, entity_id,
+                                    campaign_id, idempotency_key, payload, lock_token, locked_at)
+values
+  ('e0224000-0000-0000-0000-0000000000d1', :'GCCAND', 'gc746@test.be', 'newsletter', 'pl', 'queued',
+   'email_campaign', :'gc746_rev', :'gc746_rev', 'gc746-d1', jsonb_build_object('jobs', :'GCOK'::jsonb -> 'pl' -> 'jobs'),
+   'e0224000-0000-0000-0000-0000000000e1', now());
+set local role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check('e0224000-0000-0000-0000-0000000000d1', 'e0224000-0000-0000-0000-0000000000e1')
+    = 'suppressed_campaign_job_unavailable',
+  'GC746-10 send_check wygasza newsletter z ofertą, która wygasła po zakolejkowaniu');
+reset role;
+select pg_temp.assert(
+  (select status::text = 'failed' and suppressed_at is not null from public.email_deliveries
+    where id = 'e0224000-0000-0000-0000-0000000000d1'),
+  'GC746-10b wiersz wygaszony, ślad zostaje');
+-- KONTROLA UJEMNA: ta sama oferta znów publiczna → ten sam list przechodzi kontrolę.
+update public.jobs set expires_at = null where slug = 'gc746-ok';
+update public.email_deliveries set status = 'queued', suppressed_at = null, error_message = null,
+       lock_token = 'e0224000-0000-0000-0000-0000000000e1', locked_at = now()
+ where id = 'e0224000-0000-0000-0000-0000000000d1';
+set local role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check('e0224000-0000-0000-0000-0000000000d1', 'e0224000-0000-0000-0000-0000000000e1') is null,
+  'GC746-N3 kontrola ujemna: oferta publiczna — list przechodzi (wygaszenie wynika z oferty)');
+reset role;
+
+-- KONTROLA UJEMNA: definicje sprzed 0224 zapisują i aktywują rewizję z martwą ofertą.
+\ir ../rollback/0224_gc_batches_campaign_jobs.down.sql
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'gc746-dead',
+  jsonb_set(:'GCOK'::jsonb, '{pl,jobs,0,slug}', '"gc746-missing"')) as gc746_dead \gset
+select public.admin_activate_email_campaign(:'gc746_dead', 'draft');
+reset role;
+select pg_temp.assert((select status from public.email_campaigns where id = :'gc746_dead') = 'active',
+  'GC746-N4 kontrola ujemna: bez 0224 rewizja z nieistniejącą ofertą zapisuje się i aktywuje');
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- SV162. Zapisane oferty ze stanem oferty (0162): `get_saved_jobs_display` zwraca KAŻDY

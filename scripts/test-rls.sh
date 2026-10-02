@@ -148,6 +148,9 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
+echo ">> rollback 0224 (GC w partiach, oferty kampanii, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/gc-campaign-jobs-rollback.sql"
+
 echo ">> rollback 0218 (eksport kandydata: zgłoszenia treści i ostrzeżenia retencji, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/candidate-export-reports-rollback.sql"
 
@@ -155,6 +158,7 @@ echo ">> rollback 0217 (przywrócenie członka przez zaproszenie, w transakcji c
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/team-reactivation-rollback.sql"
 echo ">> rollback 0209 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/age-policy-cas-rollback.sql"
+
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"
 echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"

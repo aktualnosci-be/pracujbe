@@ -2831,6 +2831,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wywołanego poza normalną interakcją użytkownika. Dowód: unit
   `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
   ujemna bez zapisu w toku, odblokowanie po błędzie).
+  Tylko oferty publiczne (#720, migracja `0224` — numer tymczasowy): `email_campaign_unavailable_slugs`
+  (warunki `campaign_job_source` z 0102: aktywna, nieusunięta, niewygasła, nie demo, firma
+  `verified`) — zapis rewizji i aktywacja odrzucają `CAMPAIGN_JOB_UNAVAILABLE: slugi` (edytor: błąd
+  przy polu sluga `campaignEditorErrorJobUnavailable`, aktywacja: komunikat
+  `campaignJobsUnavailableActivate`), `process_email_campaigns` pomija rewizję (bez rezerwacji
+  odbiorców), `email_delivery_send_check` wygasza zakolejkowany newsletter
+  (`suppressed_campaign_job_unavailable`), szczegół rewizji pokazuje ostrzeżenie ze slugami.
+  `enqueue_campaign_batch` bez zmian. Dowód: `rls.sql` sekcja GC746 (kontrola ujemna: definicje
+  0155/0111 zapisują i aktywują martwą ofertę), unit `campaign-job-availability`.
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -3878,7 +3887,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
-  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163; od `0224` — numer tymczasowy —
+  w partiach po 5000 z indeksem czasu i SKIP LOCKED, najwyżej 10 partii na przebieg, flaga
+  `technicalGcBacklog`, inbox liczony od zakończenia `updated_at` zamiast `seen_at` (#746/#722,
+  sekcja GC746 z kontrolami ujemnymi, `src/lib/maintenance/technical-gc.ts`)), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,

@@ -89,6 +89,13 @@ export function EmailCampaignActions({
             focusKey: emailCampaignFocusKey(id),
             tone: 'error',
           });
+        } else if (res.reason === 'jobsUnavailable') {
+          setOpen(null);
+          feedback.succeed({
+            message: t('campaignJobsUnavailableActivate', { slugs: (res.slugs ?? []).join(', ') }),
+            focusKey: emailCampaignFocusKey(id),
+            tone: 'error',
+          });
         } else if (res.error === 'STALE_STATE' || res.error === 'NOT_FOUND' || res.error === 'INVALID_TRANSITION') {
           setOpen(null);
           feedback.succeed({
