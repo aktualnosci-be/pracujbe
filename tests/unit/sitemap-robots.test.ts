@@ -11,11 +11,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ production: true }));
 const jobs = vi.hoisted(() => ({
-  getJobs: vi.fn(),
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
-  getJobsAvailableLocales: vi.fn(),
-  getJobsCount: vi.fn(),
+}));
+// #1042: katalog ofert = kursorowe RPC (`src/lib/sitemap-jobs.ts`), bez getJobs/licznika/offsetu.
+const catalog = vi.hoisted(() => ({
+  getSitemapJobShardStarts: vi.fn(),
+  getSitemapJobsShard: vi.fn(),
+  getSitemapCompanySlugs: vi.fn(),
 }));
 
 vi.mock('@/lib/env', () => ({
@@ -23,6 +26,7 @@ vi.mock('@/lib/env', () => ({
   isProductionDeployment: () => state.production,
 }));
 vi.mock('@/lib/jobs', () => jobs);
+vi.mock('@/lib/sitemap-jobs', () => catalog);
 
 const { default: sitemap, generateSitemaps, parseSitemapId } = await import('@/app/sitemap');
 const { default: robots } = await import('@/app/robots');
@@ -84,7 +88,21 @@ const FORBIDDEN_SEGMENTS = [
 ];
 
 function job(id: string) {
-  return { id, slug: `oferta-${id}`, publishedAt: '2026-09-01T00:00:00.000Z' };
+  return {
+    id,
+    slug: `oferta-${id}`,
+    publishedAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    locales: [] as string[],
+  };
+}
+
+/** Katalog z `shards` partiami; `rows(shardIndex)` = oferty partii (numer od 1, jak w RPC). */
+function setCatalog(shards: number, rows: (shardIndex: number) => ReturnType<typeof job>[]) {
+  catalog.getSitemapJobShardStarts.mockResolvedValue(
+    Array.from({ length: shards }, (_, i) => ({ shardIndex: i + 1, after: null })),
+  );
+  catalog.getSitemapJobsShard.mockImplementation(async (shardIndex: number) => rows(shardIndex));
 }
 
 beforeEach(() => {
@@ -94,9 +112,8 @@ beforeEach(() => {
   jobs.getCityCounts.mockImplementation(async (_l: string, keys: string[]) =>
     Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 3 : 0])),
   );
-  jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
-  jobs.getJobsCount.mockResolvedValue(2);
-  jobs.getJobsAvailableLocales.mockResolvedValue(null);
+  setCatalog(1, () => [job('a'), job('b')]);
+  catalog.getSitemapCompanySlugs.mockResolvedValue([]);
 });
 
 describe('sitemap (produkcja)', () => {
@@ -162,53 +179,50 @@ describe('sitemap (produkcja)', () => {
 
   it('#599: katalog >5000 ofert dostaje WIĘCEJ partii zamiast ucięcia na pierwszej', async () => {
     let n = 0;
-    jobs.getJobsCount.mockResolvedValue(12_000);
-    jobs.getJobs.mockImplementation(async () => ({
-      jobs: Array.from({ length: 100 }, () => job(String((n += 1)))),
-      page: 1,
-      pageSize: 100,
-    }));
+    // 3 granice partii z bazy = 3 pliki ofert (id 1, 2, 3) + core (id 0); każda partia 5000 ofert.
+    setCatalog(3, () => Array.from({ length: 5000 }, () => job(String((n += 1)))));
 
-    // 12 000 ofert → reachable = min(12000, MAX_JOB_LIST_OFFSET(10000) + 100) = 10100 →
-    // 3 partie po 5000 (id 1, 2, 3) + core (id 0) = 4 pliki sitemap. Dawny sztywny sufit
-    // dawałby TYLKO 5000 ofert łącznie, bez żadnej dalszej partii.
-    const ids = await generateSitemaps(); // sam licznik (#1230), bez odczytu listy
-    expect(jobs.getJobsCount).toHaveBeenCalledTimes(1);
-    expect(jobs.getJobs).not.toHaveBeenCalled();
+    const ids = await generateSitemaps(); // jedno zapytanie o granice, bez licznika ofert
     expect(ids).toEqual([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }]);
+    expect(catalog.getSitemapJobShardStarts).toHaveBeenCalledTimes(1);
+    expect(catalog.getSitemapJobShardStarts).toHaveBeenCalledWith(5000);
 
     const entries = [];
     for (const { id } of ids) entries.push(...(await sitemap({ id })));
     const urls = entries.filter((entry) => entry.url.includes('/oferty-pracy/oferta-'));
 
-    // Każda partia jest sama w sobie ograniczona (50 stron × 100 ofert = 5000) — pętla
-    // wewnątrz jednej partii kończy się zawsze, niezależnie od `total`.
-    // + core: profile firm z jednej iteracji po całej osiągalnej liście (101 stron po 100, #1231).
-    expect(jobs.getJobs).toHaveBeenCalledTimes(101 + 3 * 50);
-    // #1230: żadna strona listy w sitemap nie liczy `get_public_jobs_count`.
-    for (const [, , options] of jobs.getJobs.mock.calls) expect(options).toEqual({ withTotal: false });
+    // Każda partia = jedno wywołanie kursorowe (bez pętli po stronach offsetu, bez sufitu 10 100).
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledTimes(3);
     expect(urls).toHaveLength(3 * 5000 * LOCALES.length);
+  });
+
+  it('#1042: katalog powyżej dawnego sufitu offsetu (10 100 ofert) nie jest ucinany', async () => {
+    setCatalog(4, () => []);
+    expect(await generateSitemaps()).toEqual([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }]);
+  });
+
+  it('#1042: brak ofert = sam core sitemap (bez plików ofert)', async () => {
+    setCatalog(0, () => []);
+    expect(await generateSitemaps()).toEqual([{ id: 0 }]);
   });
 
   it('poza produkcją: pusty sitemap i pojedynczy core sitemap bez odczytu ofert', async () => {
     state.production = false;
     expect(await generateSitemaps()).toEqual([{ id: 0 }]);
     expect(await sitemap({ id: 0 })).toEqual([]);
-    expect(jobs.getJobs).not.toHaveBeenCalled();
-    expect(jobs.getJobsCount).not.toHaveBeenCalled();
+    expect(catalog.getSitemapJobShardStarts).not.toHaveBeenCalled();
+    expect(catalog.getSitemapJobsShard).not.toHaveBeenCalled();
   });
 
   it('#591/#1231: profil firmy — jeden wpis na companySlug w CAŁYM indeksie (partia 0)', async () => {
-    // Firma X ma oferty w dwóch partiach ofert (strona 1 i strona 51); firma Y tylko w drugiej.
-    jobs.getJobsCount.mockResolvedValue(10_000);
-    jobs.getJobs.mockImplementation(async ({ page }: { page: number }) => {
-      const slugs = page === 1 ? ['firma-x', 'firma-x'] : page === 51 ? ['firma-x', 'firma-y'] : [undefined];
-      return {
-        jobs: Array.from({ length: 100 }, (_, i) => ({ ...job(`${page}-${i}`), companySlug: slugs[i % slugs.length] })),
-        page,
-        pageSize: 100,
-      };
-    });
+    // Firma X ma oferty w dwóch partiach ofert; slugi firm (zdeduplikowane kursorem po całym
+    // katalogu, `getSitemapCompanySlugs`) trafiają tylko do partii 0.
+    setCatalog(2, (shard) =>
+      shard === 1
+        ? [{ ...job('a'), companySlug: 'firma-x' }, { ...job('b'), companySlug: 'firma-x' }]
+        : [{ ...job('c'), companySlug: 'firma-x' }, { ...job('d'), companySlug: 'firma-y' }],
+    );
+    catalog.getSitemapCompanySlugs.mockResolvedValue(['firma-x', 'firma-y']);
     const perFile = [];
     for (const { id } of await generateSitemaps()) {
       perFile.push({
@@ -227,10 +241,10 @@ describe('sitemap (produkcja)', () => {
     expect(all).toHaveLength(2 * LOCALES.length);
     expect(new Set(all).size).toBe(all.length);
     expect(perFile.filter((file) => file.companies.length > 0).map((file) => file.id)).toEqual([0]);
+    expect(catalog.getSitemapCompanySlugs).toHaveBeenCalledTimes(1);
   });
 
   it('#591 kontrola ujemna: oferta demo/bez companySlug nie tworzy profilu firmy', async () => {
-    jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
     const entries = [...(await sitemap({ id: 0 })), ...(await sitemap({ id: 1 }))];
     expect(entries.some((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))).toBe(false);
   });
@@ -267,49 +281,44 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
     // Kontrola ujemna: stare `id === 0` dawało dla '0' partię ofert (-1) — oferty, getJobs
     // z numerem strony ≤ 0 i zero stron statycznych; każda z tych asercji byłaby czerwona.
     expect(urls.some((url) => url.includes('/oferty-pracy/oferta-'))).toBe(false);
-    // #1231: core czyta listę tylko po slugi firm — od strony 1, bez licznika.
-    for (const [params, , options] of jobs.getJobs.mock.calls) {
-      expect(params.page).toBeGreaterThanOrEqual(1);
-      expect(options).toEqual({ withTotal: false });
-    }
+    expect(catalog.getSitemapJobsShard).not.toHaveBeenCalled();
   });
 
-  it("id '1' = pierwsza partia ofert od strony 1, bez stron statycznych; '0' i '1' się nie dublują", async () => {
+  it("id '1' = pierwsza partia ofert (RPC nr 1), bez stron statycznych; '0' i '1' się nie dublują", async () => {
     const shard = await sitemap({ id: '1' });
     const urls = shard.map((entry) => entry.url);
     expect(urls).toContain(`${SITE}/pl/oferty-pracy/oferta-a`);
     expect(urls).not.toContain(`${SITE}/pl/praca`);
-    expect(jobs.getJobs).toHaveBeenCalledTimes(1);
-    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 1, pageSize: 100 }), undefined, {
-      withTotal: false,
-    });
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledTimes(1);
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledWith(1, 5000);
     const core = new Set((await sitemap({ id: '0' })).map((entry) => entry.url));
     expect(urls.filter((url) => core.has(url))).toEqual([]);
   });
 
-  it("id '2' zaczyna od strony 51 (partie nie są przesunięte)", async () => {
-    jobs.getJobs.mockResolvedValue({ jobs: [job('z')], total: 12_000, page: 51, pageSize: 100 });
-    await sitemap({ id: '2' });
-    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 51 }), undefined, { withTotal: false });
+  it("id '2' czyta partię nr 2 (numer pliku = numer partii RPC, bez przesunięcia)", async () => {
+    setCatalog(3, (shard) => [job(`z${shard}`)]);
+    const urls = (await sitemap({ id: '2' })).map((entry) => entry.url);
+    expect(catalog.getSitemapJobsShard).toHaveBeenCalledWith(2, 5000);
+    expect(urls).toContain(`${SITE}/pl/oferty-pracy/oferta-z2`);
+    expect(urls.some((url) => url.includes('oferta-z1') || url.includes('oferta-z3'))).toBe(false);
   });
 
   it('niepoprawne id = pusty plik bez zapytań do bazy', async () => {
-    for (const bad of ['-1', 'abc', '', ' 1', '01', '1.5', '1e0', '0x1', '4', '999', undefined, -1, 1.5, NaN]) {
+    for (const bad of ['-1', 'abc', '', ' 1', '01', '1.5', '1e0', '0x1', '101', '999', undefined, -1, 1.5, NaN]) {
       expect(await sitemap({ id: bad as string | number | undefined }), String(bad)).toEqual([]);
     }
     expect(jobs.getCategoryCounts).not.toHaveBeenCalled();
-    expect(jobs.getJobs).not.toHaveBeenCalled();
+    expect(catalog.getSitemapJobsShard).not.toHaveBeenCalled();
   });
 
   it('parseSitemapId: liczby i ich kanoniczny zapis dziesiętny w granicy partii', () => {
     expect(parseSitemapId('0')).toBe(0);
     expect(parseSitemapId(0)).toBe(0);
     expect(parseSitemapId('2')).toBe(2);
-    // Granica = ceil((MAX_JOB_LIST_OFFSET + 100) / 5000) = 3 — ta sama, do której dochodzi
-    // `generateSitemaps()` przy największym osiągalnym katalogu (test #599 wyżej: id 0..3).
-    expect(parseSitemapId('3')).toBe(3);
-    expect(parseSitemapId('4')).toBeNull();
-    expect(parseSitemapId(4)).toBeNull();
+    // Granica niezależna od bazy (#1042): 100 partii po 5000 ofert; powyżej — pusty plik bez zapytań.
+    expect(parseSitemapId('100')).toBe(100);
+    expect(parseSitemapId('101')).toBeNull();
+    expect(parseSitemapId(101)).toBeNull();
   });
 });
 
@@ -319,12 +328,12 @@ describe('robots', () => {
     const rules = Array.isArray(result.rules) ? result.rules[0]! : result.rules;
     expect(rules.allow).toBe('/');
     expect(rules.disallow).toEqual(expect.arrayContaining(['/api/', '/pl/candidate$', '/pl/candidate/', '/nl/admin/']));
-    // total=2 (fixture domyślna z beforeEach) → core (id 0) + jedna partia ofert (id 1).
+    // Jedna partia (fixture domyślna z beforeEach) → core (id 0) + jedna partia ofert (id 1).
     expect(result.sitemap).toEqual([`${SITE}/sitemap/0.xml`, `${SITE}/sitemap/1.xml`]);
   });
 
   it('katalog z kilkoma partiami ofert: robots wskazuje WSZYSTKIE, nie tylko pierwszą', async () => {
-    jobs.getJobsCount.mockResolvedValue(12_000);
+    setCatalog(3, () => [job('a')]);
     const result = await robots();
     expect(result.sitemap).toEqual([
       `${SITE}/sitemap/0.xml`,
