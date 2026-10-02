@@ -971,6 +971,28 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
   aliasie, bo przeglądarka odfiltrowuje z natywnego `datalist` opcję, której wartość nie zawiera
   wpisanego tekstu. Test: `job-location` (kontrole pozytywna/ujemna).
+- [~] Wyszukiwanie opisem (AI, #711, migracja `0222` — numer tymczasowy; za flagą
+  `AI_JOB_SEARCH_ENABLED`, domyślnie wyłączone; atrapa `AI_JOB_SEARCH_PROVIDER=fixture` tylko poza
+  produkcją): zwinięta sekcja `JobSearchAssistDisclosure` na `/oferty-pracy` (w nagłówku listy)
+  i `/candidate/wyszukiwania`; kod formularza `JobSearchAssist` = osobny chunk ładowany dopiero po
+  rozwinięciu (budżet JS #395, bez CLS). Opis potrzeby (3–500 znaków, jawny język opisu) → akcja
+  `suggestJobSearchFilters` (bez sesji i profilu; polecenia dla AI → odmowa przed limitem i modelem;
+  limit per adres 10/h i 30/dobę fail-closed; e-maile/telefony/identyfikatory zredagowane) →
+  `withAiBudget` (#36, funkcja `job_search_filters` w CHECK-u rejestru i `ai_budget_reserve` — 0222)
+  → `gpt-6-luna` przez `src/lib/ai/openai.ts` (strict JSON Schema ze słownikami jako `enum`,
+  wersja `job-search-filters-v1`) → bramki `src/lib/ai-search/guard.ts`: tylko kategorie/miasta/
+  umowy ze słowników, słowo kluczowe i fragmenty wyłącznie z tekstu użytkownika, kwota z tekstu
+  i w zakresie suwaka, wynik przez `parseSidebarFilters`→`sidebarFiltersToParams` (kanoniczne
+  parametry listy). Propozycja = edytowalne chipy (etykiety `describeJobListFilters` w języku
+  interfejsu), nierozpoznana miejscowość do wyboru (domyślnie żadna), niepewne fragmenty;
+  lista zmienia się dopiero po „Zastosuj filtry” (zapis wyszukiwania i alertu — istniejący
+  przycisk listy, #100). Inwentarz AI: wejście `job_search_query` dopuszczone w trybie
+  ogłoszeniowym (bez profilu/CV). Dowód: `rls.sql` sekcja AIS711 (kontrola ujemna: lista funkcji
+  z 0176), rollback `0222_…down.sql` (`ai-search-filters-rollback.sql`), unit `ai-search-guard`,
+  `ai-search-run`, `job-search-assist-action`, `job-search-assist-ui`, `ai-inventory`, E2E
+  `jobs-list-search-assist` (4 języki, axe 320/1280). **Otwarte:** metryki akceptacji/korekt
+  sugestii (brak zbioru bez decyzji o danych), słownik spoza 10 miast (promień `near`),
+  akceptacja brzmień i wejścia `job_search_query` w trybie ogłoszeniowym (właściciel).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner

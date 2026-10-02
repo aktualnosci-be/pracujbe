@@ -26668,6 +26668,53 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- AIS711. Wyszukiwanie opisem (#711, 0222): funkcja AI `job_search_filters` w globalnym budżecie.
+--   Rezerwacja dla nowej funkcji działa (service_role), klient nadal bez dostępu, rejestr
+--   przyjmuje identyfikator. Kontrola ujemna: lista funkcji z 0176 (rollback 0222) odrzuca
+--   rezerwację — budżet nie dałby się wywołać, więc wyszukiwanie opisem nie wołałoby modelu.
+-- ============================================================================
+\echo '--- AIS711 budżet AI: wyszukiwanie opisem ---'
+reset role; reset app.current_uid;
+begin;
+set local role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_search_filters', 'gpt-6-luna', 1500) as ais_r1 \gset
+select pg_temp.assert(
+  (select feature = 'job_search_filters' and reserved_micro_usd = 1500 from public.ai_usage_ledger where id = :'ais_r1'),
+  'AIS711-1 rezerwacja dla job_search_filters zapisana w rejestrze');
+select pg_temp.assert(public.ai_budget_settle(:'ais_r1', 'ok', 900, 120, 150),
+  'AIS711-2 rozliczenie rezerwacji wyszukiwania opisem');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_unknown'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-3 nieznana funkcja nadal odrzucona');
+reset role;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIS711-4 klient nie rezerwuje budżetu (EXECUTE tylko service_role)');
+set local role service_role;
+-- AIS711-5: wcześniejsza funkcja tej listy (`job_offer_explain`, #773) zostaje w budżecie po 0222.
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_r5 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_r5'),
+  'AIS711-5 0222 nie usuwa job_offer_explain z listy funkcji budżetu');
+reset role;
+-- Kontrola ujemna: definicje sprzed 0222 (0176 + job_offer_explain).
+\ir ../rollback/0222_ai_budget_job_search_filters.down.sql
+set local role service_role;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_filters'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-N kontrola ujemna: lista sprzed 0222 odrzuca wyszukiwanie opisem');
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_n2 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_n2'),
+  'AIS711-N2 rollback 0222 zostawia job_offer_explain (#773) w liście funkcji');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- WP724. Web Push alertów zapisanych wyszukiwań (0219, #724)
 -- Rejestr urządzeń kandydata (RPC-only, odczyt własny), lista dozwolonych usług push (bez
 -- dowolnych adresów — SSRF), kolejka tylko dla `job_match`/`saved_search`, dzierżawa, 404/410

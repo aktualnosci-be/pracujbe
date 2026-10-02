@@ -58,6 +58,9 @@ const JOB_IMPORT_ENV = {
 const JOB_ASSIST_ENV = {
   AI_JOB_ASSIST_ENABLED: '1',
   AI_JOB_ASSIST_PROVIDER: 'fixture',
+  // Wyszukiwanie opisem (#711) — ta sama zasada atrapy.
+  AI_JOB_SEARCH_ENABLED: '1',
+  AI_JOB_SEARCH_PROVIDER: 'fixture',
 };
 
 /** „Wyjaśnij ofertę” (#773) — atrapa w runtime, nigdy w produkcji; bez sieci i kosztów. */
@@ -312,6 +315,7 @@ const CLASSIFIEDS_SHARED_SPECS = [
   '**/jobs-list-facets-failure.spec.ts',
   '**/jobs-list-filter-navigation.spec.ts',
   '**/jobs-list-header.spec.ts',
+  '**/jobs-list-search-assist.spec.ts',
   '**/jobs-list-results-focus.spec.ts',
   '**/jobs-list-salary-unit.spec.ts',
   '**/jobs-list-sidebar-reach.spec.ts',

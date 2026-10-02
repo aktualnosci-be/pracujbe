@@ -44,6 +44,7 @@ const FEATURE_KEY: Record<AiFeatureId, string> = {
   job_fraud_check: 'aiCostsFeatureFraudCheck',
   candidate_profile_translation: 'aiCostsFeatureProfileTranslation',
   job_offer_explain: 'aiCostsFeatureExplain',
+  job_search_filters: 'aiCostsFeatureSearchFilters',
 };
 
 const LEVEL_KEY: Record<AiBudgetLevel, string | null> = {

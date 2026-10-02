@@ -828,7 +828,10 @@
     "cvImportFailed": "We konden geen voorstellen voorbereiden. Probeer het later opnieuw of vul je profiel handmatig in.",
     "jobContentReviewRequired": "De inhoud van de vacature moet eerst door het team van het portaal worden nagekeken. Je kunt ze publiceren na goedkeuring of na aanpassing van de tekst.",
     "jobContentRejected": "De inhoud van de vacature is niet goedgekeurd. Pas ze aan om de vacature te publiceren.",
-    "journalLimitReached": "Je logboek heeft al 200 items. Verwijder er een om een nieuw item toe te voegen."
+    "journalLimitReached": "Je logboek heeft al 200 items. Verwijder er een om een nieuw item toe te voegen.",
+    "jobSearchAssistSuspicious": "De beschrijving bevat iets dat op instructies voor AI lijkt, dus we hebben geen voorstel gemaakt. Gebruik de gewone zoekfunctie.",
+    "jobSearchAssistNoFilters": "We vonden in de beschrijving geen filters die het portaal ondersteunt. Beschrijf de sector, de stad of het soort contract — of gebruik de gewone zoekfunctie.",
+    "jobSearchAssistFailed": "Het voorstel kon niet worden gemaakt. Gebruik de gewone zoekfunctie en de filters van de lijst."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1993,6 +1996,30 @@
       "conditions": "Wij bieden"
     }
   },
+  "jobSearchAssist": {
+    "title": "Beschrijf welk werk je zoekt (AI-assistent)",
+    "aiNotice": "Je gebruikt een AI-assistent. Een taalmodel zet je beschrijving om in een voorstel van filters — controleer het voordat je het toepast.",
+    "scopeNote": "De assistent stelt alleen filters voor. Hij verstuurt, solliciteert en bewaart niets. We bewaren de beschrijving niet en verwijderen e-mailadressen, telefoonnummers en identificatienummers vóór het versturen. Vul geen persoonsgegevens in.",
+    "textLabel": "Je beschrijving",
+    "textPlaceholder": "Bv. magazijnwerk in de buurt van Gent, voltijds, zonder Nederlands, onmiddellijk",
+    "textHint": "Van {min} tot {max} tekens.",
+    "inputLocaleLabel": "Taal van de beschrijving",
+    "suggest": "Stel filters voor",
+    "suggesting": "We maken een voorstel…",
+    "resultTitle": "Voorgestelde filters",
+    "resultIntro": "Vink filters uit die je niet wilt. De lijst met vacatures verandert pas nadat je op „Filters toepassen” klikt.",
+    "filtersLegend": "Filters uit de beschrijving",
+    "placesLegend": "Deze plaatsen staan niet in de filters van het portaal. Wil je op hun naam zoeken in de vacatures?",
+    "placeNone": "Niet op plaats zoeken",
+    "placeOption": "Zoek op plaats: {place}",
+    "uncertainTitle": "Deze fragmenten hebben we aan geen enkel filter gekoppeld",
+    "uncertainHint": "Als ze belangrijk zijn, stel ze dan zelf in bij de filters van de lijst.",
+    "droppedNote": "We hebben {count, plural, one {# voorstel} other {# voorstellen}} buiten de filters van het portaal weggelaten.",
+    "apply": "Filters toepassen",
+    "nothingSelected": "Er is geen filter gekozen. Kies er minstens één of gebruik de gewone zoekfunctie.",
+    "fallback": "Je kunt altijd de gewone zoekfunctie en de filters van de lijst gebruiken.",
+    "errorNetwork": "Geen verbinding met de server. Controleer je verbinding en probeer het opnieuw."
+  },
   "messageTemplates": {
     "title": "Antwoordsjablonen",
     "intro": "Bewaar kant-en-klare antwoorden in meerdere talen. In een bericht aan een kandidaat voeg je de versie in zijn of haar taal in.",
@@ -2879,6 +2906,7 @@
     "aiCostsFeatureCvImport": "Cv importeren",
     "aiCostsFeatureProfileTranslation": "Kandidaatprofielen vertalen",
     "aiCostsFeatureExplain": "Vacatures uitleggen",
+    "aiCostsFeatureSearchFilters": "Zoeken met beschrijving",
     "navSettings": "Instellingen",
     "agePolicyTitle": "Leeftijdsdrempel kandidaten",
     "agePolicySubtitle": "Minimumleeftijd voor een kandidaataccount en voor de vindbaarheid van het profiel voor bedrijven.",

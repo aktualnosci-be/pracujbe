@@ -36,6 +36,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'jobAssist',
   // #773: panel „Wyjaśnij ofertę” na szczególe oferty.
   'jobExplain',
+  'jobSearchAssist',
   'jobImport',
   'jobWizard',
   'jobs',
