@@ -1,4 +1,5 @@
--- Rollback 0980 (#711): lista funkcji budżetu AI jak w 0176 (bez `job_search_filters`).
+-- Rollback 0980 (#711): lista funkcji budżetu AI sprzed 0980 — 0176 + `job_offer_explain` (#773,
+-- wcześniejsza migracja tej listy), bez `job_search_filters`.
 -- Wiersze rejestru tej funkcji (same liczby, bez treści) są usuwane — inaczej CHECK z 0176 nie
 -- dałby się przywrócić. Dowód: supabase/tests/ai-search-filters-rollback.sql.
 
@@ -6,7 +7,7 @@ delete from public.ai_usage_ledger where feature = 'job_search_filters';
 
 alter table public.ai_usage_ledger drop constraint if exists ai_usage_ledger_feature;
 alter table public.ai_usage_ledger add constraint ai_usage_ledger_feature
-  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation'));
+  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_offer_explain'));
 
 create or replace function public.ai_budget_reserve(
   p_feature text,
@@ -25,7 +26,7 @@ declare
   v_month_limit bigint;
   v_id uuid;
 begin
-  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation') then
+  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_offer_explain') then
     raise exception 'VALIDATION_FAILED: feature' using errcode = '22023';
   end if;
   if p_model is null or p_model !~ '^[a-z0-9][a-z0-9.-]{2,63}$' then

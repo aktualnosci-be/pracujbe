@@ -20,7 +20,8 @@ export type ProcessorId =
   | 'cloudflare-r2'
   | 'openai'
   | 'cloudflare-web-analytics'
-  | 'vies';
+  | 'vies'
+  | 'browser-push';
 
 export interface Processor {
   id: ProcessorId;
@@ -247,6 +248,24 @@ export const PROCESSORS: readonly Processor[] = [
     activation: 'Akcja administratora w /admin/firmy/[id].',
     codeRefs: ['src/lib/vies/client.ts', 'src/lib/vies/belgian-vat.ts'],
     notes: ['Zapisywane są tylko wyniki rozstrzygające (company_vies_checks).'],
+    ...UNKNOWN,
+  },
+  {
+    id: 'browser-push',
+    name: 'Usługi push przeglądarek (FCM, Mozilla, Windows, Apple)',
+    purpose: 'Dostarczenie powiadomienia push o nowych ofertach z zapisanego wyszukiwania na urządzenie kandydata.',
+    dataCategories: [
+      'Adres subskrypcji urządzenia (endpoint wydany przez usługę push przeglądarki)',
+      'Zaszyfrowana treść powiadomienia (tytuł, ogólna treść z liczbą ofert, ścieżka panelu) — usługa widzi tylko szyfrogram',
+    ],
+    dataSubjects: ['Kandydaci'],
+    activation:
+      'WEB_PUSH_ENABLED + klucze VAPID (WEB_PUSH_VAPID_*) oraz urządzenie zarejestrowane przez kandydata po zgodzie przeglądarki (domyślnie wyłączone).',
+    codeRefs: ['src/lib/push/send.ts', 'src/lib/push/encrypt.ts', 'src/lib/push/endpoint.ts', 'src/lib/push/worker.ts'],
+    notes: [
+      'Tylko alerty zapisanych wyszukiwań (push_notification_allowed, 0219); bez nazwy wyszukiwania, filtrów, tytułów ofert i danych osobowych w treści.',
+      'Endpoint tylko z listy dozwolonych usług (push_endpoint_allowed); 404/410 unieważnia urządzenie.',
+    ],
     ...UNKNOWN,
   },
 ];

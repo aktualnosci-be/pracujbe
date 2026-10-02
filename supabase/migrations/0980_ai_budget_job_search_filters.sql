@@ -4,11 +4,13 @@
 -- przechodzi przez globalny budżet kosztów (#36, `withAiBudget`). Lista funkcji w CHECK-u rejestru
 -- i w `ai_budget_reserve` = `AI_FEATURE_IDS` (test `ai-budget.test.ts` czyta najnowszą migrację).
 -- Definicja `ai_budget_reserve` = 0176 + nowy identyfikator; nic poza listą się nie zmienia.
+-- Lista zawiera też `job_offer_explain` (#773, PR #1304 — wcześniejsza migracja tej samej listy),
+-- żeby ta migracja, stosowana po niej, nie usunęła tamtej funkcji z budżetu.
 -- Rollback: supabase/rollback/0980_ai_budget_job_search_filters.down.sql.
 
 alter table public.ai_usage_ledger drop constraint if exists ai_usage_ledger_feature;
 alter table public.ai_usage_ledger add constraint ai_usage_ledger_feature
-  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_search_filters'));
+  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_offer_explain', 'job_search_filters'));
 
 create or replace function public.ai_budget_reserve(
   p_feature text,
@@ -27,7 +29,7 @@ declare
   v_month_limit bigint;
   v_id uuid;
 begin
-  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_search_filters') then
+  if p_feature is null or p_feature not in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check', 'candidate_profile_translation', 'job_offer_explain', 'job_search_filters') then
     raise exception 'VALIDATION_FAILED: feature' using errcode = '22023';
   end if;
   if p_model is null or p_model !~ '^[a-z0-9][a-z0-9.-]{2,63}$' then

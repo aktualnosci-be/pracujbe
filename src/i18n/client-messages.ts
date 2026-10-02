@@ -48,6 +48,8 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'offerStatus',
   'onboarding',
   'profileVisibility',
+  // #724: sekcja powiadomień push w ustawieniach kandydata.
+  'pushSettings',
   'savedSearches',
   'applicationJournal',
   'screeningReview',

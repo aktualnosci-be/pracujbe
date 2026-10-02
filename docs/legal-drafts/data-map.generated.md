@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
+Tabele w migracjach: 116; z danymi osobowymi: 80; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -17,10 +17,10 @@ Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
 | Pliki CV (`cv-files`) | Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela. | `public.files`, `public.retention_warnings`, `public.storage_deletion_queue`, `public.storage_gc_sweeps` | Railway | Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; obiekt przez storage_deletion_queue (≤ 72 h, dead-letter po 20 próbach). Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): wiersz z deleted_at i obiekt usunięte w 7 dni (deleted_file), CV bez aktywności 365 dni z ostrzeżeniem 30 dni. |
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): aplikacja w stanie końcowym (także hired) usuwana 180 dni od niezmiennego closed_at razem z rozmowami, powiadomieniami i e-mailami. |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. Wartości #574 (0127, za RETENTION_MODE): niepotwierdzone 7 dni od pierwszego wysłania, potwierdzone 30 dni od potwierdzenia, IP/UA zgody 7 dni. |
-| Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.match_recompute_queue`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
+| Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.match_recompute_queue`, `public.matches`, `public.saved_search_alert_pauses`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
 | Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.company_message_template_variants`, `public.company_message_templates`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_auto_queue`, `public.company_vies_checks`, `public.employer_profiles`, `public.job_content_reviews`, `public.job_duplications`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
-| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_pending_events`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
+| E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, Web Push alertów zapisanych wyszukiwań (rejestr urządzeń i kolejka wysyłek, 0219), preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_pending_events`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.push_deliveries`, `public.push_subscriptions`, `public.saved_search_alert_pauses`, `public.saved_search_alerts` | Railway, Resend, EmailLabs, Usługi push przeglądarek (FCM, Mozilla, Windows, Apple) | push_deliveries usuwane po 7 dniach, urządzenia wycofane po 30 dniach (purge_push_data, /api/maintenance); email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach (acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia. |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
@@ -170,6 +170,21 @@ Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
 - **Aktywacja:** Akcja administratora w /admin/firmy/[id].
 - **Kod:** `src/lib/vies/client.ts`, `src/lib/vies/belgian-vat.ts`
 - **Uwaga:** Zapisywane są tylko wyniki rozstrzygające (company_vies_checks).
+- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
+- **Region przetwarzania:** DO UZUPEŁNIENIA
+- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
+- **Umowa (DPA):** DO UZUPEŁNIENIA
+- **Retencja u dostawcy:** DO UZUPEŁNIENIA
+
+### Usługi push przeglądarek (FCM, Mozilla, Windows, Apple) (`browser-push`)
+
+- **Cel w portalu:** Dostarczenie powiadomienia push o nowych ofertach z zapisanego wyszukiwania na urządzenie kandydata.
+- **Kategorie danych:** Adres subskrypcji urządzenia (endpoint wydany przez usługę push przeglądarki); Zaszyfrowana treść powiadomienia (tytuł, ogólna treść z liczbą ofert, ścieżka panelu) — usługa widzi tylko szyfrogram
+- **Osoby:** Kandydaci
+- **Aktywacja:** WEB_PUSH_ENABLED + klucze VAPID (WEB_PUSH_VAPID_*) oraz urządzenie zarejestrowane przez kandydata po zgodzie przeglądarki (domyślnie wyłączone).
+- **Kod:** `src/lib/push/send.ts`, `src/lib/push/encrypt.ts`, `src/lib/push/endpoint.ts`, `src/lib/push/worker.ts`
+- **Uwaga:** Tylko alerty zapisanych wyszukiwań (push_notification_allowed, 0219); bez nazwy wyszukiwania, filtrów, tytułów ofert i danych osobowych w treści.
+- **Uwaga:** Endpoint tylko z listy dozwolonych usług (push_endpoint_allowed); 404/410 unieważnia urządzenie.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -1101,6 +1116,43 @@ Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
 | `signup_locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0002_core_tables.sql` |
 | `last_seen_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0002_core_tables.sql` |
 
+### `public.push_deliveries`
+
+- **Migracja:** `supabase/migrations/0219_web_push_subscriptions.sql`
+- **Czynności:** E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Kolejka wysyłek push (0219): bez treści powiadomienia; usuwana po 7 dniach.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `subscription_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `notification_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `status` | nie dotyczy: Stan wysyłki push. | — |
+| `attempts` | nie dotyczy: Liczba prób. | — |
+| `next_attempt_at` | nie dotyczy: Termin kolejnej próby. | — |
+| `lease_until` | nie dotyczy: Dzierżawa workera. | — |
+| `last_error` | nie dotyczy: Stały kod ostatniego błędu (bez treści odpowiedzi dostawcy). | — |
+| `sent_at` | nie dotyczy: Czas wysłania. | — |
+
+### `public.push_subscriptions`
+
+- **Migracja:** `supabase/migrations/0219_web_push_subscriptions.sql`
+- **Czynności:** E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Urządzenia Web Push kandydata (0219, #724): zgrubna etykieta (przeglądarka · system), bez pełnego User-Agent; usunięcie konta = kaskada.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `endpoint` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `p256dh` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `auth_secret` | Uwierzytelnianie (skrót hasła, tokeny, sesje, kody) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `device_label` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `last_success_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0219_web_push_subscriptions.sql` |
+| `failure_count` | nie dotyczy: Liczba kolejnych nieudanych wysyłek na urządzenie. | — |
+| `revoked_at` | nie dotyczy: Czas unieważnienia urządzenia. | — |
+| `revoked_reason` | nie dotyczy: Powód unieważnienia (user / gone / failed). | — |
+
 ### `public.rate_limits`
 
 - **Migracja:** `supabase/migrations/0015_rate_limiting.sql`
@@ -1177,6 +1229,19 @@ Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
 | `candidate_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0004_candidate_relations.sql` |
 | `job_id` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0004_candidate_relations.sql` |
 
+### `public.saved_search_alert_pauses`
+
+- **Migracja:** `supabase/migrations/0215_saved_search_pause_company_follow.sql`
+- **Czynności:** Dopasowanie i zapisane wyszukiwania, E-maile i powiadomienia
+- **Osoby:** Kandydaci (konto)
+- **Uwaga:** Czasowa pauza alertów o nowych ofertach (#810, 0215): jeden wiersz na konto, sama data wznowienia.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0215_saved_search_pause_company_follow.sql` |
+| `paused_until` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0215_saved_search_pause_company_follow.sql` |
+| `updated_at` | nie dotyczy: Czas ostatniej zmiany pauzy alertów. | — |
+
 ### `public.saved_search_alerts`
 
 - **Migracja:** `supabase/migrations/0092_saved_search_alerts.sql`
@@ -1201,6 +1266,7 @@ Tabele w migracjach: 112; z danymi osobowymi: 77; bez danych osobowych: 35.
 | `filters` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
 | `query` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
 | `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0092_saved_search_alerts.sql` |
+| `company_id` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0215_saved_search_pause_company_follow.sql` |
 | `filters_hash` | nie dotyczy: Skrót filtrów do deduplikacji wyszukiwań — nie identyfikuje osoby poza wierszem. | — |
 
 ### `public.screening_question_reviews`
@@ -1336,6 +1402,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `companySuspended` | `companyName`, `reason` | — | `admin_set_company_status` |
 | `companyVerified` | `companyName`, `reason` | `reason` | `admin_set_company_status` |
 | `contactMessageAdmin` | `reference`, `topic` | — | `submit_contact_message` |
+| `followedCompanyJobs` | `companyName`, `count`, `jobs` | — | `process_saved_search_alerts` |
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application_core` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
 | `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |
@@ -1388,6 +1455,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.language_aliases` | Słownik/konfiguracja (nazwy języków PL/NL/FR/EN (0168)) — bez danych osobowych. |
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |
 | `public.location_aliases` | Słownik/konfiguracja (nazwy miejscowości PL/NL/FR/EN) — bez danych osobowych. |
+| `public.location_names` | Słownik/konfiguracja (nazwy miejscowości w języku serwisu PL/NL/FR/EN (0212)) — bez danych osobowych. |
 | `public.locations` | Słownik/konfiguracja (miejscowości) — bez danych osobowych. |
 | `public.moderation_informed` | Niezmienny dowód poinformowania strony decyzji/cofnięcia (początek biegu terminu odwołania, 0188/#1045/#1063): identyfikatory decyzji, podstawa (e-mail wysłany / odczyt w panelu / reguła zastępcza) i czas — bez danych osobowych i bez treści. |
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |

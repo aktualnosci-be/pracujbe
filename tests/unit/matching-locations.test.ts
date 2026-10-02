@@ -8,12 +8,16 @@ import { locationLookupKeys, resolveCoordinates, type LocationAliasRow } from '@
 import { distanceKm, scoreMatch, type MatchCandidate, type MatchJob } from '@/lib/matching/score';
 import {
   MIGRATION_FILE,
+  NAMES_MIGRATION_FILE,
   SECTIONS_MIGRATION_FILE,
   SEEDED_0010,
+  buildLocationNames,
   buildSections,
   generate,
+  generateNames,
   generateSections,
   parseCuratedCities,
+  replaceNamesBlock,
 } from '../../scripts/locations/build-migration.mjs';
 import { cityKey as scriptCityKey } from '../../scripts/locations/city-key.mjs';
 
@@ -378,5 +382,51 @@ describe('dopasowanie z odległości dla miast spoza słownika bazy (#194)', () 
     );
     expect(r.strengths).toContain('remoteJob');
     expect(r.score).toBe(100);
+  });
+});
+
+describe('nazwy miejscowości w języku widoku (#1119, migracja 0212)', () => {
+  const { names, block } = generateNames();
+  const municipalities = generate();
+  const migrationSql = readFileSync(join(process.cwd(), NAMES_MIGRATION_FILE), 'utf8');
+  const owner = (name: string) => municipalities.aliases.find((a: GeneratedAlias) => a.key === cityKey(name))?.slug;
+  type GeneratedName = { slug: string; locale: string; name: string };
+
+  it('blok danych w migracji = wynik generatora', () => {
+    expect(replaceNamesBlock(migrationSql, block)).toBe(migrationSql);
+  });
+
+  it('kontrola ujemna: zmieniona nazwa w bloku nie przechodzi porównania', () => {
+    const tampered = migrationSql.replace("('aalst', 'fr', 'Alost')", "('aalst', 'fr', 'Aalst')");
+    expect(tampered).not.toBe(migrationSql);
+    expect(replaceNamesBlock(tampered, block)).not.toBe(tampered);
+  });
+
+  it('każda nazwa wskazuje swoją miejscowość (nazwa facetu = wartość filtra)', () => {
+    expect(names.length).toBeGreaterThan(100);
+    for (const n of names as GeneratedName[]) expect(owner(n.name), `${n.slug}/${n.locale}`).toBe(n.slug);
+  });
+
+  it('bez 10 miast z plików tłumaczeń i bez nazw równych locations.name', () => {
+    const rows = new Map(municipalities.rows.map((r: GeneratedRow) => [r.slug, r]));
+    for (const n of names as GeneratedName[]) {
+      expect(SEEDED_0010).not.toContain(n.slug);
+      expect(n.name).not.toBe(rows.get(n.slug)!.name);
+    }
+  });
+
+  it('egzonim innej gminy pominięty (Saint-Nicolas ≠ Sint-Niklaas); Alost/Namen/Bergen obecne', () => {
+    const find = (slug: string, locale: string) =>
+      (names as GeneratedName[]).find((n) => n.slug === slug && n.locale === locale)?.name;
+    expect(find('aalst', 'fr')).toBe('Alost');
+    expect(find('namur', 'nl')).toBe('Namen');
+    expect(find('mons', 'nl')).toBe('Bergen');
+    expect(find('sint-niklaas', 'fr')).toBeUndefined();
+    // Kontrola ujemna reguły: gdy klucz „saint nicolas” należałby do Sint-Niklaas, nazwa trafia
+    // do niej — pominięcie wynika wyłącznie ze sprawdzenia właściciela klucza.
+    const stolen = municipalities.aliases.map((a: GeneratedAlias) =>
+      (a.key === 'saint nicolas' ? { ...a, slug: 'sint-niklaas' } : a));
+    expect(buildLocationNames({ ...municipalities, aliases: stolen })
+      .find((n: GeneratedName) => n.slug === 'sint-niklaas' && n.locale === 'fr')?.name).toBe('Saint-Nicolas');
   });
 });

@@ -5,8 +5,9 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { SavedSearchList } from '@/components/candidate/SavedSearchList';
-import { loadMySavedSearches } from '@/lib/data/saved-searches';
-import { createAppDateFormatter } from '@/lib/datetime';
+import { SavedSearchesPause } from '@/components/candidate/SavedSearchesPause';
+import { loadMyAlertsPause, loadMyFollowedCompanies, loadMySavedSearches } from '@/lib/data/saved-searches';
+import { createAppDateFormatter, pauseDateRange } from '@/lib/datetime';
 import { savedSearchFilterLabels } from '@/lib/job-filter-summary';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { BTN_PRIMARY, BTN_SECONDARY, P_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
@@ -51,12 +52,14 @@ export default async function CandidateSavedSearchesPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tSearchAssist = await getTranslations({ locale, namespace: 'jobSearchAssist' });
   const tCommon = await getTranslations({ locale, namespace: 'common' });
-  const [tFilters, tCat, tContract, tLanguageNames, load] = await Promise.all([
+  const [tFilters, tCat, tContract, tLanguageNames, load, pause, followed] = await Promise.all([
     getTranslations({ locale, namespace: 'filters' }),
     getTranslations({ locale, namespace: 'categories' }),
     getTranslations({ locale, namespace: 'contractTypes' }),
     getTranslations({ locale, namespace: 'languageNames' }),
     loadMySavedSearches(),
+    loadMyAlertsPause(),
+    loadMyFollowedCompanies(),
   ]);
   const filterTranslators = {
     filters: tFilters,
@@ -65,6 +68,9 @@ export default async function CandidateSavedSearchesPage({
     languageNames: tLanguageNames,
   };
   const formatDate = createAppDateFormatter(locale, { withTime: true });
+  // #810: zakres dat wznowienia (jutro..+366 dni, Europe/Brussels — jak walidacja w bazie).
+  const pauseRange = pauseDateRange();
+  const pausedUntil = pause.status === 'ready' ? pause.pausedUntil : null;
 
   return (
     <div className="min-w-0">
@@ -90,6 +96,14 @@ export default async function CandidateSavedSearchesPage({
           <Link href="/oferty-pracy" className={cn(BTN_PRIMARY, 'mt-5')}>{t('browse')}</Link>
         </section>
       ) : (
+        <>
+        <SavedSearchesPause
+          pausedUntil={pausedUntil}
+          pausedUntilLabel={pausedUntil ? createAppDateFormatter(locale)(pausedUntil) : null}
+          minDate={pauseRange.min}
+          maxDate={pauseRange.max}
+          loadError={pause.status === 'error'}
+        />
         <SavedSearchList
           currentLocale={locale as Locale}
           searches={load.searches.map((search) => ({
@@ -97,8 +111,10 @@ export default async function CandidateSavedSearchesPage({
             lastAlertLabel: search.lastAlertAt ? formatDate(search.lastAlertAt) : null,
             // Filtry w języku widza z kanonicznego adresu (nazwa bywa zmieniona albo w innym języku).
             filterLabels: savedSearchFilterLabels(search.query, locale, filterTranslators),
+            company: followed.get(search.id) ?? null,
           }))}
         />
+        </>
       )}
     </div>
   );

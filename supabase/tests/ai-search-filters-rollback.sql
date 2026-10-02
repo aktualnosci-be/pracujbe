@@ -34,8 +34,10 @@ select pg_temp.assert(not pg_temp.ais_has_feature() and pg_temp.ais_privileges_o
 select pg_temp.assert(
   pg_get_functiondef('public.ai_budget_reserve(text, text, bigint)'::regprocedure) like '%''candidate_profile_translation''%'
   and pg_get_functiondef('public.ai_budget_reserve(text, text, bigint)'::regprocedure) like '%AI_BUDGET_EXCEEDED%'
+  and pg_get_functiondef('public.ai_budget_reserve(text, text, bigint)'::regprocedure) like '%''job_offer_explain''%'
+  and pg_get_constraintdef((select oid from pg_constraint where conname = 'ai_usage_ledger_feature')) like '%job_offer_explain%'
   and not exists (select 1 from public.ai_usage_ledger where feature = 'job_search_filters'),
-  'AIS711-R2 po rollbacku reszta reguł budżetu na miejscu, wiersze nowej funkcji usunięte');
+  'AIS711-R2 po rollbacku reszta reguł budżetu (także job_offer_explain, #773) na miejscu, wiersze nowej funkcji usunięte');
 rollback;
 
 select pg_temp.assert(pg_temp.ais_has_feature() and pg_temp.ais_privileges_ok(),
