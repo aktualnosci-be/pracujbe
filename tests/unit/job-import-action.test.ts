@@ -276,6 +276,23 @@ describe('wynik i zapis szkicu', () => {
     expect(res.ok && res.savedSteps).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  it('#1048: szkic w języku wykrytym w źródle, nie w języku panelu', async () => {
+    extract.mockResolvedValue({ ...GOOD, sourceLanguage: 'nl-BE' });
+    const res = await importJobListing(imageForm(), 'pl');
+    expect(createJobDraft).toHaveBeenCalledWith('nl', COMPANY);
+    expect(res).toMatchObject({ ok: true, contentLocale: 'nl', contentLocaleDetected: true, sourceLanguage: 'nl-BE' });
+  });
+
+  it.each([['de'], [''], ['Nederlands'], ['xx-nl']])(
+    'kontrola ujemna #1048: język źródła %j spoza serwisu — szkic w języku panelu',
+    async (sourceLanguage) => {
+      extract.mockResolvedValue({ ...GOOD, sourceLanguage });
+      const res = await importJobListing(imageForm(), 'fr');
+      expect(createJobDraft).toHaveBeenCalledWith('fr', COMPANY);
+      expect(res).toMatchObject({ ok: true, contentLocale: 'fr', contentLocaleDetected: false });
+    },
+  );
+
   it('kontrola ujemna: prompt injection w treści — wynik do sprawdzenia, bez zapisu i publikacji', async () => {
     extract.mockResolvedValue({
       ...GOOD,
