@@ -21126,7 +21126,7 @@ select pg_temp.assert(
   'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
 
 -- ============================================================================
--- DS834. Postęp kreatora szkicu (0955, #834): save_job_draft z kluczem `draft_step` zapisuje
+-- DS834. Postęp kreatora szkicu (0216, #834): save_job_draft z kluczem `draft_step` zapisuje
 --        najdalszy krok z udanym zapisem w tej samej transakcji co treść kroku; zapis spoza
 --        kreatora (bez klucza) postępu nie zmienia, wartość spoza 1–9 odrzuca cały krok.
 -- ============================================================================
@@ -21189,7 +21189,7 @@ select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC
 -- DS834-N (kontrola ujemna): definicja z 0194 (rollback funkcji, kolumna zostaje) pomija klucz
 -- `draft_step` — postęp nie byłby zapisywany, więc DS834-1 wykrywa brak migracji.
 begin;
-\ir ../rollback/0955_job_draft_resume_step.down.sql
+\ir ../rollback/0216_job_draft_resume_step.down.sql
 alter table public.jobs add column draft_step smallint;
 set local role authenticated; set local app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
 select public.save_job_draft(:'JOBDC'::uuid, '{"job": {"title": "Stara funkcja"}, "draft_step": 9}'::jsonb);
@@ -21200,7 +21200,7 @@ rollback;
 reset role; reset app.current_uid;
 select pg_temp.assert((select draft_step = 7 from public.jobs where id = :'JOBDC')
   and pg_get_functiondef('public.save_job_draft(uuid, jsonb, timestamptz)'::regprocedure) like '%draft_step%',
-  'DS834-N2 po cofnięciu transakcji baza wraca do stanu po 0955');
+  'DS834-N2 po cofnięciu transakcji baza wraca do stanu po 0216');
 
 -- ============================================================================
 -- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę

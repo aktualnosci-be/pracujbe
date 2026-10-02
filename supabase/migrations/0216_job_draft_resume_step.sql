@@ -1,14 +1,25 @@
 -- =============================================================================
--- Rollback 0955 (numer tymczasowy) — wznowienie szkicu od zapisanego kroku (#834).
--- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
--- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
--- (supabase/tests/job-draft-step-rollback.sql wykonuje go w transakcji i cofa).
+-- 0216 (numer tymczasowy) — wznowienie szkicu oferty od zapisanego kroku (#834).
 --
--- Przywraca `save_job_draft` z 0194 (treść 1:1, bez `draft_step`) i usuwa kolumnę
--- `jobs.draft_step`. Najpierw revert aplikacji: kod po 0955 wysyła klucz `draft_step`, który
--- funkcja z 0194 pomija (klucze najwyższego poziomu spoza listy są ignorowane), więc kolejność
--- jest bezpieczna w obie strony; utracony zostaje wyłącznie zapisany postęp kreatora.
+-- Dotąd „Dokończ szkic” zawsze otwierał kreator na kroku 1: `save_job_draft` utrwalał dane
+-- kroku, ale nie postęp kreatora. Teraz:
+--   * `jobs.draft_step` (smallint 1–9, null = brak postępu: stare szkice, import, oferty
+--     opublikowane przed tą migracją) — najdalszy krok kreatora, którego zapis się powiódł;
+--   * `save_job_draft` przyjmuje opcjonalny klucz `draft_step` w `p_content` i w tej samej
+--     transakcji co treść kroku podnosi postęp (`greatest`, powrót do wcześniejszego kroku
+--     go nie cofa); wartość spoza 1–9 = `VALIDATION_FAILED` bez zapisu treści;
+--   * kopia oferty jako szkic (0148) i reszta ścieżek nie ustawiają postępu (nowy szkic
+--     zaczyna od kroku 1).
+-- Sam odczyt szkicu ani zmiana kroku w przeglądarce niczego nie zapisują.
+-- Funkcja = definicja z 0194 (stan 0184 + work_time) + obsługa `draft_step`.
+-- Rollback: supabase/rollback/0216_job_draft_resume_step.down.sql.
 -- =============================================================================
+
+alter table public.jobs add column if not exists draft_step smallint
+  constraint jobs_draft_step_range check (draft_step between 1 and 9);
+
+comment on column public.jobs.draft_step is
+  '#834: najdalszy krok kreatora (1–9) z udanym zapisem szkicu; null = start od kroku 1.';
 
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
@@ -19,6 +30,7 @@ declare
   j jsonb := coalesce(p_content->'job', '{}'::jsonb);
   tr jsonb := coalesce(p_content->'translation', '{}'::jsonb);
   v_bad text;
+  v_step smallint;
 begin
   if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
   if p_content is null or jsonb_typeof(p_content) <> 'object'
@@ -50,6 +62,15 @@ begin
   end if;
   if v_bad is not null then
     raise exception 'VALIDATION_FAILED: nieznane pole %', v_bad using errcode = '42501';
+  end if;
+  -- 0216 (#834): numer kroku kreatora (1–9), którego zapis jest tą treścią. Brak klucza = zapis
+  -- spoza kreatora (import) — postęp bez zmian. Wartość spoza zakresu = odrzucenie całego kroku.
+  if p_content ? 'draft_step' then
+    if jsonb_typeof(p_content->'draft_step') <> 'number'
+       or (p_content->>'draft_step') !~ '^[1-9]$' then
+      raise exception 'VALIDATION_FAILED: nieprawidłowy krok kreatora' using errcode = '42501';
+    end if;
+    v_step := (p_content->>'draft_step')::smallint;
   end if;
 
   select j0.company_id, j0.status::text, j0.default_locale, j0.updated_at
@@ -173,6 +194,13 @@ begin
     perform public.set_job_screening_questions(p_job_id, p_content->'screening_questions');
   end if;
 
+  -- 0216 (#834): postęp kreatora = najdalszy krok z udanym zapisem. Ta sama transakcja co treść
+  -- kroku (błąd dowolnej części cofa też postęp); powrót do wcześniejszego kroku go nie cofa.
+  if v_step is not null then
+    update public.jobs set draft_step = greatest(coalesce(draft_step, 0), v_step)
+      where id = p_job_id and draft_step is distinct from greatest(coalesce(draft_step, 0), v_step);
+  end if;
+
   -- #1070: nowa wersja szkicu. Każdy zapis kroku ją podbija — także krok, który zmienia tylko
   -- relacje albo tłumaczenie (nie dotyka wiersza `jobs`); `strict_job_version` (0077) gwarantuje
   -- ścisły wzrost nawet w jednej transakcji.
@@ -185,5 +213,3 @@ begin
 end $$;
 revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
-
-alter table public.jobs drop column if exists draft_step;
