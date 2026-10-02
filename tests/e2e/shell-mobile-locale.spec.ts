@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { waitForHydrated } from "./fixtures/hydration";
 
 /**
  * Menu mobilne: każdy język musi być osiągalny DOTYKIEM. Lista opcji nie może wychodzić
@@ -17,7 +18,10 @@ for (const viewport of viewports) {
       page,
     }) => {
       await page.goto("/pl/oferty-pracy?q=kierowca");
-      await page.getByRole("button", { name: "Menu" }).tap();
+      // Panel menu otwiera się dopiero po hydratacji (handler z Reacta) — tap wcześniej ginie.
+      const menu = page.getByRole("button", { name: "Menu" });
+      await waitForHydrated(menu);
+      await menu.tap();
       const dialog = page.getByRole("dialog");
       const trigger = dialog.getByRole("combobox");
       await trigger.tap();

@@ -302,6 +302,7 @@ describe('/api/maintenance — kolejkowanie kampanii tylko z nadawcą', () => {
     'purge_stale_message_attachments',
     'rate_limit_gc',
     'processed_webhooks_gc',
+    'purge_push_data',
   ];
   const request = () =>
     new Request('http://web.internal/api/maintenance', {
