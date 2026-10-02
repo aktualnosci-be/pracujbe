@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useId, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -17,8 +17,15 @@ import {
 } from '@/lib/consent';
 import { CONSENT_BOOT_ATTRIBUTE } from '@/lib/consent-boot';
 import { OPEN_SETTINGS_EVENT, updateConsent } from '@/lib/consent-store';
+import { peekWithdrawnNotice } from '@/lib/analytics/withdraw-flag';
 import { Analytics } from './Analytics';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
+
+// Komunikat po wycofaniu zgody (#642) — osobny chunk, ładowany tylko przy znaczniku
+// w sessionStorage (montowany wyłącznie po stronie klienta, po `mounted`).
+const AnalyticsWithdrawnNotice = lazy(() =>
+  import('./AnalyticsWithdrawnNotice').then((mod) => ({ default: mod.AnalyticsWithdrawnNotice })),
+);
 
 /**
  * System zgód na cookies (RODO). Montowany globalnie w [locale]/layout.
@@ -132,6 +139,7 @@ export function CookieConsent() {
   const rowIdBase = useId();
 
   const [mounted, setMounted] = useState(false);
+  const [withdrawnNotice, setWithdrawnNotice] = useState(false);
   // Serwer nie zna zgody, więc HTML zawsze zawiera baner; ukrywa go CSS (data-consent),
   // a po hydratacji — ten stan.
   const [bannerVisible, setBannerVisible] = useState(true);
@@ -145,6 +153,7 @@ export function CookieConsent() {
   // Odczyt istniejącej zgody po stronie klienta.
   useEffect(() => {
     setMounted(true);
+    setWithdrawnNotice(peekWithdrawnNotice());
     const existing = getConsent();
     setBannerVisible(existing === null);
     if (existing) {
@@ -260,6 +269,11 @@ export function CookieConsent() {
   return (
     <>
       {mounted ? <Analytics /> : null}
+      {mounted && withdrawnNotice ? (
+        <Suspense fallback={null}>
+          <AnalyticsWithdrawnNotice />
+        </Suspense>
+      ) : null}
 
       {bannerVisible ? (
         <div
