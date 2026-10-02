@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
-import { getConsent, type ConsentRecord } from '@/lib/consent';
+import { getConsent, pendingConsentPersistence, type ConsentRecord } from '@/lib/consent';
 import { subscribeConsent } from '@/lib/consent-store';
 import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
 import { cfBeaconConfig, needsHardNavigation, sameOriginTarget } from '@/lib/analytics/beacon';
+import { withdrawLoadedBeacon } from '@/lib/analytics/withdraw';
 
 /**
  * Ładowanie skryptu analityki — WYŁĄCZNIE po świadomej zgodzie (#570: Cloudflare Web Analytics
@@ -18,10 +19,11 @@ import { cfBeaconConfig, needsHardNavigation, sameOriginTarget } from '@/lib/ana
  * i gwarantuje brak beaconu po odświeżeniu (`getConsent()` znów zwróci `null`/`analytics:false`).
  *
  * Cloudflare Web Analytics jest bezcookie'owe (beacon nie ustawia żadnych cookies) i nie ma
- * API do „odwołania" zgody w locie jak `ga-disable`/`fbq('consent','revoke')`; `next/script`
- * wstawia znacznik `<script>` bezpośrednio do DOM i nie usuwa go przy odmontowaniu komponentu —
- * dlatego, tak jak zapowiada Invariant #7, gwarancją jest brak ładowania PRZED zgodą i PO
- * odświeżeniu strony, a nie natychmiastowe zniknięcie już wstawionego znacznika w tej samej sesji.
+ * API do „odwołania" zgody w locie; `next/script` wstawia znacznik `<script>` bezpośrednio do
+ * DOM i nie usuwa go (ani jego nasłuchów) przy odmontowaniu komponentu. Dlatego wycofanie zgody,
+ * gdy skrypt jest już w karcie (#642), od razu odcina ruch do dostawcy w bieżącym dokumencie
+ * i przeładowuje stronę (`withdrawLoadedBeacon`) — po przeładowaniu skryptu nie ma, a
+ * `AnalyticsWithdrawnNotice` mówi użytkownikowi, dlaczego strona się odświeżyła.
  *
  * Kategorii `marketing` nie ma (decyzja właściciela 2026-09-25): portal nie używa trackerów
  * marketingowych, a wersja polityki cookies poszła w górę (`CONSENT_POLICY_VERSION`).
@@ -42,17 +44,24 @@ export function Analytics() {
   const pathname = usePathname();
   const routeAllowed = allowsTrackingOnPath(pathname);
 
+  // Skrypt wstawiony do DOM zostaje do końca dokumentu (`next/script` go nie usuwa).
+  const beaconLoaded = useRef(false);
+
   useEffect(() => {
     // Stan początkowy z cookie (np. zgoda z poprzedniej wizyty) + subskrypcja zmian.
     setRecord(getConsent());
-    return subscribeConsent(setRecord);
+    return subscribeConsent((next) => {
+      setRecord(next);
+      // #642: wycofanie zgody przy załadowanym beaconie — odcięcie ruchu i przeładowanie.
+      if (beaconLoaded.current && next?.categories.analytics !== true) {
+        void withdrawLoadedBeacon(pendingConsentPersistence());
+      }
+    });
   }, []);
 
   const analyticsGranted = routeAllowed && record?.categories.analytics === true;
   const shouldLoad = analyticsGranted && Boolean(CF_ANALYTICS_TOKEN);
 
-  // Skrypt wstawiony do DOM zostaje do końca dokumentu (`next/script` go nie usuwa).
-  const beaconLoaded = useRef(false);
   if (shouldLoad) beaconLoaded.current = true;
 
   useEffect(() => {
