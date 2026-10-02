@@ -59,7 +59,7 @@ export interface AdminCampaignDetail extends AdminCampaignRow {
   /** Wszystkie rewizje tego sluga (najnowsza pierwsza), łącznie z bieżącą. */
   revisions: AdminCampaignRevision[];
   /**
-   * #720 (0954): slugi ofert z treści, których dziś nie ma publicznie (brak, wygasła,
+   * #720 (0224): slugi ofert z treści, których dziś nie ma publicznie (brak, wygasła,
    * wstrzymana, usunięta, demo, firma niezweryfikowana) — taka rewizja nie aktywuje się
    * i nie wychodzi. Pusta lista = wszystkie oferty dostępne.
    */

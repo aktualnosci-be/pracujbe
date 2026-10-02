@@ -11,7 +11,7 @@ import { getEmailCampaign } from '@/lib/data/admin-campaigns';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * #720 — kampania e-mail tylko z ofertami publicznymi (migracja 0954). Baza odrzuca zapis
+ * #720 — kampania e-mail tylko z ofertami publicznymi (migracja 0224). Baza odrzuca zapis
  * i aktywację (`CAMPAIGN_JOB_UNAVAILABLE: slugi`), panel pokazuje błąd przy polu sluga oferty,
  * komunikat aktywacji i ostrzeżenie w szczególe rewizji. Kontrole ujemne: inny błąd bazy nie
  * jest brany za niedostępną ofertę; slug spoza listy nie dostaje błędu.
@@ -29,7 +29,7 @@ const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';
 const CLIENT_KEY = '5b3a1c2d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
 const CAMPAIGN_ID = '7c0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const MIGRATION = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0954_gc_batches_campaign_jobs.sql'),
+  resolve(process.cwd(), 'supabase/migrations/0224_gc_batches_campaign_jobs.sql'),
   'utf8',
 );
 
@@ -159,7 +159,7 @@ describe('szczegół rewizji', () => {
   });
 });
 
-describe('migracja 0954 (lustro)', () => {
+describe('migracja 0224 (lustro)', () => {
   it('kontrola przy zapisie, aktywacji, harmonogramie i tuż przed wysyłką', () => {
     for (const fn of [
       'admin_create_email_campaign_revision',

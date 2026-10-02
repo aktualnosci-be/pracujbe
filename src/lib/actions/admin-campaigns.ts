@@ -66,7 +66,7 @@ async function callCampaignRpc(
     } catch (error) {
       if (isDatabaseError(error)) {
         const message = databaseErrorMessage(error);
-        // #720 (0954): oferta z treści przestała być publiczna — aktywacja odrzucona.
+        // #720 (0224): oferta z treści przestała być publiczna — aktywacja odrzucona.
         const slugs = parseUnavailableJobSlugs(message);
         if (slugs) return { ok: false, error: 'VALIDATION_FAILED', reason: 'jobsUnavailable', slugs };
         return { ok: false, error: reportUnmappedDbError(error, area, mapPgError(message)) };
@@ -171,7 +171,7 @@ export async function createEmailCampaignRevision(
       if (message.includes('VALIDATION_FAILED: slug')) {
         return { ok: false, error: 'VALIDATION_FAILED', fields: { slug: 'slug' } };
       }
-      // #720 (0954): slug oferty bez oferty publicznej → błąd przy polu sluga oferty.
+      // #720 (0224): slug oferty bez oferty publicznej → błąd przy polu sluga oferty.
       const slugs = parseUnavailableJobSlugs(message);
       if (slugs) {
         const fields = unavailableJobFieldErrors(form, slugs);

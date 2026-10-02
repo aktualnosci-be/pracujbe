@@ -7674,11 +7674,11 @@ rollback;
 \set CMN5 'e0450000-0000-0000-0000-0000000000d5'
 \set CMW 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 \set CMJOBS '{"pl":{"jobs":[{"slug":"magazynier-gent","title":"Magazynier","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"magazijnier-gent","title":"Magazijnier","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"magasinier-gand","title":"Magasinier","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"warehouse-gent","title":"Warehouse worker","city":"Ghent","locale":"en","isDemo":false}]}}'
--- 0954 (#720): oferty z treści kampanii muszą być publiczne — fikstura dla sekcji kampanii
+-- 0224 (#720): oferty z treści kampanii muszą być publiczne — fikstura dla sekcji kampanii
 -- (CM45, AC45, AC155): aktywne oferty zweryfikowanej firmy o slugach z CMJOBS.
-insert into public.companies(id, name, status) values ('e0954000-0000-0000-0000-0000000000f0', 'Firma kampanii CM45', 'verified');
+insert into public.companies(id, name, status) values ('e0224000-0000-0000-0000-0000000000f0', 'Firma kampanii CM45', 'verified');
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
-select gen_random_uuid(), 'e0954000-0000-0000-0000-0000000000f0', s, 'Oferta kampanii', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'
+select gen_random_uuid(), 'e0224000-0000-0000-0000-0000000000f0', s, 'Oferta kampanii', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl'
   from unnest(array['magazynier-gent', 'magazijnier-gent', 'magasinier-gand', 'warehouse-gent']) s;
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
@@ -16090,7 +16090,7 @@ set local role service_role;
 select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied',
   'GC163-N1 bez grantu 0163 maintenance dostaje permission denied');
 reset role;
--- (0954: sygnatura z limitem partii; treść = 0015 bez dolnej granicy)
+-- (0224: sygnatura z limitem partii; treść = 0015 bez dolnej granicy)
 create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400, p_limit integer default 5000)
 returns integer language plpgsql security definer set search_path = public as $gcneg$
 declare v_deleted integer;
@@ -16110,7 +16110,7 @@ delete from public.rate_limits where key like 'gc193:%';
 delete from public.processed_webhooks where id like 'gc193:%';
 
 -- ============================================================================
--- GC746. GC w partiach i retencja inboxu od zakończenia (0954, #746/#722) oraz kampanie
+-- GC746. GC w partiach i retencja inboxu od zakończenia (0224, #746/#722) oraz kampanie
 --        tylko z ofertami publicznymi (#720).
 --   * rate_limit_gc / processed_webhooks_gc: limit partii (najstarsze pierwsze), indeks po
 --     kolumnie czasu, SKIP LOCKED (wiersz zablokowany przez rate_limit_hit nie wstrzymuje GC),
@@ -16237,9 +16237,9 @@ select pg_temp.expect_error('select public.email_campaign_unavailable_slugs(''{}
 reset role; reset app.current_uid;
 
 -- GC746-6 (#720): oferty kampanii.
-\set GCCO   'e0954000-0000-0000-0000-0000000000c1'
-\set GCCOU  'e0954000-0000-0000-0000-0000000000c2'
-\set GCCAND 'e0954000-0000-0000-0000-0000000000a1'
+\set GCCO   'e0224000-0000-0000-0000-0000000000c1'
+\set GCCOU  'e0224000-0000-0000-0000-0000000000c2'
+\set GCCAND 'e0224000-0000-0000-0000-0000000000a1'
 begin;
 insert into public.companies(id, name, status) values (:'GCCO', 'Firma GC746', 'verified'), (:'GCCOU', 'Firma GC746 U', 'pending');
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, expires_at, is_demo, deleted_at) values
@@ -16310,39 +16310,39 @@ reset role; reset app.current_uid;
 insert into public.email_deliveries(id, profile_id, to_email, template, locale, status, entity_type, entity_id,
                                     campaign_id, idempotency_key, payload, lock_token, locked_at)
 values
-  ('e0954000-0000-0000-0000-0000000000d1', :'GCCAND', 'gc746@test.be', 'newsletter', 'pl', 'queued',
+  ('e0224000-0000-0000-0000-0000000000d1', :'GCCAND', 'gc746@test.be', 'newsletter', 'pl', 'queued',
    'email_campaign', :'gc746_rev', :'gc746_rev', 'gc746-d1', jsonb_build_object('jobs', :'GCOK'::jsonb -> 'pl' -> 'jobs'),
-   'e0954000-0000-0000-0000-0000000000e1', now());
+   'e0224000-0000-0000-0000-0000000000e1', now());
 set local role service_role;
 select pg_temp.assert(
-  public.email_delivery_send_check('e0954000-0000-0000-0000-0000000000d1', 'e0954000-0000-0000-0000-0000000000e1')
+  public.email_delivery_send_check('e0224000-0000-0000-0000-0000000000d1', 'e0224000-0000-0000-0000-0000000000e1')
     = 'suppressed_campaign_job_unavailable',
   'GC746-10 send_check wygasza newsletter z ofertą, która wygasła po zakolejkowaniu');
 reset role;
 select pg_temp.assert(
   (select status::text = 'failed' and suppressed_at is not null from public.email_deliveries
-    where id = 'e0954000-0000-0000-0000-0000000000d1'),
+    where id = 'e0224000-0000-0000-0000-0000000000d1'),
   'GC746-10b wiersz wygaszony, ślad zostaje');
 -- KONTROLA UJEMNA: ta sama oferta znów publiczna → ten sam list przechodzi kontrolę.
 update public.jobs set expires_at = null where slug = 'gc746-ok';
 update public.email_deliveries set status = 'queued', suppressed_at = null, error_message = null,
-       lock_token = 'e0954000-0000-0000-0000-0000000000e1', locked_at = now()
- where id = 'e0954000-0000-0000-0000-0000000000d1';
+       lock_token = 'e0224000-0000-0000-0000-0000000000e1', locked_at = now()
+ where id = 'e0224000-0000-0000-0000-0000000000d1';
 set local role service_role;
 select pg_temp.assert(
-  public.email_delivery_send_check('e0954000-0000-0000-0000-0000000000d1', 'e0954000-0000-0000-0000-0000000000e1') is null,
+  public.email_delivery_send_check('e0224000-0000-0000-0000-0000000000d1', 'e0224000-0000-0000-0000-0000000000e1') is null,
   'GC746-N3 kontrola ujemna: oferta publiczna — list przechodzi (wygaszenie wynika z oferty)');
 reset role;
 
--- KONTROLA UJEMNA: definicje sprzed 0954 zapisują i aktywują rewizję z martwą ofertą.
-\ir ../rollback/0954_gc_batches_campaign_jobs.down.sql
+-- KONTROLA UJEMNA: definicje sprzed 0224 zapisują i aktywują rewizję z martwą ofertą.
+\ir ../rollback/0224_gc_batches_campaign_jobs.down.sql
 set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select public.admin_create_email_campaign_revision(gen_random_uuid(), 'gc746-dead',
   jsonb_set(:'GCOK'::jsonb, '{pl,jobs,0,slug}', '"gc746-missing"')) as gc746_dead \gset
 select public.admin_activate_email_campaign(:'gc746_dead', 'draft');
 reset role;
 select pg_temp.assert((select status from public.email_campaigns where id = :'gc746_dead') = 'active',
-  'GC746-N4 kontrola ujemna: bez 0954 rewizja z nieistniejącą ofertą zapisuje się i aktywuje');
+  'GC746-N4 kontrola ujemna: bez 0224 rewizja z nieistniejącą ofertą zapisuje się i aktywuje');
 rollback;
 reset role; reset app.current_uid;
 

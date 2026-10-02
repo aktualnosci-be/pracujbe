@@ -44,7 +44,7 @@ import {
  * wyrenderuje), rewizje tego sluga oraz aktywacja/zatrzymanie (`EmailCampaignActions`, RPC
  * z CAS i audytem, 0111). Bez konfiguracji nadawcy marketingu — komunikat i brak aktywacji.
  * „Nowa rewizja” → edytor wstępnie wypełniony treścią tej rewizji (RPC 0155, szkic).
- * #720 (0954): oferta z treści niedostępna publicznie — komunikat ze slugami (aktywacja
+ * #720 (0224): oferta z treści niedostępna publicznie — komunikat ze slugami (aktywacja
  * odrzucona, harmonogram i worker listów nie wyślą takiej rewizji).
  */
 

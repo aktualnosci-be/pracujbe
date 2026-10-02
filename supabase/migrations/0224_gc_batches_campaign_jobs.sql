@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0954_gc_batches_campaign_jobs.sql  (numer TYMCZASOWY — ostateczny nada integrator)
+-- 0224_gc_batches_campaign_jobs.sql  (numer TYMCZASOWY — ostateczny nada integrator)
 --
 -- #746: GC tabel technicznych (0163/0195) usuwał całą zaległość jednym `DELETE` bez indeksu
 --       po kolumnie czasu — długi skan, duży WAL i blokady obok `rate_limit_hit`/`claim_webhook`.
@@ -20,7 +20,7 @@
 --       jest jednorazowa) i tuż przed wysyłką (`email_delivery_send_check` →
 --       `suppressed_campaign_job_unavailable`). `enqueue_campaign_batch` bez zmian.
 --
--- Rollback: supabase/rollback/0954_gc_batches_campaign_jobs.down.sql
+-- Rollback: supabase/rollback/0224_gc_batches_campaign_jobs.down.sql
 -- Dowód: supabase/tests/rls.sql sekcja GC746 (kontrole ujemne).
 -- =============================================================================
 

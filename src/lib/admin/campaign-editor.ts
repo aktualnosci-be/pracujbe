@@ -54,7 +54,7 @@ export type CampaignEditorError =
   | 'tooLong'
   | 'jobsCount'
   | 'invalid'
-  /** #720: slug nie wskazuje oferty publicznej (sprawdza baza przy zapisie, 0954). */
+  /** #720: slug nie wskazuje oferty publicznej (sprawdza baza przy zapisie, 0224). */
   | 'unavailable';
 
 /** Klucze: `slug`, `<język>.jobs`, `<język>.<indeks>.<pole>`. */

@@ -2831,7 +2831,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wywołanego poza normalną interakcją użytkownika. Dowód: unit
   `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
   ujemna bez zapisu w toku, odblokowanie po błędzie).
-  Tylko oferty publiczne (#720, migracja `0954` — numer tymczasowy): `email_campaign_unavailable_slugs`
+  Tylko oferty publiczne (#720, migracja `0224` — numer tymczasowy): `email_campaign_unavailable_slugs`
   (warunki `campaign_job_source` z 0102: aktywna, nieusunięta, niewygasła, nie demo, firma
   `verified`) — zapis rewizji i aktywacja odrzucają `CAMPAIGN_JOB_UNAVAILABLE: slugi` (edytor: błąd
   przy polu sluga `campaignEditorErrorJobUnavailable`, aktywacja: komunikat
@@ -3887,7 +3887,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
-  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163; od `0954` — numer tymczasowy —
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163; od `0224` — numer tymczasowy —
   w partiach po 5000 z indeksem czasu i SKIP LOCKED, najwyżej 10 partii na przebieg, flaga
   `technicalGcBacklog`, inbox liczony od zakończenia `updated_at` zamiast `seen_at` (#746/#722,
   sekcja GC746 z kontrolami ujemnymi, `src/lib/maintenance/technical-gc.ts`)), AV, PDF faktur (`storage.ts`, #27).

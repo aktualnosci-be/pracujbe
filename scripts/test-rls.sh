@@ -148,7 +148,7 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
-echo ">> rollback 0954 (GC w partiach, oferty kampanii, w transakcji cofanej)"
+echo ">> rollback 0224 (GC w partiach, oferty kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/gc-campaign-jobs-rollback.sql"
 
 echo ">> rollback 0218 (eksport kandydata: zgłoszenia treści i ostrzeżenia retencji, w transakcji cofanej)"

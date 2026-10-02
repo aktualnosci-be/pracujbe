@@ -1,4 +1,4 @@
--- Rollback 0954 (numer tymczasowy): przywraca GC z 0163/0195 (jeden DELETE od seen_at),
+-- Rollback 0224 (numer tymczasowy): przywraca GC z 0163/0195 (jeden DELETE od seen_at),
 -- edytor/aktywację/harmonogram kampanii z 0155/0111/0101 i send_check z 0131; usuwa
 -- email_campaign_unavailable_slugs i indeksy czasu.
 drop function if exists public.rate_limit_gc(integer, integer);

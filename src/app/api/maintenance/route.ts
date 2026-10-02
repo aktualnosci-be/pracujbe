@@ -299,7 +299,7 @@ async function run(request: Request): Promise<Response> {
   // K2/#17 (0163): tabele techniczne — okna limitera starsze niż doba (dolna granica w bazie)
   // i rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. Bez danych do decyzji o
   // retencji: e-maile (`email_deliveries_gc`) czekają na #574.
-  // #746 (0954): w partiach — każda partia w osobnej, krótkiej transakcji (SKIP LOCKED w bazie),
+  // #746 (0224): w partiach — każda partia w osobnej, krótkiej transakcji (SKIP LOCKED w bazie),
   // pełna partia = zaległość → kolejna partia, najwyżej TECHNICAL_GC_MAX_BATCHES na przebieg
   // (reszta w następnym). #722: inbox liczony od zakończenia (`updated_at`), nie od odebrania.
   const purgedRateLimits = await batchedTask('rateLimits', 'rate_limit_gc', { p_older_than_seconds: 86_400 });

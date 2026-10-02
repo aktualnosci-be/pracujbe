@@ -1,5 +1,5 @@
 /**
- * GC tabel technicznych w `/api/maintenance` (#746, migracja 0954): `rate_limit_gc`
+ * GC tabel technicznych w `/api/maintenance` (#746, migracja 0224): `rate_limit_gc`
  * i `processed_webhooks_gc` usuwają najwyżej `TECHNICAL_GC_BATCH_LIMIT` wierszy na wywołanie
  * (najstarsze pierwsze, SKIP LOCKED). Pełna partia = zaległość → kolejna partia w osobnej
  * transakcji, najwyżej `TECHNICAL_GC_MAX_BATCHES` na przebieg; reszta w następnym przebiegu.

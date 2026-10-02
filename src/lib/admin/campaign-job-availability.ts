@@ -1,5 +1,5 @@
 /**
- * Oferty kampanii e-mail niedostępne publicznie (#720, migracja 0954). Baza odrzuca zapis
+ * Oferty kampanii e-mail niedostępne publicznie (#720, migracja 0224). Baza odrzuca zapis
  * i aktywację rewizji, w której slug oferty nie wskazuje aktywnej, nieusuniętej, niewygasłej,
  * niedemonstracyjnej oferty zweryfikowanej firmy: `CAMPAIGN_JOB_UNAVAILABLE: slug1,slug2`
  * (`email_campaign_unavailable_slugs`). Tu tylko odczyt tego komunikatu i przypięcie błędu
