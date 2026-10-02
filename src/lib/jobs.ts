@@ -50,6 +50,11 @@ import {
   type WorkTime,
   type WorkTimeFilter,
 } from '@/lib/job-filter-options';
+import {
+  normalizeShiftPatterns,
+  shiftPatternsMatch,
+  type ShiftPattern,
+} from '@/lib/job-shift-patterns';
 
 export type ContractType =
   | 'permanent'
@@ -246,6 +251,11 @@ export interface JobDetail extends JobListItem {
    * nie podano (nie zgadujemy z opisu godzin).
    */
   workTime?: WorkTime;
+  /**
+   * #858 (0227): typy grafiku pracy zadeklarowane przez pracodawcę (`jobs.shift_patterns`,
+   * osobny odczyt `get_public_job_shift_patterns`); brak = nie podano albo odczyt nieudany.
+   */
+  shiftPatterns?: ShiftPattern[];
 }
 
 export interface GetJobsParams {
@@ -276,6 +286,8 @@ export interface GetJobsParams {
   languageLevel?: LanguageFilterLevel;
   /** #811 (0194): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
   workTime?: WorkTimeFilter;
+  /** #858 (0227): typy grafiku — oferta z którymkolwiek z nich (bez deklaracji nie pasuje). */
+  shiftPatterns?: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
   near?: string;
   /** #824: promień w km (z `near`). */
@@ -434,6 +446,10 @@ function getJobsFromDemo(
   if (params.workTime) {
     const wanted = params.workTime;
     jobs = jobs.filter((job) => workTimeMatches(job.workTime, wanted));
+  }
+  if (params.shiftPatterns?.length) {
+    const wanted = params.shiftPatterns;
+    jobs = jobs.filter((job) => shiftPatternsMatch(job.shiftPatterns, wanted));
   }
   if (params.benefits?.length) {
     const wanted = params.benefits;
@@ -656,6 +672,15 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // 0227 (#858): grafik pracy — odczyt pomocniczy; awaria = sam opis tekstowy godzin/zmian.
+  let shiftPatterns: ShiftPattern[] = [];
+  try {
+    const { getPublicJobShiftPatterns } = await import('@/lib/db/public-jobs');
+    const raw = await getPublicJobShiftPatterns(pool, job.id);
+    shiftPatterns = normalizeShiftPatterns(Array.isArray(raw) ? raw : []);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobShiftPatterns' });
+  }
   // 0976 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
   let benefits: JobBenefits | undefined;
   try {
@@ -677,6 +702,7 @@ async function getJobBySlugFromDb(
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(shiftPatterns.length > 0 ? { shiftPatterns } : {}),
     ...(benefits && (benefits.codes.length > 0 || benefits.other.length > 0) ? { benefits } : {}),
     ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),

@@ -5,8 +5,9 @@
 -- (supabase/tests/job-benefits-rollback.sql wykonuje go w transakcji i cofa).
 --
 -- Przywraca: get_public_jobs, get_public_jobs_count, get_public_job_filter_facets,
--- saved_search_jobs_after, saved_search_canonical_filters, saved_search_keyset_page
--- i save_job_draft z 0216 (lista, licznik, facety i kopia alertów z 0214); update_published_job z 0203; job_edit_audit_snapshot z 0200.
+-- saved_search_jobs_after, saved_search_canonical_filters, saved_search_keyset_page,
+-- save_job_draft i update_published_job DOKŁADNIE w stanie 0227 (grafik pracy — p_shift_patterns /
+-- shift_patterns zostają); job_edit_audit_snapshot z 0200. Uruchamiać PRZED rollbackiem 0227.
 -- Usuwa kolumnę jobs.benefit_codes (ZAZNACZONE ŚWIADCZENIA PRZEPADAJĄ; tekstowe benefity
 -- w job_translations zostają) i funkcje pomocnicze. Zapisane wyszukiwania z kluczem `benefits`
 -- trzeba przed rollbackiem usunąć albo oczyścić — stara kanonizacja go nie zna.
@@ -19,22 +20,22 @@ drop function if exists public.get_public_job_benefits(uuid, text);
 
 drop function if exists public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[]);
 drop function if exists public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[]);
 drop function if exists public.get_public_job_filter_facets(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[]);
 drop function if exists public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[]);
 
--- --- Definicje z 0214/0216 (listy, licznik, facety, kopia dla alertów, zapisane wyszukiwania, kreator)
--- --- 5. get_public_jobs (stan 0167) + nowe filtry ------------------------------------------------
+-- --- Definicje ze stanu 0227 (skopiowane 1:1 z supabase/migrations/0227_job_shift_patterns.sql)
+-- --- 2. get_public_jobs i get_public_jobs_count (stan 0214) + p_shift_patterns ------------------
 drop function if exists public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean);
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer);
 create or replace function public.get_public_jobs(
   p_locale         text        default 'pl',
   p_keyword        text        default null,
@@ -58,7 +59,9 @@ create or replace function public.get_public_jobs(
   p_language_level text        default null,
   p_work_time      text        default null,
   p_near           text        default null,
-  p_radius_km      integer     default null
+  p_radius_km      integer     default null,
+  -- 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich)
+  p_shift_patterns text[]      default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -144,6 +147,11 @@ begin
       -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
       and (coalesce(p_work_time, '') = ''
            or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
+      -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
+      -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
+      -- ze starego opisu godzin/zmian).
+      and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
+           or j.shift_patterns && p_shift_patterns)
       -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
       -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
       -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -173,16 +181,16 @@ end;
 $$;
 revoke all on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]
 ) from public;
 grant execute on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]
 ) to anon, authenticated;
 
 drop function if exists public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer);
 create or replace function public.get_public_jobs_count(
   p_locale         text      default 'pl',
   p_keyword        text      default null,
@@ -203,7 +211,9 @@ create or replace function public.get_public_jobs_count(
   p_language_level text        default null,
   p_work_time      text        default null,
   p_near           text        default null,
-  p_radius_km      integer     default null
+  p_radius_km      integer     default null,
+  -- 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich)
+  p_shift_patterns text[]      default null
 ) returns bigint language plpgsql stable security definer
 set search_path = public, pg_temp
 -- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
@@ -264,6 +274,11 @@ begin
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
+    -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
+    -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
+    -- ze starego opisu godzin/zmian).
+    and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
+         or j.shift_patterns && p_shift_patterns)
     -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -275,17 +290,18 @@ end;
 $$;
 revoke all on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]
 ) from public;
 grant execute on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]
 ) to anon, authenticated;
 
--- --- 6. Facety (stan 0183 z PR #1186 — gmina nadrzędna części; bez niej stan 0167) + nowe filtry
+
+-- --- 3. Facety (stan 0214) + p_shift_patterns (zawęża bazę wszystkich wymiarów) -------------------
 drop function if exists public.get_public_job_filter_facets(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer);
 create or replace function public.get_public_job_filter_facets(
   p_locale text default 'pl', p_keyword text default null, p_city text default null,
   p_categories text[] default null, p_locations text[] default null,
@@ -297,7 +313,9 @@ create or replace function public.get_public_job_filter_facets(
   -- 0194: język, poziom, wymiar pracy, promień (zawężają bazę wszystkich wymiarów)
   p_language text default null, p_language_level text default null,
   p_work_time text default null, p_near text default null,
-  p_radius_km integer default null
+  p_radius_km integer default null,
+  -- 0227 (#858): typy grafiku pracy
+  p_shift_patterns text[] default null
 ) returns table (dimension text, key text, total bigint)
 language plpgsql stable security definer
 set search_path = public, pg_temp
@@ -367,6 +385,11 @@ begin
       -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
       and (coalesce(p_work_time, '') = ''
            or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
+      -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
+      -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
+      -- ze starego opisu godzin/zmian).
+      and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
+           or j.shift_patterns && p_shift_patterns)
       -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
       -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
       -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -443,13 +466,13 @@ begin
     (coalesce(p_no_language,false)=false or b.no_language_required) and not b.is_agency;
 end;
 $$;
-revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer) from public;
-grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer) to anon, authenticated;
+revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[]) from public;
+grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[]) to anon, authenticated;
 
--- --- 7. Kopia filtrów dla alertów (test saved-search-keyset-sync: blok = get_public_jobs) -----
+-- --- 4. Kopia filtrów dla alertów (test saved-search-keyset-sync: blok = get_public_jobs) -----
 drop function if exists public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean);
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer);
 create or replace function public.saved_search_jobs_after(
   p_locale              text,
   p_keyword             text,
@@ -472,7 +495,8 @@ create or replace function public.saved_search_jobs_after(
   p_language_level      text    default null,
   p_work_time           text    default null,
   p_near                text    default null,
-  p_radius_km           integer default null
+  p_radius_km           integer default null,
+  p_shift_patterns      text[]  default null
 )
 returns table (id uuid, published_at timestamptz)
 language plpgsql stable security definer
@@ -536,6 +560,11 @@ begin
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
+    -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
+    -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
+    -- ze starego opisu godzin/zmian).
+    and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
+         or j.shift_patterns && p_shift_patterns)
     -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -552,14 +581,15 @@ end;
 $$;
 revoke all on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]
 ) from public, anon, authenticated;
 grant execute on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]
 ) to service_role;
 
--- --- 8. Zapisane wyszukiwania: nowe klucze kanoniczne (stan 0092) i strona kursora (stan 0158) --
+
+-- --- 5. Zapisane wyszukiwania: klucz kanoniczny `shiftPatterns` (stan 0194) ------------------
 create or replace function public.saved_search_canonical_filters(p_filters jsonb, p_locale text)
 returns jsonb language plpgsql stable set search_path = public, pg_temp as $$
 declare
@@ -576,7 +606,9 @@ begin
     select 1 from jsonb_object_keys(p_filters) k
     where k not in ('keyword', 'city', 'categories', 'locations', 'contractTypes',
                     'salaryMin', 'salaryMax', 'salaryUnit', 'accommodation', 'immediate',
-                    'noLanguage', 'language', 'languageLevel', 'workTime', 'near', 'radiusKm')
+                    'noLanguage', 'language', 'languageLevel', 'workTime', 'near', 'radiusKm',
+                    -- 0227 (#858)
+                    'shiftPatterns')
   ) then
     raise exception 'VALIDATION_FAILED: nieznany filtr' using errcode = '22023';
   end if;
@@ -710,6 +742,15 @@ begin
     v_out := v_out || jsonb_build_object('radiusKm', 25);
   end if;
 
+  -- 0227 (#858): typy grafiku pracy (lista z `job_shift_pattern_values`, posortowana, bez duplikatów).
+  v_arr := public.saved_search_text_array(p_filters -> 'shiftPatterns', 20);
+  if v_arr is not null then
+    if not v_arr <@ public.job_shift_pattern_values() then
+      raise exception 'VALIDATION_FAILED: nieznany typ grafiku' using errcode = '22023';
+    end if;
+    v_out := v_out || jsonb_build_object('shiftPatterns', to_jsonb(v_arr));
+  end if;
+
   if v_out = '{}'::jsonb then
     raise exception 'VALIDATION_FAILED: wymagany co najmniej jeden filtr' using errcode = '22023';
   end if;
@@ -760,7 +801,9 @@ language sql stable security definer set search_path = public, pg_temp as $$
     p_language_level     => p_filters ->> 'languageLevel',
     p_work_time          => p_filters ->> 'workTime',
     p_near               => p_filters ->> 'near',
-    p_radius_km          => (p_filters ->> 'radiusKm')::integer
+    p_radius_km          => (p_filters ->> 'radiusKm')::integer,
+    -- 0227 (#858)
+    p_shift_patterns     => (select array_agg(x) from jsonb_array_elements_text(p_filters -> 'shiftPatterns') x)
   ) k;
 $$;
 revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
@@ -768,7 +811,7 @@ revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz,
 grant execute on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
   to service_role;
 
--- --- 9. Kreator: save_job_draft (stan 0184 — token wersji szkicu) + work_time ----------------------
+-- --- 6. Kreator: save_job_draft (stan 0216) + shift_patterns -----------------------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -800,7 +843,9 @@ begin
                     -- 0172: kanał aplikowania u ogłoszeniodawcy
                     'apply_url', 'apply_email', 'apply_phone',
                     -- 0194, #811: wymiar czasu pracy
-                    'work_time')
+                    'work_time',
+                    -- 0227, #858: typy grafiku pracy
+                    'shift_patterns')
     limit 1;
   if v_bad is null then
     select k into v_bad from jsonb_object_keys(tr) k
@@ -879,7 +924,8 @@ begin
       apply_url                = case when j ? 'apply_url' then nullif(btrim(coalesce(j->>'apply_url', '')), '') else apply_url end,
       apply_email              = case when j ? 'apply_email' then nullif(btrim(coalesce(j->>'apply_email', '')), '') else apply_email end,
       apply_phone              = case when j ? 'apply_phone' then nullif(btrim(coalesce(j->>'apply_phone', '')), '') else apply_phone end,
-      work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end
+      work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end,
+      shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end
     where id = p_job_id;
   end if;
 
@@ -962,7 +1008,7 @@ end $$;
 revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
 
--- --- update_published_job z 0203
+-- --- 7. update_published_job (stan 0203) + shift_patterns --------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -1048,6 +1094,8 @@ begin
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
     -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji; przeniesione z main).
     work_time                = nullif(j->>'work_time', ''),
+    -- 0227 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
+    shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
     updated_at               = now()
   where id = p_job_id;
   delete from public.job_operation_context

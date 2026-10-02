@@ -24,6 +24,7 @@ export const TURNSTILE_ACTIONS = {
   contact: 'contact',
   report: 'report',
   guestApply: 'guest_apply',
+  jobExplain: 'job_explain',
 } as const;
 
 export type TurnstileFlow = keyof typeof TURNSTILE_ACTIONS;
@@ -41,6 +42,8 @@ export type ProviderFailurePolicy = 'open' | 'closed';
  *   publiczny formularz zgłoszenia treści (#41), `contact` — formularz kontaktu (#61).
  *
  * - guest_apply: `closed` — aplikacja bez konta (#98) wysyła e-mail na podany adres.
+ * - job_explain: `closed` — „Wyjaśnij ofertę” (#773, decyzja właściciela) jest dostępne bez konta
+ *   i każde wywołanie modelu kosztuje; awaria dostawcy = brak wywołania.
  *
  * Aplikowanie z konta nie ma Turnstile: wymaga zalogowanego kandydata (logowanie
  * i rejestracja są chronione), limitu `apply` i idempotencji w bazie.
@@ -52,6 +55,7 @@ export const TURNSTILE_PROVIDER_FAILURE: Record<TurnstileFlow, ProviderFailurePo
   contact: 'closed',
   report: 'closed',
   guestApply: 'closed',
+  jobExplain: 'closed',
 };
 
 /** Publiczny klucz witryny (build-time, trafia do przeglądarki). Pusty = widżet wyłączony. */

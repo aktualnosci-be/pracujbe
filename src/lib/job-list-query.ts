@@ -3,6 +3,7 @@ import { resolveCityFilters } from '@/lib/locations/city-aliases';
 import { codePointLength, truncateCodePoints } from '@/lib/validation/text';
 import type { LanguageCode } from '@/lib/languages';
 import type { LanguageFilterLevel, RadiusKm, WorkTimeFilter } from '@/lib/job-filter-options';
+import type { ShiftPattern } from '@/lib/job-shift-patterns';
 import type { JobBenefitCode } from '@/lib/job-benefits';
 import {
   parseSidebarFilters,
@@ -99,6 +100,8 @@ export interface SavedSearchFilters {
   languageLevel?: LanguageFilterLevel;
   /** #811 (0194): wymiar pracy. */
   workTime?: WorkTimeFilter;
+  /** #858 (0227): typy grafiku pracy (baza zapisuje posortowane, bez duplikatów). */
+  shiftPatterns?: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (baza zapisuje małymi literami). */
   near?: string;
   /** #824: promień w km (zawsze z `near`). */
@@ -137,6 +140,7 @@ export function savedSearchFiltersFromQuery(query: JobListQuery): SavedSearchFil
     if (p.languageLevel) out.languageLevel = p.languageLevel;
   }
   if (p.workTime) out.workTime = p.workTime;
+  if (p.shiftPatterns?.length) out.shiftPatterns = [...p.shiftPatterns];
   if (p.near) {
     out.near = p.near;
     if (p.radiusKm !== undefined) out.radiusKm = p.radiusKm;

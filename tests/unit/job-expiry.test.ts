@@ -137,6 +137,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedMessageAttachments: 0,
       purgedRateLimits: 0,
       purgedWebhookInbox: 0,
+      technicalGcBacklog: false,
       // #17/#833: bez bucketu Railway oba GC bucketu (CV i załączników wiadomości) pominięte.
       storageGc: null,
       // #706/#879 (0191): pusta kolejka automatycznego sprawdzenia VIES.

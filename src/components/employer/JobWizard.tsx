@@ -114,6 +114,7 @@ import {
 import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 import { isWorkTime, type WorkTime } from '@/lib/job-filter-options';
 import { JOB_BENEFIT_CODES, normalizeBenefitCodes, type JobBenefitCode } from '@/lib/job-benefits';
+import { normalizeShiftPatterns, SHIFT_PATTERNS, type ShiftPattern } from '@/lib/job-shift-patterns';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -176,6 +177,8 @@ interface FormValues {
   shifts: string;
   /** #811 (0194): wymiar pracy ('' = nie podano). */
   workTime: '' | WorkTime;
+  /** #858 (0227): typy grafiku pracy (pusta lista = nie podano). */
+  shiftPatterns: ShiftPattern[];
   startImmediately: boolean;
   startDate: string;
   // krok 3 — lokalizacja
@@ -243,6 +246,7 @@ const DEFAULT_VALUES: FormValues = {
   workingHours: '',
   shifts: '',
   workTime: '',
+  shiftPatterns: [],
   startImmediately: false,
   startDate: '',
   city: '',
@@ -291,7 +295,7 @@ const DEFAULT_VALUES: FormValues = {
 /** Pola należące do kroku (kolejność = kolejność przewijania do pierwszego błędu). */
 const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   1: ['title', 'contentLocale', 'category', 'occupation'],
-  2: ['contractType', 'workingHours', 'workTime', 'shifts', 'startDate'],
+  2: ['contractType', 'workingHours', 'workTime', 'shiftPatterns', 'shifts', 'startDate'],
   3: ['city', 'region', 'address'],
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
   5: ['description', 'responsibilities'],
@@ -380,6 +384,7 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         workingHours: v.workingHours,
         shifts: toOptionalText(v.shifts),
         workTime: v.workTime || undefined,
+        shiftPatterns: v.shiftPatterns,
         startImmediately: v.startImmediately,
         startDate: toOptionalText(v.startDate),
       };
@@ -480,6 +485,7 @@ export interface JobWizardInitialValues
     | 'currency'
     | 'salaryPeriod'
     | 'workTime'
+    | 'shiftPatterns'
     | 'languages'
     | 'screeningQuestions'
     | 'accommodationKind'
@@ -501,6 +507,7 @@ export interface JobWizardInitialValues
   currency?: string;
   salaryPeriod?: string;
   workTime?: string;
+  shiftPatterns?: string[];
   languages?: { language: string; level: string }[];
   screeningQuestions?: { type: string; required: boolean; prompt: ScreeningQuestionDraft['prompt']; options: ScreeningQuestionDraft['options'] }[];
 }
@@ -615,6 +622,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     currency,
     salaryPeriod,
     workTime,
+    shiftPatterns,
     languages,
     screeningQuestions,
     accommodationKind,
@@ -655,6 +663,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
   }
   if (currency === 'EUR' || currency === 'PLN') narrowed.currency = currency;
   if (isWorkTime(workTime)) narrowed.workTime = workTime;
+  if (shiftPatterns) narrowed.shiftPatterns = normalizeShiftPatterns(shiftPatterns);
   if (salaryPeriod && (SALARY_PERIODS as readonly string[]).includes(salaryPeriod)) {
     narrowed.salaryPeriod = salaryPeriod as SalaryPeriod;
   }
@@ -700,6 +709,7 @@ export function JobWizard({
   const tContract = useTranslations('contractTypes');
   const tLang = useTranslations('languageNames');
   const tBenefits = useTranslations('jobBenefits');
+  const tShift = useTranslations('filters.shiftPatternValues');
   const locale = useLocale();
   const router = useRouter();
   // #1048: język wskazany przez stronę (szkic) albo język panelu — startowa wartość pola
@@ -1552,6 +1562,38 @@ export function JobWizard({
                   </Select>
                   <p id="job-work-time-hint" className="text-sm text-muted-foreground">{t('workTimeHint')}</p>
                 </div>
+                {/* #858 (0227): grafik pracy — filtr listy ofert; opis zmian niżej zostaje uzupełnieniem. */}
+                <fieldset
+                  id={domId('shiftPatterns')}
+                  className={FORM_FIELD}
+                  aria-describedby="job-shift-patterns-hint"
+                >
+                  <legend className={FORM_LABEL_TEXT}>{t('shiftPatternsLabel')}</legend>
+                  <div className="grid gap-x-4 sm:grid-cols-2">
+                    {SHIFT_PATTERNS.map((pattern) => (
+                      <CheckboxField
+                        key={pattern}
+                        id={`${domId('shiftPatterns')}-${pattern}`}
+                        label={tShift(pattern)}
+                        checked={values.shiftPatterns.includes(pattern)}
+                        onChange={(c) =>
+                          setValue(
+                            'shiftPatterns',
+                            normalizeShiftPatterns(
+                              c
+                                ? [...values.shiftPatterns, pattern]
+                                : values.shiftPatterns.filter((p) => p !== pattern),
+                            ),
+                            { shouldDirty: true },
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                  <p id="job-shift-patterns-hint" className="text-sm text-muted-foreground">
+                    {t('shiftPatternsHint')}
+                  </p>
+                </fieldset>
                 <div className={FORM_FIELD}>
                   <Label htmlFor={domId('shifts')} className={FORM_LABEL_TEXT}>{t('shiftsLabel')}</Label>
                   <Input

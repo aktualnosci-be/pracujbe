@@ -55,6 +55,14 @@ echo ">> asercje RLS/triggery"
 echo ">> rollback 0976 (świadczenia oferty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-benefits-rollback.sql"
 
+echo ">> rollback 0227 (grafik pracy oferty i filtr, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-shift-patterns-rollback.sql"
+echo ">> rollback 0226 (blokady: ostatni właściciel firmy, źródło kopii oferty; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-copy-locks-rollback.sql"
+
+echo ">> rollback 0221 (wiadomości serwisowe a opt-out in-app, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/notification-inapp-service-rollback.sql"
+
 echo ">> rollback 0210 (współbieżność kampanii, tłumaczeń i zaproszeń; w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/p2-concurrency-rollback.sql"
 
@@ -121,6 +129,8 @@ echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji c
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
+echo ">> rollback 0220 (funkcja AI „Wyjaśnij ofertę” w budżecie, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/ai-job-explain-rollback.sql"
 echo ">> rollback 0203 (tytuł oferty bez heurystyki zaślepki, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-title-completeness-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
@@ -138,11 +148,18 @@ echo ">> rollback 0175 (konto i komunikacja w trybie ogłoszeniowym, w transakcj
 echo ">> rollback 0174 (tryb ogłoszeniowy: wiadomości i CV, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-messaging-cv-rollback.sql"
 
+echo ">> rollback 0223 (integralność kolejki tłumaczeń, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-queue-integrity-rollback.sql"
 echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-protected-terms-rollback.sql"
 
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
+
+echo ">> rollback 0225 (język receiptu zgody cookies, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/consent-receipt-locale-rollback.sql"
+echo ">> rollback 0224 (GC w partiach, oferty kampanii, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/gc-campaign-jobs-rollback.sql"
 
 echo ">> rollback 0218 (eksport kandydata: zgłoszenia treści i ostrzeżenia retencji, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/candidate-export-reports-rollback.sql"
@@ -151,6 +168,7 @@ echo ">> rollback 0217 (przywrócenie członka przez zaproszenie, w transakcji c
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/team-reactivation-rollback.sql"
 echo ">> rollback 0209 (CAS progu wieku i zatwierdzenie właściciela, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/age-policy-cas-rollback.sql"
+
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"
 echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"
@@ -158,6 +176,8 @@ echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofane
 echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
 
+echo ">> rollback 0222 (budżet AI: wyszukiwanie opisem, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/ai-search-filters-rollback.sql"
 echo ">> rollback 0219 (Web Push alertów zapisanych wyszukiwań, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/web-push-rollback.sql"
 echo ">> rollback 0213 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"

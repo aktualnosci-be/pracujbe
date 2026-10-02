@@ -1,5 +1,6 @@
 import { localizedLocationLabel } from '@/lib/locations/city-aliases';
 import { parseJobListQuery, type FlatSearchParams, type JobListQuery } from '@/lib/job-list-query';
+import { SHIFT_PATTERN_PARAM } from '@/lib/job-shift-patterns';
 import { isSalaryNarrowed, salaryBounds } from '@/components/public/job-filters';
 
 /**
@@ -105,6 +106,15 @@ export function describeJobListFilters(
       id: 'worktime',
       label: t.filters(sf.workTime === 'full_time' ? 'workTimeFull' : 'workTimePart'),
       removeKey: 'workTime',
+    });
+  }
+  // 0227 (#858): typy grafiku pracy — chip na wartość (jak rodzaj umowy).
+  for (const pattern of sf.shiftPatterns) {
+    items.push({
+      id: `shift-${pattern}`,
+      label: t.filters(`shiftPatternValues.${pattern}`),
+      removeKey: SHIFT_PATTERN_PARAM,
+      removeValue: pattern,
     });
   }
   if (sf.near) {

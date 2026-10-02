@@ -32,13 +32,23 @@ export type AiInputSubject =
   /** Pola profilu kandydata napisane przez kandydata. */
   | 'candidate_profile_text'
   /** Tekst CV kandydata wgrany przez kandydata, po lokalnej minimalizacji (#487, #498). */
-  | 'candidate_cv_text';
+  | 'candidate_cv_text'
+  /**
+   * Krótki opis poszukiwanej pracy wpisany w wyszukiwarce ofert (#711) — bez konta, profilu
+   * i CV, po redakcji e-maili, telefonów i numerów identyfikacyjnych; bez identyfikatora osoby.
+   */
+  | 'job_search_query';
 
 /**
  * Wejścia dozwolone w trybie ogłoszeniowym (#1152 — decyzja produktowa: portal ogłoszeniowy):
- * wyłącznie treść ogłoszenia. Dane kandydatów nie trafiają do modelu w tym trybie.
+ * treść ogłoszenia i zapytanie wyszukiwania ofert (#711 — to samo, co lista ofert robi z polem
+ * „słowo kluczowe”, bez profilu i CV). Dane kandydatów (profil, CV) nie trafiają do modelu.
  */
-export const CLASSIFIEDS_ALLOWED_INPUTS: readonly AiInputSubject[] = ['job_offer_text', 'third_party_listing'];
+export const CLASSIFIEDS_ALLOWED_INPUTS: readonly AiInputSubject[] = [
+  'job_offer_text',
+  'third_party_listing',
+  'job_search_query',
+];
 
 /** Czy wszystkie wejścia funkcji to treść ogłoszenia (warunek `allowedInClassifieds: true`). */
 export function inputsAllowedInClassifieds(inputs: readonly AiInputSubject[]): boolean {
@@ -101,6 +111,8 @@ export const AI_FEATURE_IDS = [
   'cv_profile_import',
   'job_fraud_check',
   'candidate_profile_translation',
+  'job_offer_explain',
+  'job_search_filters',
 ] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
@@ -223,6 +235,46 @@ export const AI_FEATURES: readonly AiFeature[] = [
     decidesAboutPerson: false,
     usageLogged: true,
     // Adapter tłumaczeń (`withAiBudget`) rozlicza zadanie tej encji pod własnym identyfikatorem.
+    costBudgeted: true,
+  },
+  {
+    id: 'job_offer_explain',
+    issues: ['#773'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/ai-explain/explain.ts', 'src/lib/ai-explain/run.ts'],
+    enableFlag: 'AI_JOB_EXPLAIN_ENABLED',
+    provider: 'openai',
+    // Wyłącznie treść jednej publicznej oferty i język odpowiedzi — bez CV, profilu ani danych
+    // osobowych odwiedzającego.
+    inputs: ['job_offer_text'],
+    allowedInClassifieds: true,
+    output:
+      'Objaśnienie warunków oferty prostym językiem (JSON ze schematu) z odwołaniami do fragmentów oferty i listą brakujących/sprzecznych/niejasnych informacji; serwer odrzuca objaśnienia bez źródła, z danymi kontaktowymi albo z liczbami, kwotami, datami lub negacją niezgodnymi ze wskazanymi fragmentami. Wynik pokazywany tylko pytającemu, obok niezmienionej treści oferty; nic nie jest zapisywane.',
+    humanInTheLoop: false,
+    humanStep:
+      'Wynik jest informacją dla czytającego (src/components/public/JobExplainPanel.tsx): obok każdego objaśnienia źródło z oferty i zastrzeżenie, że wiąże treść oferty; akcja src/lib/actions/job-explain.ts niczego nie zapisuje i nie zmienia oferty.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/ai-explain/run.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
+  },
+  {
+    id: 'job_search_filters',
+    issues: ['#711'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/ai-search/interpret.ts'],
+    enableFlag: 'AI_JOB_SEARCH_ENABLED',
+    provider: 'openai',
+    inputs: ['job_search_query'],
+    allowedInClassifieds: true,
+    output:
+      'Propozycja filtrów listy ofert (JSON ze schematu: kategorie, miasta i rodzaje umowy wyłącznie ze słowników portalu, kwota, zakwaterowanie, „od zaraz”, bez wymogu języka, wymiar pracy) + fragmenty niepewne; serwer odrzuca wartości spoza słowników i spoza tekstu użytkownika (src/lib/ai-search/guard.ts).',
+    humanInTheLoop: true,
+    humanStep:
+      'Propozycja trafia wyłącznie do formularza JobSearchAssist (src/components/public/JobSearchAssist.tsx); lista ofert zmienia się dopiero po kliknięciu „Zastosuj filtry”, a użytkownik może wcześniej odznaczyć każdy filtr. Akcja src/lib/actions/job-search-assist.ts niczego nie zapisuje, nie czyta sesji ani profilu.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/ai-search/run.ts (#36): rezerwacja przed wywołaniem modelu.
     costBudgeted: true,
   },
 ];

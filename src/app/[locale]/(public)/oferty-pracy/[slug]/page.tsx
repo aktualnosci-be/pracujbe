@@ -67,6 +67,8 @@ import {
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
 import { EmployerApplyChannel } from '@/components/public/EmployerApplyChannel';
+import { JobExplainPanelLazy as JobExplainPanel } from '@/components/public/JobExplainPanelLazy';
+import { jobExplainProvider } from '@/lib/ai-explain/config';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
@@ -242,6 +244,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
   const messagingOn = isRecruitmentEnabled('messaging');
+  const explainProvider = jobExplainProvider();
 
   const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, tBenefits, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
@@ -258,6 +261,12 @@ export default async function JobDetailPage({ params }: PageProps) {
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
+  // 0227 (#858): grafik pracy w języku widza (te same etykiety co filtr listy).
+  const shiftPatternLabels = job.shiftPatterns?.length
+    ? await getTranslations('filters.shiftPatternValues').then((tShift) =>
+        job.shiftPatterns!.map((pattern) => tShift(pattern)).join(', '),
+      )
+    : null;
   // I18N-02: wymagane języki w języku widza (kod słownika 0168 / nazwa PL-NL-FR-EN), a nie
   // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
   const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
@@ -798,6 +807,18 @@ export default async function JobDetailPage({ params }: PageProps) {
                     <dd className="font-medium text-foreground">{t(`workTimeValues.${job.workTime}`)}</dd>
                   </div>
                 ) : null}
+                {shiftPatternLabels ? (
+                  <div className="relative pl-[1.875rem]" data-testid="job-shift-patterns">
+                    <dt className="text-sm text-muted-foreground">
+                      <Clock
+                        className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      {t('shiftPatternsLabel')}
+                    </dt>
+                    <dd className="font-medium text-foreground">{shiftPatternLabels}</dd>
+                  </div>
+                ) : null}
                 {job.languages.length > 0 ? (
                   <div className="relative pl-[1.875rem]">
                     <dt className="text-sm text-muted-foreground">
@@ -816,6 +837,15 @@ export default async function JobDetailPage({ params }: PageProps) {
               ) : null}
             </Section>
           </div>
+
+          {/*
+            #773: „Wyjaśnij ofertę” — na żądanie, za flagą AI_JOB_EXPLAIN_ENABLED (domyślnie
+            wyłączona). Osobna sekcja pod treścią oferty: treść nie jest zastępowana ani zmieniana.
+            Oferta przykładowa tylko z atrapą (bez kosztów).
+          */}
+          {explainProvider && (!job.isDemo || explainProvider === 'fixture') ? (
+            <JobExplainPanel slug={job.slug} locale={pageLocale} />
+          ) : null}
 
           {/* Informacje o firmie */}
           <div className={cn(PAPER, 'mt-[25px]')}>

@@ -28,6 +28,8 @@ select pg_temp.assert(
 begin;
 -- 0976 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
 \ir ../rollback/0976_job_benefits.down.sql
+-- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
+\ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0214_keyword_job_qualifications.down.sql
 
 select pg_temp.assert(
