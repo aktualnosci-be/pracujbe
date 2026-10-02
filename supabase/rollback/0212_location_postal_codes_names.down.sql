@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0996 — miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119).
+-- Rollback 0212 — miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
 -- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/location-postal-names-rollback.sql wykonuje go w transakcji i cofa).

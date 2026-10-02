@@ -25017,7 +25017,7 @@ reset role; reset app.current_uid;
 
 -- ============================================================================
 -- PC1119. Miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119, #1076/M-4,
---         migracja 0996): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
+--         migracja 0212): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
 --         rozpoznanego miasta; facet lokalizacji w języku widoku (location_names), tylko gdy
 --         nazwa wskazuje tę samą miejscowość.
 -- ============================================================================

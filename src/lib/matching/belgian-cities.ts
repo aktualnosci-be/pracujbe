@@ -88,7 +88,7 @@ const POSTAL_CODE = new RegExp(`${WORD_START}(?:be? ?)?[1-9][0-9]{3}${WORD_END}`
 const COUNTRY = new RegExp(`${WORD_START}(?:belgie|belgique|belgium|belgia|belgien)${WORD_END}`, 'gu');
 
 /**
- * Klucz miasta bez dopisku (#1119, lustro SQL `location_lookup_key`, migracja 0996): bez
+ * Klucz miasta bez dopisku (#1119, lustro SQL `location_lookup_key`, migracja 0212): bez
  * belgijskiego kodu pocztowego (4 cyfry, opcjonalnie z prefiksem B/BE), nawiasów, przecinków
  * i nazwy kraju — „Bruxelles 1000”, „B-1000 Bruxelles”, „Gent, België” → nazwa miasta. Baza
  * sprawdza go dopiero, gdy pełny klucz `cityKey` nie wskazuje miejscowości.

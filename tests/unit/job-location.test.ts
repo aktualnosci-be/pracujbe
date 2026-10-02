@@ -110,7 +110,7 @@ describe('podpowiedź miasta w kreatorze — logika', () => {
     expect(demoJobCityAssist('antwerpia').slug).toBe('antwerp');
     expect(demoJobCityAssist(' ANVERS ').slug).toBe('antwerp');
     expect(demoJobCityAssist('Nieznanowo')).toEqual({ slug: null, suggestions: [] });
-    // #1119: kod pocztowy i nazwa kraju przy mieście jak w `resolve_location_id` (0996).
+    // #1119: kod pocztowy i nazwa kraju przy mieście jak w `resolve_location_id` (0212).
     expect(demoJobCityAssist('Bruxelles 1000').slug).toBe('brussels');
     expect(demoJobCityAssist('B-9000 Gent, België').slug).toBe('ghent');
     expect(demoJobCityAssist('1000').slug).toBeNull();
@@ -141,7 +141,7 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     expect(await jobCityAssist({ city: '  ANTWERPEN ', locale: 'pl' })).toEqual({
       status: 'ok', match: { slug: 'antwerp', name: 'Antwerpia' }, suggestions: ['Antwerpen'],
     });
-    // Wpis trafia do `resolve_location_id` bez zmian (reguła klucza i kodu pocztowego w bazie, 0996).
+    // Wpis trafia do `resolve_location_id` bez zmian (reguła klucza i kodu pocztowego w bazie, 0212).
     expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['  ANTWERPEN ', 'pl']);
     expect(fakeDb.callsTo('job-city.suggest')[0]?.values).toEqual(['antwerpen%']);
     // Odczyt pod sesją (RLS), nie service_role; akcja niczego nie zapisuje.

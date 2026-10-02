@@ -197,7 +197,7 @@ export async function getPublicJobFilterFacets(
   viewerId: string | null = null,
 ): Promise<JobFilterFacets> {
   return withUserTransaction(pool, viewerId, async (transaction) => {
-    // #1119 (0996): pozycja „miasto” w języku widoku (`location_display_name`: nazwa z
+    // #1119 (0212): pozycja „miasto” w języku widoku (`location_display_name`: nazwa z
     // `location_names`, tylko gdy wskazuje tę samą miejscowość — jest też wartością filtra).
     // Nazwę podmienia zapytanie wokół RPC, więc treść facetów w bazie zostaje bez zmian.
     const result = (await transaction.query(

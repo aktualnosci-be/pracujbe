@@ -480,12 +480,12 @@ export function generateSections(cwd = process.cwd()) {
 }
 
 // -----------------------------------------------------------------------------
-// Nazwy miejscowości w języku widoku (#1119, migracja 0996 — numer tymczasowy): blok danych
+// Nazwy miejscowości w języku widoku (#1119, migracja 0212 — numer tymczasowy): blok danych
 // `location_names` w ręcznie pisanej migracji, między znacznikami BEGIN/END GENERATED.
 // -----------------------------------------------------------------------------
 
 /** Numer tymczasowy — ostateczny nada integrator (zmiana nazwy pliku = zmiana tej stałej). */
-export const NAMES_MIGRATION_FILE = 'supabase/migrations/0996_location_postal_codes_names.sql';
+export const NAMES_MIGRATION_FILE = 'supabase/migrations/0212_location_postal_codes_names.sql';
 export const NAMES_BLOCK_BEGIN = '-- BEGIN GENERATED location_names (node scripts/locations/build-migration.mjs)';
 export const NAMES_BLOCK_END = '-- END GENERATED location_names';
 export const NAME_LOCALES = ['pl', 'nl', 'fr', 'en'];

@@ -385,7 +385,7 @@ describe('dopasowanie z odległości dla miast spoza słownika bazy (#194)', () 
   });
 });
 
-describe('nazwy miejscowości w języku widoku (#1119, migracja 0996)', () => {
+describe('nazwy miejscowości w języku widoku (#1119, migracja 0212)', () => {
   const { names, block } = generateNames();
   const municipalities = generate();
   const migrationSql = readFileSync(join(process.cwd(), NAMES_MIGRATION_FILE), 'utf8');

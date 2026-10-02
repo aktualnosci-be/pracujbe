@@ -853,7 +853,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   („do 2000”) nie wysyła dolnej granicy z końca suwaka (`salaryQueryParams`, licznik
   `matchesSidebar`). Lustro demo (`getJobsFromDemo`) szuka jak SQL: słowo kluczowe tylko w tytule,
   miasto tylko w nazwie miasta. Dowód: unit `city-aliases` (#1077, kontrole ujemne starej reguły),
-  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. Miasto z dopiskiem i facet w języku widoku (#1119, #1076/M-4, migracja `0996` — numer
+  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. Miasto z dopiskiem i facet w języku widoku (#1119, #1076/M-4, migracja `0212` — numer
   tymczasowy): `location_lookup_key` (lustro `cityLookupKey` w `belgian-cities.ts`) usuwa z klucza
   miasta belgijski kod pocztowy (4 cyfry, prefiks B/BE), nawiasy/przecinki i nazwę kraju;
   `resolve_location_id` szuka najpierw pełnego klucza, potem klucza bez dopisku, więc „Bruxelles
@@ -868,7 +868,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   zapytanie aplikacji wokół RPC (`getPublicJobFilterFacets`, `$1` = język; te same nazwy scalone),
   podpowiedź miasta w kreatorze używa `resolve_location_id` i `location_display_name`. Dowód:
   `rls.sql` sekcja PC1119 (kontrole ujemne: `resolve_location_id` z 0153, funkcja nazw bez
-  strażnika), rollback `0996_…down.sql` + `location-postal-names-rollback.sql` (ponowne nałożenie =
+  strażnika), rollback `0212_…down.sql` + `location-postal-names-rollback.sql` (ponowne nałożenie =
   backfill), unit `location-postal-names`, `matching-locations` (blok = generator, kontrola ujemna),
   `job-location`. **Otwarte:** matching liczy odległość z `cityKey` (bez klucza bez dopisku;
   funkcja wyłączona w trybie ogłoszeniowym), kod pocztowy bez nazwy miasta (brak słownika kodów).

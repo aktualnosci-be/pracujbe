@@ -5,7 +5,7 @@ import type { TransactionClient, TransactionPool } from '@/lib/db/transaction';
 import { cityKey, cityLookupKey } from '@/lib/matching/belgian-cities';
 
 /**
- * #1119 (migracja 0996): miasto oferty z dopiskiem i facet lokalizacji w języku widoku.
+ * #1119 (migracja 0212): miasto oferty z dopiskiem i facet lokalizacji w języku widoku.
  * Zapis `jobs.location_id`, filtry i backfill sprawdza rls.sql sekcja PC1119 (PG16); tu:
  * zgodność klucza TS z SQL i zapytanie facetów aplikacji.
  */

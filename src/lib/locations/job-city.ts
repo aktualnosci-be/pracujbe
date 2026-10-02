@@ -67,7 +67,7 @@ export function pickSuggestions(
 export function demoJobCityAssist(city: string): { slug: string | null; suggestions: string[] } {
   const key = cityKey(city);
   if (!key) return { slug: null, suggestions: [] };
-  // Jak `resolve_location_id` (0996): pełny klucz, potem klucz bez kodu pocztowego/kraju.
+  // Jak `resolve_location_id` (0212): pełny klucz, potem klucz bez kodu pocztowego/kraju.
   const findBy = (wanted: string) => wanted
     ? BELGIAN_CITIES.find((c) => [c.slug, ...c.aliases].some((a) => cityKey(a) === wanted))
     : undefined;

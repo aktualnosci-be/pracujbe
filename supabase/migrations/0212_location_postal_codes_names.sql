@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0996_location_postal_codes_names.sql — miasto oferty z dopiskiem i nazwy miejscowości
+-- 0212_location_postal_codes_names.sql — miasto oferty z dopiskiem i nazwy miejscowości
 -- w języku widoku (#1119, #1076/M-4). NUMER TYMCZASOWY — ostateczny nada integrator.
 --
 -- Problem 1: `jobs.location_id` (0153) rozpoznaje miejscowość po CAŁYM kluczu `city_key`.
@@ -24,7 +24,7 @@
 -- Nazwa w języku widoku jest zarazem wartością filtra, więc funkcja zwraca ją tylko, gdy
 -- wskazuje tę samą miejscowość (inaczej `locations.name`).
 --
--- Rollback: supabase/rollback/0996_location_postal_codes_names.down.sql
+-- Rollback: supabase/rollback/0212_location_postal_codes_names.down.sql
 -- =============================================================================
 
 -- --- 1. Klucz miasta bez kodu pocztowego i nazwy kraju -----------------------------------------
@@ -118,7 +118,7 @@ create table if not exists public.location_names (
   primary key (location_id, locale)
 );
 comment on table public.location_names is
-  'Nazwa miejscowości w języku serwisu (#1119, 0996). Brak wiersza = locations.name. Dane z migawki Wikidata (generator scripts/locations/build-migration.mjs).';
+  'Nazwa miejscowości w języku serwisu (#1119, 0212). Brak wiersza = locations.name. Dane z migawki Wikidata (generator scripts/locations/build-migration.mjs).';
 
 alter table public.location_names enable row level security;
 drop policy if exists location_names_public_read on public.location_names;

@@ -1,5 +1,5 @@
 -- =============================================================================
--- PC1119-R — rollback migracji 0996 (miasto z dopiskiem, nazwy miejscowości w języku widoku,
+-- PC1119-R — rollback migracji 0212 (miasto z dopiskiem, nazwy miejscowości w języku widoku,
 -- #1119) i ponowne nałożenie migracji (backfill). Uruchamiany przez scripts/test-rls.sh po
 -- rls.sql, na tej samej bazie. Całość w transakcji, cofana.
 -- =============================================================================
@@ -23,7 +23,7 @@ select pg_temp.assert(
   and to_regclass('public.location_names') is not null,
   'PC1119-R0 stan przed rollbackiem');
 
-\ir ../rollback/0996_location_postal_codes_names.down.sql
+\ir ../rollback/0212_location_postal_codes_names.down.sql
 
 -- Po rollbacku: stan 0153/0183 — miasto z kodem pocztowym bez miejscowości, bez tabeli nazw.
 select pg_temp.assert(
@@ -45,16 +45,16 @@ alter table public.jobs enable trigger trg_strict_job_version;
 set constraints all immediate;
 select pg_temp.assert((select updated_at from public.jobs where slug = 'pc1119r-a') = '2026-01-01T00:00:00Z',
   'PC1119-R2a znacznik updated_at ustawiony');
-\ir ../migrations/0996_location_postal_codes_names.sql
+\ir ../migrations/0212_location_postal_codes_names.sql
 select pg_temp.assert(
   (select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.slug = 'pc1119r-a') = 'brussels'
   and (select updated_at from public.jobs where slug = 'pc1119r-a') = '2026-01-01T00:00:00Z'
   and public.get_public_jobs_count('pl', 'pc1119r', p_locations => array['Bruksela']) = 1
   and public.location_display_name('Aalst', 'fr') = 'Alost',
-  'PC1119-R2 backfill 0996: oferta z kodem pocztowym dowiązana, updated_at bez zmian');
+  'PC1119-R2 backfill 0212: oferta z kodem pocztowym dowiązana, updated_at bez zmian');
 rollback;
 select pg_temp.assert(
   to_regclass('public.location_names') is not null
   and (select count(*) from public.jobs where slug = 'pc1119r-a') = 0,
   'PC1119-R3 rollback testu cofnięty');
-\echo 'PC1119-R rollback 0996: PASS'
+\echo 'PC1119-R rollback 0212: PASS'

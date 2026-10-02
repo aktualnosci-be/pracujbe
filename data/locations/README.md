@@ -22,7 +22,7 @@ części = współrzędne gminy nadrzędnej.
 - Odświeżenie migawek (ręcznie, poza CI): `node scripts/locations/fetch-wikidata.mjs`
   (`municipalities` albo `sections` — tylko jedna migawka; odświeżenie gmin zmienia wynik
   generatora 0112, więc po wdrożeniu zmiany idą nową migracją)
-- Wygenerowanie SQL (0112 i 0151 oraz blok danych `location_names` w 0996 — nazwy miejscowości
+- Wygenerowanie SQL (0112 i 0151 oraz blok danych `location_names` w 0212 — nazwy miejscowości
   w języku serwisu z etykiet PL/NL/FR/EN, #1119): `node scripts/locations/build-migration.mjs`
 
 Lista kanoniczna `src/lib/matching/belgian-cities.ts` ma pierwszeństwo (współrzędne i aliasy).
