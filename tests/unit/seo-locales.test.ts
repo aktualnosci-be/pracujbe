@@ -12,14 +12,17 @@ import { ogLocale, openGraphLocales, pickXDefaultLocale } from '@/lib/seo/locale
  */
 
 const jobs = vi.hoisted(() => ({
-  getJobs: vi.fn(),
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
-  getJobsAvailableLocales: vi.fn(),
-  getJobsCount: vi.fn(),
+}));
+const catalog = vi.hoisted(() => ({
+  getSitemapJobShardStarts: vi.fn(),
+  getSitemapJobsShard: vi.fn(),
+  getSitemapCompanySlugs: vi.fn(async () => [] as string[]),
 }));
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' }, isProductionDeployment: () => true }));
 vi.mock('@/lib/jobs', () => jobs);
+vi.mock('@/lib/sitemap-jobs', () => catalog);
 vi.mock('@/lib/guides/guides', () => ({ getAllGuideSlugs: () => [] }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
 
@@ -98,13 +101,15 @@ describe('x-default oferty (#1097)', () => {
     const fromDb: Locale[] = ['en', 'fr', 'nl'];
     jobs.getCategoryCounts.mockResolvedValue({});
     jobs.getCityCounts.mockResolvedValue({});
-    jobs.getJobs.mockResolvedValue({
-      jobs: [{ id: 'a', slug: 'oferta-a', publishedAt: '2026-09-01T00:00:00.000Z' }],
-      total: 1,
-      page: 1,
-      pageSize: 100,
-    });
-    jobs.getJobsAvailableLocales.mockResolvedValue({ a: fromDb });
+    catalog.getSitemapJobsShard.mockResolvedValue([
+      {
+        id: 'a',
+        slug: 'oferta-a',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        locales: fromDb,
+      },
+    ]);
 
     const entries = await sitemap({ id: 1 });
     const entry = entries.find((item) => item.url.endsWith('/oferta-a'));
