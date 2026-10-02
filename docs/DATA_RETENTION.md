@@ -162,7 +162,12 @@ screeningowymi, propozycje z historią, **zapisane** wyniki `matches` (bez licze
 rozmowy (treść obu stron, strona oznaczona `fromMe`, bez tożsamości rekrutera), zapisane
 oferty i wyszukiwania, blokady firm (nazwa firmy), preferencje i powiadomienia, zgody, dowody zgód e-mail
 (`email_consent_events`) i akceptacje dokumentów, e-maile (szablon, status, daty — bez treści), zgłoszenia bez konta
-przejęte przez to konto, historia wniosków.
+przejęte przez to konto, historia wniosków, zgłoszenia treści złożone przez kandydata
+(`contentReports`: numer sprawy, kategoria/powód, opis, dane podane w formularzu, stan i daty — bez
+zgłoszonej treści, identyfikatora celu i kodu dostępu) oraz wysłane ostrzeżenia przed usunięciem z powodu
+braku aktywności (`retentionWarnings`: kategoria, aktywność, data ostrzeżenia, termin; migracja 0218 —
+numer tymczasowy, #1091). Historii widoczności profilu dla firm eksport nie obejmuje (funkcja wyłączona
+w trybie ogłoszeniowym, #1128).
 
 Pomijane: identyfikatory innych osób (rekruter, inny kandydat), klucze idempotencji,
 klucze obiektów storage. Ograniczenie z art. 15(4) RODO wobec innych osób rozstrzyga się

@@ -667,6 +667,8 @@ export type JobDraftLoad =
       updatedAt: string;
       /** Język treści oferty (`default_locale`) — pytania screeningowe wymagają tekstu w nim. */
       contentLocale: string;
+      /** #834: najdalszy zapisany krok kreatora szkicu (`jobs.draft_step`); null = krok 1. */
+      resumeStep: number | null;
       values: JobDraftValues;
     }
   | { status: 'not-found' }
@@ -749,6 +751,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
     slug: job.slug,
     updatedAt: job.createdAt ?? '',
     contentLocale: 'pl',
+    resumeStep: null,
     values: {
       title: job.title,
       category: 'warehouse',
@@ -818,7 +821,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 shifts, work_time, shift_patterns, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
-                expires_at, updated_at,
+                expires_at, updated_at, draft_step,
                 accommodation_kind, accommodation_cost::text AS accommodation_cost,
                 accommodation_cost_period, accommodation_deducted, accommodation_registration,
                 accommodation_after_contract, transport_shuttle, transport_reimbursed,
@@ -881,6 +884,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
       slug: asString(job['slug']),
       updatedAt: asString(job['updated_at']),
       contentLocale: locale,
+      resumeStep: jobStatus === 'draft' && typeof job['draft_step'] === 'number' ? job['draft_step'] : null,
       values: {
         title: asString(job['title']),
         category: asString(job['category']),

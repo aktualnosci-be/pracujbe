@@ -235,3 +235,100 @@ export async function deleteSavedSearchAction(id: unknown): Promise<SavedSearchM
     return { ok: false, error: 'INTERNAL' };
   }
 }
+
+const companyIdSchema = z.string().uuid();
+const pauseDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+});
+
+/**
+ * Czasowa pauza alertów konta (#810). `until` = dzień wznowienia (`YYYY-MM-DD`, jutro..+366 dni,
+ * sprawdza baza, Europe/Brussels) albo `null` = wznów od razu. Indywidualne ustawienia wyszukiwań
+ * nie są zmieniane.
+ */
+export async function setAlertsPauseAction(until: unknown): Promise<SavedSearchMutationResult> {
+  const parsed = until === null ? { success: true as const, data: null } : pauseDateSchema.safeParse(until);
+  if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) => rpc(tx, 'set_saved_search_alerts_pause', { p_until: parsed.data }));
+    revalidateSavedSearches();
+    return { ok: true };
+  } catch (error) {
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.pause', mapPgError(databaseErrorMessage(error))) };
+    }
+    captureError(error, { area: 'saved-searches.pause' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+export type CompanyFollowState =
+  | { status: 'candidate'; following: boolean }
+  | { status: 'anonymous' | 'unavailable' | 'error' };
+
+/** Stan obserwowania firmy dla wyspy na publicznym profilu (strona ISR nie czyta sesji). */
+export async function getCompanyFollowState(companyId: unknown): Promise<CompanyFollowState> {
+  const parsed = companyIdSchema.safeParse(companyId);
+  if (!parsed.success || !isPortalDataConfigured()) return { status: 'unavailable' };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'anonymous' };
+    if (me.role !== 'candidate') return { status: 'unavailable' };
+    const rows = await withPortalTransaction(me, (tx) => rpcRows(tx, 'get_my_followed_companies', {}));
+    const following = rows.some((row) => (row as Record<string, unknown>)['company_id'] === parsed.data);
+    return { status: 'candidate', following };
+  } catch (error) {
+    captureError(error, { area: 'saved-searches.followState' });
+    return { status: 'error' };
+  }
+}
+
+/** Obserwowanie zweryfikowanej firmy (idempotentne; obserwacja liczy się do limitu 20). */
+export async function followCompanyAction(companyId: unknown, locale: unknown): Promise<SavedSearchMutationResult | { ok: false; error: 'UNAUTHENTICATED' }> {
+  const parsedId = companyIdSchema.safeParse(companyId);
+  const parsedLocale = z.enum(routing.locales).safeParse(locale);
+  if (!parsedId.success || !parsedLocale.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
+    await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'follow_company', { p_company_id: parsedId.data, p_locale: parsedLocale.data }),
+    );
+    revalidateSavedSearches();
+    return { ok: true };
+  } catch (error) {
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.follow', mapPgError(databaseErrorMessage(error))) };
+    }
+    captureError(error, { area: 'saved-searches.follow' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/** Przestanie obserwować firmę (idempotentne). */
+export async function unfollowCompanyAction(companyId: unknown): Promise<SavedSearchMutationResult> {
+  const parsedId = companyIdSchema.safeParse(companyId);
+  if (!parsedId.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) => rpc(tx, 'unfollow_company', { p_company_id: parsedId.data }));
+    revalidateSavedSearches();
+    return { ok: true };
+  } catch (error) {
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.unfollow', mapPgError(databaseErrorMessage(error))) };
+    }
+    captureError(error, { area: 'saved-searches.unfollow' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}

@@ -26,6 +26,7 @@ vi.mock('next-intl/server', () => ({
 vi.mock('@/i18n/navigation', () => ({ Link: () => null }));
 vi.mock('@/components/public/Breadcrumbs', () => ({ Breadcrumbs: () => null }));
 vi.mock('@/components/public/JobCard', () => ({ JobCard: () => null }));
+vi.mock('@/components/candidate/FollowCompanyButton', () => ({ FollowCompanyButton: () => null }));
 vi.mock('@/components/public/Pagination', () => ({ Pagination: () => null }));
 vi.mock('@/components/public/PublicSavedJobs', () => ({
   PublicSavedJobsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
