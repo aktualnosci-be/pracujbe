@@ -201,9 +201,11 @@ describe('Limiter PostgreSQL — atomowość i wąska rola', () => {
     const windows = process.platform === 'win32';
     const output = execFileSync(windows ? 'wsl.exe' : 'docker',
       windows ? ['-d', 'Ubuntu', '--', 'docker', ...args] : args,
-      { input, encoding: 'utf8', timeout: 60_000 });
+      // Zestaw RLS rośnie z każdą migracją; przy 60 s przebieg na runnerze CI przekraczał limit
+      // (spawnSync ETIMEDOUT przy ~62 s) mimo zielonego wyniku.
+      { input, encoding: 'utf8', timeout: 240_000 });
     expect(output).toContain('ALL RLS TESTS PASSED');
-  }, 70_000);
+  }, 270_000);
 
   it.each([{ max: 0 }, { windowSeconds: 0 }, { max: 1.5 }, { keySecret: '' }, { keySecret: 'x'.repeat(31) },
     { trustedClientIp: 'unknown' }, { action: 'client:controlled' }])(

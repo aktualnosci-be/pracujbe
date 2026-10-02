@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0960 — lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (#1215).
+-- Rollback 0213 — lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (#1215).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
 -- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/public-jobs-plan-rollback.sql wykonuje go w transakcji i cofa).

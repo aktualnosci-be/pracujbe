@@ -1,7 +1,7 @@
 -- =============================================================================
--- PF1215-R — rollback migracji 0960 (publiczne RPC ofert z planem dla wartości parametrów,
+-- PF1215-R — rollback migracji 0213 (publiczne RPC ofert z planem dla wartości parametrów,
 -- #1215). Uruchamiany przez scripts/test-rls.sh po rls.sql. Rollback w transakcji cofanej:
--- baza po teście nadal ma stan po 0960. Zgodność wyników obu wersji sprawdza rls.sql PF1215.
+-- baza po teście nadal ma stan po 0213. Zgodność wyników obu wersji sprawdza rls.sql PF1215.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -27,10 +27,10 @@ select pg_temp.assert(
   and pg_temp.pf_lang(:'PF_SAVED'::regprocedure) = 'plpgsql'
   and to_regclass('public.idx_jobs_public_salary_month') is not null
   and to_regclass('public.idx_jobs_public_salary_hour') is not null,
-  'PF1215-R0 baza w stanie po 0960');
+  'PF1215-R0 baza w stanie po 0213');
 
 begin;
-\ir ../rollback/0960_public_jobs_custom_plan.down.sql
+\ir ../rollback/0213_public_jobs_custom_plan.down.sql
 
 select pg_temp.assert(
   pg_temp.pf_lang(:'PF_LIST'::regprocedure) = 'sql'
@@ -58,4 +58,4 @@ rollback;
 select pg_temp.assert(
   pg_temp.pf_lang(:'PF_LIST'::regprocedure) = 'plpgsql'
   and to_regclass('public.idx_jobs_public_salary_month') is not null,
-  'PF1215-R4 po cofnięciu transakcji stan 0960 zostaje');
+  'PF1215-R4 po cofnięciu transakcji stan 0213 zostaje');

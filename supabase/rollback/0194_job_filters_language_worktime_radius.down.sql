@@ -12,7 +12,7 @@
 -- kluczami (language, languageLevel, workTime, near, radiusKm) trzeba przed rollbackiem usunąć
 -- albo oczyścić — stara kanonizacja ich nie zna, a alert by je pominął.
 -- Aplikacja wysyła nowe parametry RPC — przed rollbackiem wycofać wersję aplikacji.
--- Najpierw rollback 0960 (#1215): jej indeksy zależą od job_salary_sort_key(…, currency, …) z 0194.
+-- Najpierw rollback 0213 (#1215): jej indeksy zależą od job_salary_sort_key(…, currency, …) z 0194.
 -- =============================================================================
 
 drop trigger if exists trg_job_duplications_copy_work_time on public.job_duplications;

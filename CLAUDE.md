@@ -833,7 +833,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
-  Plan dla wartości parametrów (#1215, audyt PERF-01, migracja `0960` — numer tymczasowy):
+  Plan dla wartości parametrów (#1215, audyt PERF-01, migracja `0213` — numer tymczasowy):
   `get_public_jobs`/`_count`/`get_public_job_filter_facets` i `saved_search_jobs_after` to
   `plpgsql` z `set plan_cache_mode = force_custom_plan` i `set jit = off` (dawniej `LANGUAGE sql`
   = plan generyczny, pełny skan aktywnych ofert przy każdym wywołaniu). Tytuł do słowa kluczowego
@@ -844,7 +844,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   strona 1 233 → 1 ms, sort po wynagrodzeniu 616 → 2 ms, licznik 212 → 5 ms, facety 245 → 41 ms
   (`docs/railway/OPERATIONS.md` §3). Dowód: `rls.sql` sekcja PF1215 (odciski wyników 34 kombinacji
   = definicje z 0194; kontrola ujemna: stara definicja czyta wszystkie oferty), rollback
-  `0960_…down.sql` (`public-jobs-plan-rollback.sql`). Zmiana filtrów listy = ta sama zmiana
+  `0213_…down.sql` (`public-jobs-plan-rollback.sql`). Zmiana filtrów listy = ta sama zmiana
   w czterech funkcjach (w plpgsql).
   Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
   (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
