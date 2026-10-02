@@ -30,9 +30,10 @@ function job(id: string) {
 describe('sitemap', () => {
   it('pomija puste landingi i nieistniejące tłumaczenia ofert', async () => {
     jobs.getCategoryCounts.mockResolvedValue({ construction: 2 });
-    // #189: licznik per klucz miasta — oferta w Kortrijk jest na landingu w każdym języku.
+    // #189: licznik per klucz miasta — oferty w Kortrijk są na landingu w każdym języku.
+    // #920: Gandawa ma 2 oferty (poniżej progu 3) — nie trafia do sitemap (kontrola ujemna).
     jobs.getCityCounts.mockImplementation(async (_locale: string, keys: string[]) =>
-      Object.fromEntries(keys.map((key) => [key, key === 'kortrijk' ? 1 : 0])),
+      Object.fromEntries(keys.map((key) => [key, key === 'kortrijk' ? 3 : key === 'ghent' ? 2 : 0])),
     );
     jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
     jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['nl'], b: ['pl', 'nl', 'fr', 'en'] });

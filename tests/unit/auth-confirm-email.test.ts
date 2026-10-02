@@ -35,6 +35,7 @@ import {
   stubPortalEnv,
 } from '../helpers/auth-portal';
 import { confirmEmail } from '@/lib/actions/auth';
+import { SIGNUP_BROWSER_COOKIE, signupBrowserMarker } from '@/lib/auth/signup-browser';
 
 const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImpAZXgub3JnIn0.c2lnbmF0dXJl';
 
@@ -53,6 +54,8 @@ beforeEach(() => {
   internalAdapter.findUserByEmail.mockResolvedValue({
     user: { id: USER_ID, email: 'j@ex.org', raw_user_meta_data: { company_name: 'Firma Testowa' } },
   });
+  // Domyślnie link otwiera przeglądarka, która założyła konto (#1090).
+  cookieJar.set(SIGNUP_BROWSER_COOKIE, { value: signupBrowserMarker('j@ex.org', process.env.BETTER_AUTH_SECRET)! });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -137,5 +140,34 @@ describe('confirmEmail', () => {
       internalAdapter.findUserByEmail.mockResolvedValue({ user: { id: USER_ID, email: 'j@ex.org' } });
       expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/candidate' });
     });
+  });
+});
+
+describe('confirmEmail — automatyczne logowanie tylko w przeglądarce rejestracji (#1090)', () => {
+  it('inna przeglądarka (bez znacznika): adres potwierdzony, sesja nie zostaje, logowanie ręczne', async () => {
+    cookieJar.delete(SIGNUP_BROWSER_COOKIE);
+    expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/logowanie' });
+    expect(api.verifyEmail).toHaveBeenCalled();
+    expect(cookieJar.has(SESSION_COOKIE)).toBe(false);
+    expect(internalAdapter.deleteUserSessions).toHaveBeenCalledWith(USER_ID);
+    expect(mocks.bootstrap).not.toHaveBeenCalled();
+  });
+
+  it('znacznik innego adresu nie wystarcza', async () => {
+    cookieJar.set(SIGNUP_BROWSER_COOKIE, { value: signupBrowserMarker('ktos@ex.org', process.env.BETTER_AUTH_SECRET)! });
+    expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/logowanie' });
+    expect(cookieJar.has(SESSION_COOKIE)).toBe(false);
+  });
+
+  it('podrobiony znacznik (bez sekretu) nie wystarcza', async () => {
+    cookieJar.set(SIGNUP_BROWSER_COOKIE, { value: signupBrowserMarker('j@ex.org', 'inny-sekret'.repeat(4))! });
+    expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/logowanie' });
+  });
+
+  it('kontrola ujemna: przeglądarka rejestracji dostaje sesję, znacznik jest zużyty', async () => {
+    expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/candidate' });
+    expect(cookieJar.get(SESSION_COOKIE)?.value).toBe('tok.sig');
+    expect(cookieJar.has(SIGNUP_BROWSER_COOKIE)).toBe(false);
+    expect(internalAdapter.deleteUserSessions).not.toHaveBeenCalled();
   });
 });
