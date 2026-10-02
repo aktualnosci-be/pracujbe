@@ -81,7 +81,9 @@ describe('JobSearchAssist', () => {
     fireEvent.click(screen.getByRole('button', { name: a.suggest }));
     await waitFor(() => expect(screen.getByRole('heading', { name: a.resultTitle })).toBeTruthy());
     expect(suggestJobSearchFilters).toHaveBeenCalledWith({ text: 'magazyn Gandawa od zaraz', inputLocale: 'nl', locale: 'pl' });
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: a.resultTitle }));
+    // Fokus przenosi efekt pasywny (useEffect po commicie) — commit z nagłówkiem może być
+    // widoczny dla waitFor przed jego wykonaniem, więc czekamy na sam fokus.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: a.resultTitle })));
     // Kontrola ujemna: sama propozycja niczego nie stosuje.
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByText('blisko szkoły')).toBeTruthy();
