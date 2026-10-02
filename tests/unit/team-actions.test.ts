@@ -327,9 +327,9 @@ describe('hierarchia ról w UI = hierarchia w bazie (0086)', () => {
     expect(mapTeamError('PERMISSION_DENIED')).toBe('PERMISSION_DENIED');
   });
 
-  it('#867: migracja 0953 sprawdza starą rolę przy zaproszeniu i przy przyjęciu', () => {
+  it('#867: migracja 0217 sprawdza starą rolę przy zaproszeniu i przy przyjęciu', () => {
     const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/0953_team_member_reactivation_hierarchy.sql'),
+      resolve(process.cwd(), 'supabase/migrations/0217_team_member_reactivation_hierarchy.sql'),
       'utf8',
     );
     expect(sql).toMatch(/company_role_manageable_by\(v_inv\.company_id, v_inv\.invited_by, v_member\.role\)/);

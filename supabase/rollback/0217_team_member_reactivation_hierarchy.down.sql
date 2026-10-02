@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0953_team_member_reactivation_hierarchy.sql (#867) — ręczny, NIE jest migracją.
+-- Rollback 0217_team_member_reactivation_hierarchy.sql (#867) — ręczny, NIE jest migracją.
 -- Usuwa strażnika zaproszeń i funkcje pomocnicze; `respond_to_company_invitation` wraca do
 -- definicji z 0086 (reaktywacja bez kontroli hierarchii). Test:
 -- supabase/tests/team-reactivation-rollback.sql.

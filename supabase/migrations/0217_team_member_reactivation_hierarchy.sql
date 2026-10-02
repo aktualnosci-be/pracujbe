@@ -1,4 +1,4 @@
--- 0953_team_member_reactivation_hierarchy.sql (numer tymczasowy — ostateczny nada integrator)
+-- 0217_team_member_reactivation_hierarchy.sql (numer tymczasowy — ostateczny nada integrator)
 --
 -- #867: zaproszenie nie może obejść hierarchii ról przy przywracaniu wyłączonego członka.
 -- Dotąd `invite_company_member` (0121/0178) sprawdzał tylko rolę DOCELOWĄ zaproszenia, a

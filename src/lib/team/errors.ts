@@ -19,7 +19,7 @@ const TEAM_KEYS: Record<TeamSpecificError, string> = {
   INVITATION_LIMIT_REACHED: 'team.error.invitationLimit',
   COMPANY_LIMIT_REACHED: 'team.error.companyLimit',
   LAST_OWNER: 'team.error.lastOwner',
-  // #867 (0953): wyłączonego członka przywraca zaproszeniem tylko ktoś, kto zarządza jego
+  // #867 (0217): wyłączonego członka przywraca zaproszeniem tylko ktoś, kto zarządza jego
   // dotychczasową rolą — przy zapraszaniu i przy przyjęciu zaproszenia.
   MEMBER_REACTIVATION_DENIED: 'team.error.reactivationDenied',
   REACTIVATION_NOT_ALLOWED: 'team.error.reactivationNotAllowed',

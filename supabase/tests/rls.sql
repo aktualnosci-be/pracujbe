@@ -25421,9 +25421,9 @@ reset role; reset app.current_uid;
 
 -- ============================================================================
 -- TMR867. Przywrócenie wyłączonego członka przez zaproszenie respektuje hierarchię ról
--- (0953, #867): admin nie przywróci wyłączonego admina zaproszeniem na niższą rolę ani przy
+-- (0217, #867): admin nie przywróci wyłączonego admina zaproszeniem na niższą rolę ani przy
 -- tworzeniu zaproszenia, ani przy jego przyjęciu; owner może. Kontrola ujemna: po rollbacku
--- 0953 obejście znowu działa.
+-- 0217 obejście znowu działa.
 -- ============================================================================
 \echo '--- TMR867 reaktywacja członka przez zaproszenie ---'
 \set R8O  'e9530000-0000-0000-0000-0000000000a1'
@@ -25477,7 +25477,7 @@ reset role; reset app.current_uid;
 select pg_temp.assert(pg_temp.r8_member(:'R8R') = 'member:true',
   'TMR867-2 admin przywraca wyłączonego rekrutera jako member (pozytyw)');
 
--- TMR867-3: zaproszenie sprzed 0953 (bez strażnika) — przyjęcie odrzucone, stan bez zmian.
+-- TMR867-3: zaproszenie sprzed 0217 (bez strażnika) — przyjęcie odrzucone, stan bez zmian.
 alter table public.company_invitations disable trigger trg_company_invitations_reactivation_guard;
 insert into public.company_invitations (company_id, email, role, invited_by, locale, signup_token_hash)
   values (:'R8C', 'r8a2@test.be', 'recruiter', :'R8A1', 'pl', pg_temp.r8_hash())
@@ -25519,8 +25519,8 @@ reset role; reset app.current_uid;
 select pg_temp.assert(pg_temp.r8_member(:'R8M') = 'member:false', 'TMR867-5b członkostwo nadal wyłączone');
 update public.company_members set is_active = true where company_id = :'R8C' and profile_id = :'R8A1';
 
--- Kontrola ujemna: bez 0953 admin przywraca wyłączonego admina zaproszeniem na rekrutera.
-\ir ../rollback/0953_team_member_reactivation_hierarchy.down.sql
+-- Kontrola ujemna: bez 0217 admin przywraca wyłączonego admina zaproszeniem na rekrutera.
+\ir ../rollback/0217_team_member_reactivation_hierarchy.down.sql
 set local role authenticated; set local app.current_uid = :'R8A1'; select pg_temp.assert_client_role();
 select invitation_id as r8inva3 from public.invite_company_member(:'R8C', 'r8a3@test.be', 'recruiter', 'pl', pg_temp.r8_hash(), pg_temp.r8_nonce()) \gset
 reset role; reset app.current_uid;
@@ -25528,7 +25528,7 @@ set local role authenticated; set local app.current_uid = :'R8A3'; select pg_tem
 select public.respond_to_company_invitation(:'r8inva3', true);
 reset role; reset app.current_uid;
 select pg_temp.assert(pg_temp.r8_member(:'R8A3') = 'recruiter:true',
-  'TMR867-N kontrola ujemna: bez 0953 admin przywraca wyłączonego admina zaproszeniem');
+  'TMR867-N kontrola ujemna: bez 0217 admin przywraca wyłączonego admina zaproszeniem');
 -- PF1215. Lista, licznik, facety ofert i kopia filtrów alertów bez pełnego skanu (0213, #1215,
 -- audyt PERF-01). Definicje z 0194 (LANGUAGE sql, plan generyczny) zastąpione plpgsql
 -- z `plan_cache_mode = force_custom_plan`. 4000 ofert z remisami `published_at` (po 7)

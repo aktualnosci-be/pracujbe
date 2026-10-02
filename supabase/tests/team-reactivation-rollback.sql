@@ -1,7 +1,7 @@
 -- =============================================================================
--- TMR867-R — rollback migracji 0953 (przywrócenie członka przez zaproszenie, #867).
+-- TMR867-R — rollback migracji 0217 (przywrócenie członka przez zaproszenie, #867).
 -- Uruchamiany przez scripts/test-rls.sh po rls.sql; rollback w transakcji cofanej, baza
--- zostaje po 0953.
+-- zostaje po 0217.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -15,10 +15,10 @@ select pg_temp.assert(
   to_regprocedure('public.company_role_manageable_by(uuid, uuid, public.company_member_role)') is not null
   and exists (select 1 from pg_trigger where tgname = 'trg_company_invitations_reactivation_guard')
   and position('REACTIVATION_NOT_ALLOWED' in pg_get_functiondef('public.respond_to_company_invitation(uuid, boolean)'::regprocedure)) > 0,
-  'TMR867-R0 baza w stanie po 0953');
+  'TMR867-R0 baza w stanie po 0217');
 
 begin;
-\ir ../rollback/0953_team_member_reactivation_hierarchy.down.sql
+\ir ../rollback/0217_team_member_reactivation_hierarchy.down.sql
 
 select pg_temp.assert(
   to_regprocedure('public.company_role_manageable_by(uuid, uuid, public.company_member_role)') is null
@@ -36,6 +36,6 @@ rollback;
 
 select pg_temp.assert(
   exists (select 1 from pg_trigger where tgname = 'trg_company_invitations_reactivation_guard'),
-  'TMR867-R3 po teście baza wraca do stanu po 0953');
+  'TMR867-R3 po teście baza wraca do stanu po 0217');
 
-\echo '--- TMR867-R rollback 0953 OK ---'
+\echo '--- TMR867-R rollback 0217 OK ---'
