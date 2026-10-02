@@ -75,10 +75,21 @@ const LOCAL_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 /**
  * Wartość pola `datetime-local` (`YYYY-MM-DDTHH:mm`, czas w Europe/Brussels) → ISO UTC.
  * Pusta albo zła wartość → null (#490: czas stwierdzenia naruszenia i zgłoszeń).
+ *
+ * `previousIso` (#1112): chwila, z której pole zostało wypełnione. Godzina jesiennej zmiany
+ * czasu (02:00–03:00 występuje dwa razy) jest niejednoznaczna — bez podpowiedzi zawsze
+ * wybieramy jedno z wystąpień, więc zapis NIEZMIENIONEGO pola mógłby przesunąć zapisaną chwilę
+ * o godzinę. Gdy wartość pola to dokładnie lokalny zapis `previousIso`, zwracamy tę chwilę.
  */
-export function appLocalInputToUtc(value: string | null | undefined): string | null {
+export function appLocalInputToUtc(
+  value: string | null | undefined,
+  previousIso?: string | null,
+): string | null {
   const m = value ? LOCAL_INPUT_RE.exec(value.trim()) : null;
   if (!m) return null;
+  if (previousIso && utcToAppLocalInput(previousIso) === value!.trim()) {
+    return new Date(Date.parse(previousIso)).toISOString();
+  }
   const [y, mo, d, h, mi] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5])];
   const naive = Date.UTC(y, mo - 1, d, h, mi);
   const check = new Date(naive);

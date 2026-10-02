@@ -6,12 +6,14 @@ import { isSearchIndexingEnabled } from '@/lib/seo/indexing';
 import {
   getCategoryCounts,
   getCityCounts,
-  getJobs,
-  getJobsAvailableLocales,
-  getJobsCount,
   type CategoryKey,
 } from '@/lib/jobs';
-import { MAX_JOB_LIST_OFFSET } from '@/lib/job-list-pagination';
+import {
+  getSitemapCompanySlugs,
+  getSitemapJobShardStarts,
+  getSitemapJobsShard,
+} from '@/lib/sitemap-jobs';
+import type { SitemapJobRow } from '@/lib/db/sitemap-jobs';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
 import { NAVIGATOR_PATH, NAVIGATOR_REGIONS } from '@/lib/guides/start-navigator';
 import { pickXDefaultLocale } from '@/lib/seo/locales';
@@ -27,16 +29,18 @@ import { CITY_LANDING_KEYS, cityLandingQualifies } from '@/lib/locations/city-la
  *
  * Dawny sztywny sufit `SITEMAP_MAX_JOBS = 5000` (jeden plik, bez dalszych partii) ucinał
  * katalog bezpowrotnie — starsze/dalsze oferty zostawały publiczne, ale poza sitemapem (#599).
- * Teraz partii przybywa wraz z wolumenem, aż do granicy paginacji publicznej listy ofert
- * (`MAX_JOB_LIST_OFFSET`, #593) — powyżej niej `get_public_jobs` i tak nie oddaje kolejnych
- * wyników przez offset (odrębne ograniczenie backendu list, nie tego pliku).
+ * Partii przybywa wraz z wolumenem. Od #1042 (migracja 0208) katalog czytają dwa lekkie RPC
+ * kursorowe (`src/lib/sitemap-jobs.ts`): granice partii (bez licznika) i strony po 1000 ofert
+ * kursorem (`published_at`, `id`) razem z językami tłumaczeń — bez OFFSET, więc bez sufitu
+ * offsetu publicznej listy (`MAX_JOB_LIST_OFFSET`, #593) i bez kosztu rosnącego z głębokością.
  *
  * Każdy wpis ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
- * celowo pominięte (patrz `robots.ts`). Działa bez env (dane demonstracyjne z `getJobs`).
+ * celowo pominięte (patrz `robots.ts`). Poza produkcją pusta (bez odczytu bazy).
  *
  * Profile firm (#591) są w partii `0` (PERF-05, #1231): jeden wpis na `companySlug` zebrany
- * z jednej iteracji po WSZYSTKICH osiągalnych ofertach (strony listy bez licznika, #1230),
- * więc firma z ofertami w kilku partiach ofert nie powtarza się między plikami sitemap.
+ * z jednej iteracji kursorem po WSZYSTKICH publicznych ofertach (`getSitemapCompanySlugs`,
+ * to samo RPC co partie ofert, #1042), więc firma z ofertami w kilku partiach nie powtarza się
+ * między plikami sitemap.
  * Dane demonstracyjne nie mają `companySlug`, więc profili firm tam nie ma.
  *
  * TODO(i18n-slugs): segment listy ofert jest wspólny (`oferty-pracy`) — po wdrożeniu
@@ -50,26 +54,23 @@ import { CITY_LANDING_KEYS, cityLandingQualifies } from '@/lib/locations/city-la
  * usługi). Per żądanie sitemap widzi aktualne oferty; roboty pobierają go rzadko.
  * Strażnik: `tests/unit/readiness-postgres-only.test.ts`.
  *
- * Koszt powtarzanych żądań (#1042, krok 1): wynik każdego pliku i lista partii są trzymane w
+ * Koszt powtarzanych żądań (#1042): krok 1 — wynik każdego pliku i lista partii są trzymane w
  * pamięci procesu przez 3600 s z deduplikacją równoległych obliczeń (`sitemap-cache.ts`), więc
- * anonimowe pobieranie sitemapy nie liczy ofert za każdym razem.
+ * anonimowe pobieranie sitemapy nie liczy ofert za każdym razem; krok 2 — pojedyncze przeliczenie
+ * jest lekkie (kursorowe RPC bez licznika i OFFSET, `src/lib/sitemap-jobs.ts`).
  */
 export const dynamic = 'force-dynamic';
 
 /** Ofert szczegółowych na jeden plik sitemap (dużo poniżej limitu protokołu 50 000 URL-i). */
 const JOBS_PER_SITEMAP_SHARD = 5000;
-/** Rozmiar strony przy odpytywaniu `getJobs` wewnątrz jednej partii (jak dotąd). */
-const SITEMAP_JOBS_PAGE = 100;
 
 /**
- * Liczba partii ofert (id `1..N`) potrzebna dla obecnego wolumenu. Wołana tylko przy włączonym
- * indeksowaniu — poza nim `generateSitemaps` zwraca sam core bez odczytu bazy (#429, #1115). `getJobsCount` jest dokładnym licznikiem publicznych
- * ofert (P1-12), niezależnym od sufitu paginacji offsetowej; bez odczytu wierszy (#1230).
+ * Liczba partii ofert (id `1..N`) potrzebna dla obecnego wolumenu = liczba granic partii z bazy
+ * (jedno lekkie zapytanie, bez osobnego licznika ofert). Wołana tylko przy włączonym
+ * indeksowaniu — poza nim `generateSitemaps` zwraca sam core bez odczytu bazy (#429, #1115).
  */
 async function jobSitemapShardCount(): Promise<number> {
-  const total = await getJobsCount({ locale: routing.defaultLocale });
-  const reachable = Math.min(total, MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE);
-  return Math.max(0, Math.ceil(reachable / JOBS_PER_SITEMAP_SHARD));
+  return (await getSitemapJobShardStarts(JOBS_PER_SITEMAP_SHARD)).length;
 }
 
 /** Identyfikatory plików sitemap: `0` = core, `1..N` = partie ofert (Next.js: `generateSitemaps`). */
@@ -165,14 +166,11 @@ async function nonEmptyLandingLocales(
 }
 
 /**
- * Górna granica identyfikatora partii ofert, niezależna od bazy: tyle partii wystarcza na
- * wszystkie oferty osiągalne przez paginację listy (`MAX_JOB_LIST_OFFSET`, jak w
- * `jobSitemapShardCount`). Wyższe id nie mają treści — bez tej granicy `/sitemap/999.xml`
- * wykonywał zapytania, które `get_public_jobs` klampuje do ostatniej strony (duplikaty).
+ * Górna granica identyfikatora partii ofert, niezależna od bazy: `/sitemap/999.xml` nie
+ * wykonuje żadnego zapytania. 100 partii × 5000 = 500 000 ofert (dziesiątki razy więcej niż
+ * dziś); kolejna partia poza istniejącymi (numer w granicy, ale bez ofert) = pusty plik.
  */
-const MAX_JOB_SITEMAP_SHARDS = Math.ceil(
-  (MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE) / JOBS_PER_SITEMAP_SHARD,
-);
+const MAX_JOB_SITEMAP_SHARDS = 100;
 
 /**
  * Normalizuje `id` pliku sitemap. Next.js 15.5 (`next-metadata-route-loader`) wywołuje handler
@@ -202,37 +200,11 @@ export default async function sitemap({
   const shard = parseSitemapId(id);
   if (shard === null) return [];
 
-  // #1042: 3600 s w pamięci procesu. Wynik zdegradowany (nieznane języki tłumaczeń) nie zostaje.
-  const health = { degraded: false };
-  const key = String(shard);
-  const entries = await sitemapEntriesCache.run(key, () =>
-    shard === 0 ? coreSitemap() : jobsSitemapShard(shard - 1, health),
+  // #1042: 3600 s w pamięci procesu (błąd odczytu nie jest cache'owany — rzut przechodzi dalej;
+  // języki tłumaczeń idą w tym samym zapytaniu co oferty, więc nie ma wyniku „zdegradowanego”).
+  return sitemapEntriesCache.run(String(shard), () =>
+    shard === 0 ? coreSitemap() : jobsSitemapShard(shard - 1),
   );
-  if (health.degraded) sitemapEntriesCache.delete(key);
-  return entries;
-}
-
-/** Stron listy (po `SITEMAP_JOBS_PAGE`) osiągalnych paginacją — ta sama granica co partie ofert. */
-const MAX_SITEMAP_JOB_PAGES = Math.ceil((MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE) / SITEMAP_JOBS_PAGE);
-
-/**
- * PERF-05 (#1231): slugi firm z aktywnymi, osiągalnymi ofertami — jedna iteracja po całej
- * liście (bez licznika i przekładu), w kolejności pierwszego wystąpienia.
- */
-async function collectCompanySlugs(): Promise<string[]> {
-  const slugs = new Set<string>();
-  for (let page = 1; page <= MAX_SITEMAP_JOB_PAGES; page += 1) {
-    const result = await getJobs(
-      { locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE },
-      undefined,
-      { withTotal: false },
-    );
-    for (const job of result.jobs) {
-      if (job.companySlug) slugs.add(job.companySlug);
-    }
-    if (result.jobs.length < SITEMAP_JOBS_PAGE) break; // ostatnia strona całej listy
-  }
-  return [...slugs];
 }
 
 /** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji, poradniki i profile firm. */
@@ -317,7 +289,7 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
 
   // --- Profile firm (#591; #1231: tylko tutaj, raz na firmę w całym indeksie) — komplet
   // języków (treść nie zależy od tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
-  for (const slug of await collectCompanySlugs()) {
+  for (const slug of await getSitemapCompanySlugs()) {
     const path = `${COMPANIES_PATH}/${slug}`;
     const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
     for (const locale of locales) {
@@ -334,52 +306,47 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
 }
 
 /**
- * `id=1..N` (parametr 0-indeksowany `shardIndex`): jedna partia (`JOBS_PER_SITEMAP_SHARD`)
- * szczegółów ofert — koniec sztywnego ucinania katalogu po pierwszych 5000 (#599). Kolejne
- * partie to kolejne zakresy stron `getJobs` (P1-13: `get_public_jobs` klampuje limit do
- * 100/stronę, więc iterujemy stronami w obrębie tej partii).
+ * `lastModified` wpisu oferty: data ostatniej edycji (`jobs.updated_at`, #796) — po istotnej
+ * edycji opublikowanej oferty jest nowsza niż `published_at`; fallback na datę publikacji,
+ * a przy błędzie obu — bieżący czas (jak dotąd).
  */
-async function jobsSitemapShard(
-  shardIndex: number,
-  health: { degraded: boolean },
-): Promise<MetadataRoute.Sitemap> {
+function jobLastModified(job: Pick<SitemapJobRow, 'publishedAt' | 'updatedAt'>, fallback: Date): Date {
+  const updatedTs = Date.parse(job.updatedAt);
+  if (!Number.isNaN(updatedTs)) return new Date(updatedTs);
+  const publishedTs = Date.parse(job.publishedAt);
+  return Number.isNaN(publishedTs) ? fallback : new Date(publishedTs);
+}
+
+/**
+ * `id=1..N` (parametr 0-indeksowany `shardIndex`): jedna partia (`JOBS_PER_SITEMAP_SHARD`)
+ * szczegółów ofert — koniec sztywnego ucinania katalogu po pierwszych 5000 (#599). Partię
+ * wyznaczają kursory (`published_at`, `id`) z bazy (#1042): oferty wraz z językami tłumaczeń
+ * przychodzą stronami po 1000 w jednym zapytaniu, bez licznika i offsetu.
+ */
+async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitemap> {
   const base = env.siteUrl;
   const locales = routing.locales;
   const now = new Date();
   const entries: MetadataRoute.Sitemap = [];
 
-  const pagesPerShard = JOBS_PER_SITEMAP_SHARD / SITEMAP_JOBS_PAGE;
-  const firstPage = shardIndex * pagesPerShard + 1;
-  const lastPage = firstPage + pagesPerShard - 1;
-  for (let page = firstPage; page <= lastPage; page += 1) {
-    // #1230: partia nie potrzebuje licznika — jedno zapytanie na stronę zamiast dwóch.
-    const result = await getJobs(
-      { locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE },
-      undefined,
-      { withTotal: false },
-    );
-    if (result.jobs.length === 0) break;
-    // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
-    const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
-    if (!availableByJob) health.degraded = true; // błąd odczytu: wszystkie wersje, ale nie trzymamy tego w cache
-    for (const job of result.jobs) {
-      const path = `${JOBS_PATH}/${job.slug}`;
-      const available = availableByJob?.[job.id];
-      const jobLocales = availableByJob && available?.length ? available : locales;
-      const languages = buildLanguages(base, jobLocales, (locale) => `/${locale}${path}`);
-      const publishedTs = Date.parse(job.publishedAt);
-      const lastModified = Number.isNaN(publishedTs) ? now : new Date(publishedTs);
-      for (const locale of jobLocales) {
-        entries.push({
-          url: `${base}/${locale}${path}`,
-          lastModified,
-          changeFrequency: 'daily',
-          priority: 0.8,
-          alternates: { languages },
-        });
-      }
+  // Profile firm (#591) są wyłącznie w partii `0` (#1231) — tu same oferty.
+  const jobs = await getSitemapJobsShard(shardIndex + 1, JOBS_PER_SITEMAP_SHARD);
+
+  for (const job of jobs) {
+    const path = `${JOBS_PATH}/${job.slug}`;
+    // Tylko wersje językowe z tłumaczeniem (#301); oferta bez żadnego wpisu = wszystkie, jak dotąd.
+    const jobLocales = job.locales.length > 0 ? job.locales : locales;
+    const languages = buildLanguages(base, jobLocales, (locale) => `/${locale}${path}`);
+    const lastModified = jobLastModified(job, now);
+    for (const locale of jobLocales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        lastModified,
+        changeFrequency: 'daily',
+        priority: 0.8,
+        alternates: { languages },
+      });
     }
-    if (result.jobs.length < SITEMAP_JOBS_PAGE) break; // ostatnia strona całej listy
   }
 
   return entries;

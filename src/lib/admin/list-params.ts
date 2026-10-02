@@ -321,6 +321,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
   'age_policy.updated': 'auditActionAgePolicyUpdated',
+  'age_policy.owner_confirmed': 'auditActionAgePolicyOwnerConfirmed',
   'retention.policy_changed': 'auditActionRetentionPolicyChanged',
   'retention.policies_seeded': 'auditActionRetentionPoliciesSeeded',
   'breach.created': 'auditActionBreachCreated',

@@ -421,6 +421,26 @@ zmianą któregokolwiek klucza. Kolejność: (1) zapis decyzji w `docs/railway/S
 alarm między krokami jest oczekiwany. Po odtworzeniu kopii baza wraca w trybie ogłoszeniowym
 (`restore-backup.sh`, [BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
 
+## 7. Próg wieku kandydatów — zatwierdzenie właściciela (#639, migracja `0209`)
+
+Administrator zmienia próg konta kandydata (16/18) w `/admin/ustawienia`, z uzasadnieniem
+i kontrolą wersji (formularz otwarty przed zmianą innego administratora albo przed
+zatwierdzeniem dostaje `STALE_STATE`). Każda taka zmiana zapisuje **wartość roboczą**
+(`age_policy.confirmed = false`) — panel nie pozwala oznaczyć jej jako decyzji właściciela.
+
+Status „zatwierdzone” nadaje wyłącznie właściciel, poza panelem, przez RPC
+`owner_confirm_candidate_min_age` (EXECUTE tylko `service_role`): powtórzenie zatwierdzanego
+progu i znacznika zmiany (CAS), notatka (≤ 1000 znaków), wpis `audit_logs`
+`age_policy.owner_confirmed` osobny od wpisu zmiany administratora (`age_policy.updated`).
+
+```bash
+# odczyt progu, statusu i znacznika (login migratora, nigdy DATABASE_URL aplikacji)
+MIGRATION_DATABASE_URL=… node scripts/db/confirm-age-policy.mjs --status
+# zatwierdzenie: --confirm powtarza próg, --expected = znacznik z --status
+MIGRATION_DATABASE_URL=… node scripts/db/confirm-age-policy.mjs \
+  --min-age 16 --expected "<znacznik>" --note "<decyzja właściciela, data>" --confirm 16
+```
+
 ## Pozostałe punkty #47 (niezrobione w tej zmianie)
 
 - raportowanie CSP (`report-to`) z limitem i redakcją URL/PII oraz ścisła
