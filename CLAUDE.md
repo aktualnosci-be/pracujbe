@@ -982,8 +982,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (`/<język>/<panel>$` i `/<język>/<panel>/`, `src/lib/seo/robots-rules.ts`) — dawne reguły z
   gwiazdką blokowały oferty i profile firm o slugach `administratief-…`/`employer-…` (test
   z dopasowaniem jak Google i kontrolą ujemną w `sitemap-robots`). Sitemap: profile firm raz
-  w całym indeksie, w partii `0` (#1231, PERF-05; jedna iteracja po osiągalnej liście);
-  liczba partii i metadane landingów przez `getJobsCount`, a strony listy w sitemap, na stronie
+  w całym indeksie, w partii `0` (#1231, PERF-05; jedna iteracja kursorem po całym katalogu —
+  `getSitemapCompanySlugs`, to samo RPC co partie #1042); metadane landingów przez
+  `getJobsCount`, a strony listy na stronie
   głównej, w „Podobnych ofertach” i na pulpicie kandydata bez licznika
   (`getJobs(…, { withTotal: false })` → `getPublicJobsPage`, #1230, PERF-04).
   Dane strukturalne (#313) w `src/lib/seo/structured-data.ts`: JobPosting bez wymyślonego
@@ -1040,6 +1041,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
   kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
   #301) i `company-profile` (nazwy = widoczna ścieżka).
+  Sitemap ofert kursorem (#1042, migracja `0208` — numer tymczasowy): `sitemap.ts` nie używa już
+  `getJobs` (osobny licznik + OFFSET po 100 ofert, sufit offsetu 10 000). Dwa lekkie RPC niezależne
+  od `get_public_jobs` (anon, SECURITY DEFINER): `get_public_jobs_sitemap_shard_starts(rozmiar)`
+  (jeden wiersz na partię = kursor ostatniej oferty poprzedniej; liczba plików = liczba wierszy,
+  bez licznika ofert) i `get_public_jobs_sitemap_page(after, until, limit ≤ 1000)` (strona
+  kursorem `published_at desc, id desc` z językami tłumaczeń #301, slugiem firmy #591 i
+  `updated_at` do `lastmod` #796 w jednym zapytaniu; kursor „do” włącznie = partie rozłączne
+  i bez dziur także przy zmianie katalogu między żądaniami). `id` rozstrzyga remis `published_at`;
+  znaczniki czasu jako tekst z mikrosekundami (`to_jsonb`), nigdy `Date`. Warunek „oferta
+  publiczna” = kopia `get_public_jobs` + `published_at is not null`; częściowy indeks
+  `idx_jobs_sitemap_cursor`. Kod: `src/lib/db/sitemap-jobs.ts` (SQL), `src/lib/sitemap-jobs.ts`
+  (partie, błąd = `AppError`, faza builda = pusto). Sufit partii `MAX_JOB_SITEMAP_SHARDS = 100`
+  niezależny od bazy. Dowód: `rls.sql` sekcja SM1042 (wynik = publiczna lista, remis 130 ofert
+  przez granice stron i partii, kontrole ujemne: kursor bez `id` gubi i dubluje, oferty
+  ukryte, niepełny kursor), rollback `supabase/rollback/0208_…down.sql`, integracja
+  `sitemap-jobs` (PG16, 2600 ofert z jednym `published_at`), unit `sitemap-jobs`,
+  `sitemap-jobs-db`, `sitemap-robots`, `sitemap-seo`. Cache 3600 s: osobno (#1177). Profile
+  firm (#1231) tylko w partii `0` — `getSitemapCompanySlugs` przechodzi cały katalog kursorem
+  (bezpiecznik 500 stron), partie ofert już ich nie zbierają.
   Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
   (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
   ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
