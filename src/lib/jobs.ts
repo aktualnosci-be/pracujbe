@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
   isApplyPhone,
@@ -71,7 +72,8 @@ export type CategoryKey =
   | 'logistics'
   | 'seasonal';
 
-export type LocationKey =
+/** Miasta z danymi demonstracyjnymi i pierwszą listą landingów (#920: rdzeń katalogu). */
+export type CoreLocationKey =
   | 'brussels'
   | 'antwerp'
   | 'ghent'
@@ -82,6 +84,27 @@ export type LocationKey =
   | 'charleroi'
   | 'bruges'
   | 'kortrijk';
+
+/**
+ * Klucz miasta z katalogu landingów `/praca/miasto/<klucz>` (#920) = klucz `locations.*`
+ * w `src/messages`. Klucz = slug miejscowości w słowniku `locations` (0112). Katalog i reguła
+ * kwalifikacji: `src/lib/locations/city-landings.ts`.
+ */
+export type LocationKey =
+  | CoreLocationKey
+  | 'namur'
+  | 'mons'
+  | 'aalst'
+  | 'ostend'
+  | 'genk'
+  | 'sint-niklaas'
+  | 'roeselare'
+  | 'la-louviere'
+  | 'tournai'
+  | 'turnhout'
+  | 'vilvoorde'
+  | 'zaventem'
+  | 'wavre';
 
 export interface JobListItem {
   id: string;
@@ -187,6 +210,11 @@ export interface JobDetail extends JobListItem {
   screeningQuestions?: ScreeningQuestion[];
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
+  /**
+   * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
+   * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
+   */
+  qualifications?: JobQualifications;
   /**
    * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
    * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
@@ -608,10 +636,20 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
+  let qualifications: JobQualifications | undefined;
+  try {
+    const { getPublicJobQualifications } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobQualifications(pool, job.id, locale);
+    qualifications = parseJobQualifications(rows.skills, rows.certificates);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobQualifications' });
+  }
   const requested = toLocale(locale);
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };

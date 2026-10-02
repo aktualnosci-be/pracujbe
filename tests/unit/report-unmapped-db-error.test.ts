@@ -10,6 +10,7 @@ import { getPublicSavedJobs } from '@/lib/actions/public-saved-jobs';
 import { markNotificationsRead } from '@/lib/actions/notifications';
 import { inviteTeamMember } from '@/lib/actions/team';
 import { captureActionError, reportUnmappedDbError } from '@/lib/db/errors';
+import { PORTAL_LEGAL_MODE_ENV } from '@/lib/portal-mode';
 import { setErrorReporter, type ErrorReport } from '@/lib/error-report';
 import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -48,7 +49,10 @@ beforeEach(() => {
   vi.mocked(checkRateLimit).mockResolvedValue(true);
   vi.mocked(getActiveCompany).mockResolvedValue({ activeId: COMPANY, activeRole: 'owner' } as never);
 });
-afterEach(() => setErrorReporter(null));
+afterEach(() => {
+  setErrorReporter(null);
+  vi.unstubAllEnvs();
+});
 
 describe('reportUnmappedDbError', () => {
   it('INTERNAL z błędu bazy → zgłoszenie z obszarem i SQLSTATE, bez komunikatu', () => {
@@ -171,6 +175,9 @@ describe('dokończenie #1068: pozostałe akcje', () => {
   const JOB = '5c4b1e5d-3a5f-4d29-8b47-2a8c3d0e9f12';
 
   it('szablony: nieznany SQLSTATE → INTERNAL + wpis; znany NOT_FOUND → bez wpisu', async () => {
+    // Szablony odpowiedzi są wyłączone w trybie ogłoszeniowym (#1211) — zgłaszanie błędów bazy
+    // sprawdzamy w trybie RECRUITMENT, w którym akcja dochodzi do RPC.
+    vi.stubEnv(PORTAL_LEGAL_MODE_ENV, 'RECRUITMENT');
     fakeDb.rpc('delete_company_message_template', () => {
       throw pgError('XX000', SECRET_ROW);
     });
@@ -210,9 +217,9 @@ describe('dokończenie #1068: pozostałe akcje', () => {
 const ACTIONS_DIR = path.join(process.cwd(), 'src/lib/actions');
 const REPORTS = /captureError|captureActionError|reportUnmappedDbError|failureCode\(|failure\(|unexpected\(|mapFailure\(|toErrorCode\(|appealFailure\(|throw /;
 const FAILS = /'INTERNAL'|status: 'error'|ok: false|'failed'/;
-/** Wyjątek: `auth.ts` — błędy Better Auth mapuje `mapAuthError` na kody kont (osobny przegląd,
- *  poza listą modułów #1068). Nowy plik akcji nie trafia tu automatycznie. */
-const ALLOWED = new Set(['auth.ts']);
+/** Wyjątki (plik albo `plik:linia`) — obecnie brak; `auth.ts` zgłasza błędy przez `failureCode`
+ *  (kontynuacja #1068, `auth-error-reporting.test.ts`). Nowy plik akcji nie trafia tu automatycznie. */
+const ALLOWED = new Set<string>();
 const SILENT_DB_MAPPING = /isDatabaseError\((\w+)\)\)\s*return[^;]*map\w*Error\(databaseErrorMessage\(\1\)\)/;
 
 function silentCatches(file: string, source: string): string[] {
@@ -254,5 +261,9 @@ describe('strażnik: Server Actions bez cichych błędów (#1068)', () => {
       ),
     ).toEqual(['y.ts:1 (mapowanie bez reportUnmappedDbError)']);
     expect(silentCatches('z.ts', "try { a(); } catch (e) {\n  captureActionError(e, 'z');\n  return { status: 'error' };\n}")).toEqual([]);
+    // Wzorzec akcji kont sprzed zdjęcia wyjątku `auth.ts`: kod z `mapAuthError` bez zgłoszenia.
+    expect(
+      silentCatches('auth.ts', "try { a(); } catch (e) {\n  return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };\n}"),
+    ).toEqual(['auth.ts:1']);
   });
 });

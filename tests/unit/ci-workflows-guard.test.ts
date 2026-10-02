@@ -162,7 +162,16 @@ describe('strażnik workflowów CI', () => {
 
   const negatives: Array<[string, (ci: string) => string, string]> = [
     ['zmieniona nazwa wymaganego checka', (ci) => ci.replace('name: E2E (Playwright)', 'name: E2E'), 'E2E (Playwright)'],
-    ['job zbiorczy bez always()', (ci) => ci.replace('if: always() && (', 'if: ('), 'always()'],
+    ['job zbiorczy bez always()', (ci) => ci.replace('    if: always()\n', ''), 'always()'],
+    // PR z forków (#671): pełne CI bez sekretów i bez zapisu — każde obejście = czerwony.
+    ['job pomija PR z forków', (ci) => ci.replace('    name: Lint\n', "    name: Lint\n    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\n"), 'pomijać PR-ów z forków'],
+    ['job zbiorczy pomija PR z forków', (ci) => ci.replace('    if: always()\n', "    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n"), 'always()'],
+    ['sekret w kroku', (ci) => ci.replace("  NEXT_TELEMETRY_DISABLED: '1'\n", "  NEXT_TELEMETRY_DISABLED: '1'\n  API_KEY: ${{ secrets.API_KEY }}\n"), 'bez sekretów'],
+    ['wyzwalacz pull_request_target', (ci) => ci.replace('  pull_request:\n', '  pull_request_target:\n'), 'pull_request'],
+    ['token przekazany do kroku', (ci) => ci.replace("  NEXT_TELEMETRY_DISABLED: '1'\n", "  NEXT_TELEMETRY_DISABLED: '1'\n  GITHUB_TOKEN: ${{ github.token }}\n"), 'tokenu'],
+    ['uprawnienia zapisu tokenu', (ci) => ci.replace('permissions:\n  contents: read\n', 'permissions:\n  contents: write\n'), 'contents: read'],
+    ['uprawnienia jobu', (ci) => ci.replace('    name: Lint\n', '    name: Lint\n    permissions:\n      pull-requests: write\n'), 'bez uprawnień jobu'],
+    ['środowisko z sekretami', (ci) => ci.replace('    name: Lint\n', '    name: Lint\n    environment: production\n'), 'środowiska'],
     ['job zbiorczy nie sprawdza wyniku części', (ci) => ci.replace('job.result !== "success"', 'job.result === "failure"'), 'success'],
     ['job zbiorczy bez shardów w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]', 'needs: [build, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]'), 'zależności'],
     ['mianownik shardu ≠ macierz', (ci) => ci.replace('E2E_DEMO_SHARD: ${{ matrix.shard }}', 'E2E_DEMO_SHARD: 9'), 'E2E_DEMO_SHARD'],

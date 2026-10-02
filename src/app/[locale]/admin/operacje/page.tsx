@@ -99,7 +99,7 @@ export default async function AdminOpsPage({ params }: { params: Promise<{ local
   const formatNote = (note: OpsNote): string => {
     switch (note.key) {
       case 'smallSample':
-        return t('opsNoteSmallSample', { sent: num.format(note.sent), min: num.format(note.min) });
+        return t('opsNoteSmallSample', { sent: note.sent, min: num.format(note.min) });
       case 'queueReady':
         return t('opsNoteQueueReady', { ready: num.format(note.ready) });
       case 'lastRunNever':

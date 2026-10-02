@@ -23,6 +23,7 @@ import {
   ROW_TITLE,
   SECTION_HEAD,
 } from '@/components/dashboard/panel-styles';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { cn } from '@/lib/utils';
 
 /**
@@ -64,6 +65,8 @@ export default async function EmployerTeamPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'team' });
+  // #1225: opisy ról i odebrania dostępu bez funkcji procesu w trybie ogłoszeniowym.
+  const recruitment = isRecruitmentEnabled();
   const data = await getTeamPageData();
 
   if (data.status === 'error') {
@@ -112,7 +115,7 @@ export default async function EmployerTeamPage({
           <p className={cn(PANEL_P, 'mt-2')}>
             {t('notManagerDesc', { role: t(roleLabelKey(data.activeRole)) })}
           </p>
-          <p className={cn(PANEL_P, 'mt-2')}>{t(roleDescKey(data.activeRole))}</p>
+          <p className={cn(PANEL_P, 'mt-2')}>{t(roleDescKey(data.activeRole, recruitment))}</p>
         </section>
       ) : (
         <>
@@ -126,6 +129,7 @@ export default async function EmployerTeamPage({
               </p>
             </div>
             <TeamMembers
+              recruitmentEnabled={recruitment}
               actorRole={data.activeRole}
               members={data.members.map((m) => ({
                 id: m.id,
@@ -173,7 +177,7 @@ export default async function EmployerTeamPage({
           {ROLES.map((role) => (
             <div key={role} className="min-w-0">
               <dt className={ROW_TITLE}>{t(roleLabelKey(role))}</dt>
-              <dd className={ROW_META}>{t(roleDescKey(role))}</dd>
+              <dd className={ROW_META}>{t(roleDescKey(role, recruitment))}</dd>
             </div>
           ))}
         </dl>
