@@ -214,7 +214,7 @@ describe('POST /api/client-error', () => {
       POST(
         request(JSON.stringify({ code: 'INTERNAL', route: '/pl' }), {
           // Wspólny X-Real-IP (np. brzeg Cloudflare przed Railway) — nie powinien już liczyć.
-          'x-real-ip': '198.51.100.9',
+          'x-real-ip': '172.70.1.2',
           'cf-connecting-ip': cfIp,
         }),
       );

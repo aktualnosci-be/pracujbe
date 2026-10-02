@@ -24767,6 +24767,87 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- EX1232. Eksport pracodawcy: odwołania i zgłoszenia treści (#1232, migracja 0207)
+-- ============================================================================
+\echo '--- EX1232 eksport pracodawcy: odwołania i zgłoszenia ---'
+\set XE1 'e1232000-0000-4000-8000-000000000001'
+\set XE2 'e1232000-0000-4000-8000-000000000002'
+\set XCO1 'e1232000-0000-4000-8000-0000000000a1'
+\set XCO2 'e1232000-0000-4000-8000-0000000000a2'
+\set XJ1 'e1232000-0000-4000-8000-0000000000b1'
+\set XJ2 'e1232000-0000-4000-8000-0000000000b2'
+\set XGROUNDS 'Wymóg opłaty był błędem szablonu; nie pobieramy opłat od kandydatów.'
+\set XFACTS 'Oferta żąda od kandydatów opłaty za rekrutację z góry.'
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'XE1','xe1@test.be','Xawery E','{"role":"employer","first_name":"Xawery","last_name":"E","locale":"pl"}'),
+  (:'XE2','xe2@test.be','Xenia F','{"role":"employer","first_name":"Xenia","last_name":"F","locale":"nl"}');
+insert into public.companies(id, name, status) values
+  (:'XCO1', 'Firma X Odwołująca', 'verified'), (:'XCO2', 'Firma X Zgłoszona', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'XCO1', :'XE1', 'owner', true), (:'XCO2', :'XE2', 'owner', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'XJ1', :'XCO1', 'ex1232-job-1', 'Magazynier X1', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl'),
+  (:'XJ2', :'XCO2', 'ex1232-job-2', 'Magazynier X2', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl');
+set local role service_role;
+-- Zgłoszenie oferty XCO1 przez gościa (decyzja, od której XE1 się odwoła) i zgłoszenie oferty XCO2
+-- złożone przez XE1 (zalogowany zgłaszający).
+select report_id as xr1 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', :'XJ1', 'fraud', 'Oferta X1 wymaga opłaty za rekrutację z góry.', null, 'Gość X', 'ex1232-guest@test.be', 'fr', true) \gset
+select report_id as xr2, case_number as xcase2 from public.submit_content_report(:'XE1', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'XJ2', 'other', 'Oferta X2 podaje mylące warunki pracy w opisie.',
+  'https://example.test/ex1232', 'Xawery E', 'xe1-report@test.be', 'pl', true) \gset
+reset role;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'xr1', 'open', 'job_removed', :'XFACTS', 'terms', 'Regulamin § 4') as xd1 \gset
+reset role;
+set local role authenticated; set local app.current_uid = :'XE1'; select pg_temp.assert_client_role();
+select appeal_id as xa1, reference as xaref1 from public.submit_moderation_appeal(:'xd1', gen_random_uuid(), :'XGROUNDS') \gset
+select public.export_my_employer_data()::text as xexp \gset
+reset role;
+select pg_temp.assert(
+  jsonb_array_length((:'xexp')::jsonb -> 'moderationAppeals') = 1
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,reference}' = :'xaref1'
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,role}' = 'author'
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,grounds}' = :'XGROUNDS'
+  and (:'xexp')::jsonb #>> '{moderationAppeals,0,status}' = 'pending',
+  'EX1232-1 eksport pracodawcy zawiera jego odwołanie (kształt jak u kandydata)');
+select pg_temp.assert(
+  jsonb_array_length((:'xexp')::jsonb -> 'contentReports') = 1
+  and (:'xexp')::jsonb #>> '{contentReports,0,caseNumber}' = :'xcase2'
+  and (:'xexp')::jsonb #>> '{contentReports,0,kind}' = 'dsa_notice'
+  and (:'xexp')::jsonb #>> '{contentReports,0,targetType}' = 'job'
+  and (:'xexp')::jsonb #>> '{contentReports,0,details}' = 'Oferta X2 podaje mylące warunki pracy w opisie.'
+  and (:'xexp')::jsonb #>> '{contentReports,0,reporterEmail}' = 'xe1-report@test.be',
+  'EX1232-2 eksport pracodawcy zawiera jego zgłoszenie treści');
+-- Bez danych osób trzecich: identyfikator i migawka zgłoszonej oferty, fakty decyzji, zgłoszenie
+-- gościa o własnej firmie (inny zgłaszający), skrót kodu dostępu.
+select pg_temp.assert(
+  position(:'XJ2' in :'xexp') = 0 and position('Magazynier X2' in :'xexp') = 0
+  and position(:'XFACTS' in :'xexp') = 0 and position('ex1232-guest@test.be' in :'xexp') = 0
+  and position('Oferta X1 wymaga' in :'xexp') = 0 and position(:'xr1' in :'xexp') = 0
+  and not exists (select 1 from jsonb_array_elements((:'xexp')::jsonb -> 'contentReports') r
+                   where r ? 'targetId' or r ? 'targetSnapshot' or r ? 'accessCodeHash'),
+  'EX1232-3 eksport bez treści zgłoszonej, faktów decyzji i zgłoszeń innych osób');
+-- Inny pracodawca nie widzi cudzych odwołań ani zgłoszeń.
+set local role authenticated; set local app.current_uid = :'XE2'; select pg_temp.assert_client_role();
+select public.export_my_employer_data()::text as xexp2 \gset
+reset role;
+select pg_temp.assert(
+  jsonb_array_length((:'xexp2')::jsonb -> 'moderationAppeals') = 0
+  and jsonb_array_length((:'xexp2')::jsonb -> 'contentReports') = 0
+  and position(:'XGROUNDS' in :'xexp2') = 0,
+  'EX1232-4 eksport innego pracodawcy bez cudzych odwołań i zgłoszeń');
+-- Kontrola ujemna: definicja z 0161 (rollback 0207) gubi obie pozycje.
+\ir ../rollback/0207_employer_export_appeals_reports.down.sql
+set local role authenticated; set local app.current_uid = :'XE1'; select pg_temp.assert_client_role();
+select public.export_my_employer_data()::text as xexpn \gset
+reset role;
+select pg_temp.assert(
+  not ((:'xexpn')::jsonb ? 'moderationAppeals') and not ((:'xexpn')::jsonb ? 'contentReports')
+  and position(:'XGROUNDS' in :'xexpn') = 0,
+  'EX1232-N kontrola ujemna: eksport z 0161 pomija odwołania i zgłoszenia');
 
 -- ============================================================================
 -- DBP1245 / CC1244 (0206): indeksy pod usuwanie konta i kaskady FK (#1245) oraz nazwy

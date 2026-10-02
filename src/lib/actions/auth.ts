@@ -32,6 +32,12 @@ import { kickAuthEmailQueue } from '@/lib/auth/email-kick';
 import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
+import {
+  SIGNUP_BROWSER_COOKIE,
+  SIGNUP_BROWSER_MAX_AGE,
+  isSignupBrowserFor,
+  signupBrowserMarker,
+} from '@/lib/auth/signup-browser';
 import { companyNameFromMetadata } from '@/lib/auth/signup-company-name';
 import { isAgeAttestationError } from '@/lib/age-policy/constants';
 import { roleFromProfileRead, type ProfileRole } from '@/lib/auth/profile-role';
@@ -332,7 +338,11 @@ export async function signIn(
   } catch (e) {
     const code = failureCode(e, 'auth.signIn');
     // `sendOnSignIn`: poprawne hasło niepotwierdzonego konta zleca nowy link — wysyłka od razu (W1).
-    if (code === 'AUTH_EMAIL_NOT_CONFIRMED') kickAuthEmailQueue();
+    if (code === 'AUTH_EMAIL_NOT_CONFIRMED') {
+      // Poprawne hasło = ta przeglądarka należy do właściciela konta: nowy link zaloguje tutaj (#1090).
+      await rememberSignupBrowser(parsed.data.email);
+      kickAuthEmailQueue();
+    }
     return { ok: false, error: code };
   }
 
@@ -359,6 +369,27 @@ async function rememberVerifyNext(next: string | null): Promise<void> {
     path: '/',
     maxAge: VERIFY_NEXT_MAX_AGE,
   });
+}
+
+/**
+ * Oznacza tę przeglądarkę jako tę, która założyła konto dla adresu (#1090) — tylko ona dostaje
+ * automatyczne logowanie z linku potwierdzającego. Awaria zapisu cookie nie przerywa akcji
+ * (link nadal potwierdzi adres, logowanie ręczne).
+ */
+async function rememberSignupBrowser(email: string): Promise<void> {
+  const marker = signupBrowserMarker(email, env.authSecret);
+  if (!marker) return;
+  try {
+    (await cookies()).set(SIGNUP_BROWSER_COOKIE, marker, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.siteUrl.startsWith('https:'),
+      path: '/',
+      maxAge: SIGNUP_BROWSER_MAX_AGE,
+    });
+  } catch (error) {
+    captureError(error, { area: 'auth.rememberSignupBrowser' });
+  }
 }
 
 /** Komunikat błędu bazy (także opakowany przez SDK w `cause`) o braku ważnej deklaracji wieku. */
@@ -428,6 +459,7 @@ export async function registerCandidate(
   try {
     await signUp((action, evidence) => withCandidateSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(safeNextPath(next));
+    await rememberSignupBrowser(parsed.data.email);
   } catch (e) {
     return { ok: false, error: failureCode(e, 'auth.registerCandidate') };
   }
@@ -462,6 +494,7 @@ export async function registerEmployer(
   try {
     await signUp((action, evidence) => withEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
+    await rememberSignupBrowser(parsed.data.email);
   } catch (e) {
     return { ok: false, error: failureCode(e, 'auth.registerEmployer') };
   }
@@ -506,6 +539,7 @@ export async function registerInvitedEmployer(
     }
     await signUp((action, evidence) => withInvitedEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
+    await rememberSignupBrowser(parsed.data.email);
     // Konto już powstało; nieudane zużycie (np. równoległe wysłanie) nie cofa rejestracji —
     // zaproszenie i tak przyjmuje tylko właściciel zweryfikowanego adresu.
     try {
@@ -649,8 +683,13 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
 
     // Przeglądarka z aktywną sesją (np. inne konto) nie dostaje automatycznego logowania z linku:
     // nowa sesja nie nadpisuje istniejącej — adres zostaje potwierdzony, użytkownik loguje się sam.
+    // #1090: automatyczne logowanie tylko w przeglądarce, która założyła konto (znacznik HMAC
+    // adresu) — link otwarty na innym urządzeniu albo przez skaner poczty sesji nie zostawia.
     const sessionCookie = context.authCookies.sessionToken.name;
-    const browserHasSession = Boolean((await cookies()).get(sessionCookie)?.value);
+    const jar = await cookies();
+    const browserHasSession = Boolean(jar.get(sessionCookie)?.value);
+    const signupBrowser = email ? isSignupBrowserFor(jar.get(SIGNUP_BROWSER_COOKIE)?.value, email, env.authSecret) : false;
+    const withholdSession = browserHasSession || !signupBrowser;
     let sessionIssued = false;
     try {
       const verified = await auth.api.verifyEmail({
@@ -659,12 +698,12 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
         returnHeaders: true,
       });
       sessionIssued = verified.headers.getSetCookie().some((c) => c.startsWith(`${sessionCookie}=`));
-      if (!(sessionIssued && browserHasSession)) await applyAuthCookies(verified.headers);
+      if (!(sessionIssued && withholdSession)) await applyAuthCookies(verified.headers);
     } catch (error) {
       throw mapAuthError(error);
     }
 
-    if (sessionIssued && browserHasSession) {
+    if (sessionIssued && withholdSession) {
       // Wydanej sesji nikt nie odbierze (cookie nie zostało zapisane) — unieważniamy ją w bazie.
       try {
         const created = email ? await context.internalAdapter.findUserByEmail(email) : null;
@@ -710,6 +749,7 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       const next =
         nextPath && !isRecruitmentEnabled() && /\/candidate\/onboarding(?:[/?#]|$)/.test(nextPath) ? null : nextPath;
       store.delete(VERIFY_NEXT_COOKIE);
+      store.delete(SIGNUP_BROWSER_COOKIE);
       target = next ? { path: next } : { panel: role };
     }
   } catch (e) {
