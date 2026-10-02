@@ -50,7 +50,7 @@ type JobOutcome = 'applied' | 'proposal' | 'superseded' | 'retry' | 'deferred' |
 
 /**
  * Minimalny zapas dzierżawy przed wywołaniem modelu (#644): limit czasu klienta OpenAI (60 s)
- * + zapis wyniku. Baza (0952) odrzuca wynik po terminie dzierżawy (`stale_lease`), więc
+ * + zapis wyniku. Baza (0223) odrzuca wynik po terminie dzierżawy (`stale_lease`), więc
  * wywołanie, które nie zdąży przed terminem, byłoby płatne i bezużyteczne — a zadanie i tak
  * przejmie kolejny worker. Przy krótszym zapasie zadanie wraca do puli bez wywołania modelu.
  */

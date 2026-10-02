@@ -6986,7 +6986,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
--- Encje TR31 to SZKICE ofert (od 0952 źródło wymaga istniejącej encji, #754): szkic nie jest
+-- Encje TR31 to SZKICE ofert (od 0223 źródło wymaga istniejącej encji, #754): szkic nie jest
 -- publiczny, więc triggery 0146 nie kolejkują go same — sekcja rdzenia steruje kolejką wprost.
 \set TRJA 'f0310000-0000-0000-0000-0000000000a1'
 \set TRJB 'f0310000-0000-0000-0000-0000000000b1'
@@ -13052,7 +13052,7 @@ rollback;
 
 -- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
 -- przy tej samej treści = nowa rewizja; bez nazw (5/6 argumentów) jak w 0145.
--- TPE1 = szkic (od 0952 źródło wymaga istniejącej encji, #754).
+-- TPE1 = szkic (od 0223 źródło wymaga istniejącej encji, #754).
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values (:'TPE1', :'TPCO', 'draft-tp740-e1', 'Magazynier', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl');
 set role service_role;
@@ -20330,7 +20330,7 @@ select pg_temp.assert(exists (select 1 from public.candidate_skills where candid
   'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
 
 \echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0176, #1152, #1153) ---'
--- Start i koniec w RECRUITMENT. Encje kolejki (od 0952 muszą istnieć, #754): CLAIP1 = profil
+-- Start i koniec w RECRUITMENT. Encje kolejki (od 0223 muszą istnieć, #754): CLAIP1 = profil
 -- kandydata CANDA, CLAIJ1 = szkic oferty; CLAIP2 bez wiersza (odrzuca go strażnik trybu).
 \set CLAIP2 'c1a10176-0000-0000-0000-0000000000c2'
 \set CLAIJ1 'c1a10176-0000-0000-0000-0000000000d1'
@@ -26590,17 +26590,17 @@ reset role; reset app.current_uid;
 
 -- ============================================================================
 -- =============================================================================
--- TQ952 (0952 — numer tymczasowy; #644, #754, #755): integralność kolejki tłumaczeń.
+-- TQ952 (0223 — numer tymczasowy; #644, #754, #755): integralność kolejki tłumaczeń.
 --   #644: dzierżawa ważna tylko do lease_expires_at (complete/fail/defer po terminie =
 --         stale_lease, nawet bez ponownego przejęcia);
 --   #754: źródło tylko dla istniejącej, nieusuniętej encji właściwego typu; ukrycie źródła
 --         encji, której nie ma, usuwa je;
 --   #755: korekta ręczna wymaga autora z uprawnieniem do encji.
--- Cała sekcja w cofanej transakcji; kontrole ujemne na definicjach sprzed 0952 (\ir rollbacku).
+-- Cała sekcja w cofanej transakcji; kontrole ujemne na definicjach sprzed 0223 (\ir rollbacku).
 -- =============================================================================
-\set TQJ  'f0952000-0000-0000-0000-0000000000a1'
-\set TQJD 'f0952000-0000-0000-0000-0000000000a2'
-\set TQX  'f0952000-0000-0000-0000-0000000000ff'
+\set TQJ  'f0223000-0000-0000-0000-0000000000a1'
+\set TQJD 'f0223000-0000-0000-0000-0000000000a2'
+\set TQX  'f0223000-0000-0000-0000-0000000000ff'
 \set TQF  '{"title":"Magazynier","description":"Praca w magazynie od 8:00."}'
 \set TQOUT '{"title":"Warehouse worker","description":"Warehouse work from 8:00."}'
 reset role; reset app.current_uid;
@@ -26702,25 +26702,25 @@ select pg_temp.assert(not exists (select 1 from public.translation_sources where
   and not exists (select 1 from public.translation_documents where entity_id = :'tq_cpb'),
   'TQ952-4 źródło usuniętej encji usunięte (purge), nie tylko ukryte');
 
--- TQ952-N (kontrole ujemne): definicje sprzed 0952.
-\ir ../rollback/0952_translation_queue_integrity.down.sql
+-- TQ952-N (kontrole ujemne): definicje sprzed 0223.
+\ir ../rollback/0223_translation_queue_integrity.down.sql
 select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is null, 'TQ952-N0 rollback usuwa helper');
 set local role service_role;
 select pg_temp.assert(((public.record_translation_source('job', :'TQX', 'pl', :'TQF'::jsonb, 'tr-v1'))->>'status') = 'created',
-  'TQ952-N1 kontrola ujemna: bez 0952 źródło nieistniejącej oferty powstaje');
+  'TQ952-N1 kontrola ujemna: bez 0223 źródło nieistniejącej oferty powstaje');
 select pg_temp.assert(public.save_manual_translation('job', :'TQJ', 'nl', :'TQOUT'::jsonb, null) = 1,
-  'TQ952-N2 kontrola ujemna: bez 0952 korekta bez autora przechodzi');
+  'TQ952-N2 kontrola ujemna: bez 0223 korekta bez autora przechodzi');
 reset role;
 update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id = :'tq_fr';
 set local role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tq_fr', :'tq_fr_lease2', :'TQOUT'::jsonb) in ('applied', 'proposal'),
-  'TQ952-N3 kontrola ujemna: bez 0952 wynik po terminie dzierżawy jest zapisywany');
+  'TQ952-N3 kontrola ujemna: bez 0223 wynik po terminie dzierżawy jest zapisywany');
 reset role;
 rollback;
 select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uuid)') is not null
   and not exists (select 1 from public.jobs where id in (:'TQJ', :'TQJD'))
   and not exists (select 1 from public.translation_sources where entity_id in (:'TQJ', :'TQX')),
-  'TQ952-R sekcja cofnięta, funkcje 0952 na miejscu');
+  'TQ952-R sekcja cofnięta, funkcje 0223 na miejscu');
 reset role; reset app.current_uid;
 
 -- ============================================================================

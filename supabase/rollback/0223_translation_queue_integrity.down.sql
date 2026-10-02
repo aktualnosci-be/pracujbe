@@ -1,48 +1,11 @@
--- =============================================================================
--- 0952_translation_queue_integrity.sql — integralność kolejki tłumaczeń AI (#644, #754, #755).
---
--- NUMER TYMCZASOWY (0952) — ostateczny nadaje integrator. Zależy od 0145 i 0190.
---
--- 1. #644 — dzierżawa liczy się do `lease_expires_at`: `complete_translation_job`,
---    `fail_translation_job` i `defer_translation_job` zwracają `stale_lease`, gdy termin
---    dzierżawy minął, także jeśli nikt jej jeszcze nie przejął (kontrola pod tą samą blokadą
---    wiersza zadania co CAS po `lease_id`). Spóźniony worker nie zapisze wyniku, a zadanie
---    wraca do puli przez `claim_translation_jobs` (jak dotąd).
--- 2. #754 — źródło tłumaczenia tylko dla istniejącej encji: `translation_entity_exists`
---    (oferta: `jobs` bez `deleted_at` i firma bez `deleted_at`; profil: `candidate_profiles.id`
---    bez `deleted_at` i profil konta bez `deleted_at`). `record_translation_source` (treść =
---    0190) odrzuca brakującą/usuniętą encję i pomylony typ (`NOT_FOUND`) PO wstawieniu
---    głowy — strażnik trybu (0176) dalej odpowiada pierwszy `RECRUITMENT_DISABLED`, a błąd
---    cofa wstawienie. `deactivate_translation_source` odrzuca nieznany typ, a ukrycie źródła
---    encji, której już nie ma, usuwa je (purge). Jednorazowo usuwane są istniejące sieroty.
--- 3. #755 — korekta ręczna ma autora: `save_manual_translation` wymaga istniejącej encji
---    i autora (`VALIDATION_FAILED: author` dla null); autor = aktywne, nieusunięte konto
---    administratora, aktywny owner/admin/recruiter firmy oferty albo właściciel profilu
---    kandydata, inaczej `PERMISSION_DENIED`. `manual_author` zostaje nullable
---    (`ON DELETE SET NULL` po usunięciu konta autora).
---
--- Dowód: supabase/tests/rls.sql sekcja TQ952 (kontrole ujemne na definicjach sprzed 0952).
--- Rollback: supabase/rollback/0952_translation_queue_integrity.down.sql
---           (test: supabase/tests/translation-queue-integrity-rollback.sql).
--- =============================================================================
+-- Rollback 0223 (numer tymczasowy): przywraca definicje sprzed kontroli integralności kolejki
+-- tłumaczeń (#644, #754, #755) — record_translation_source z 0190, complete/fail/defer,
+-- deactivate i save_manual_translation z 0145 — oraz usuwa translation_entity_exists.
+-- create or replace zachowuje granty. Usuniętych sierot (krok 7 migracji) nie odtwarza.
+-- Test: supabase/tests/translation-queue-integrity-rollback.sql.
 
--- --- 1. Istnienie encji domenowej ------------------------------------------------------------
-create or replace function public.translation_entity_exists(p_entity_type text, p_entity_id uuid)
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
-  select case p_entity_type
-    when 'job' then exists (
-      select 1 from public.jobs j join public.companies c on c.id = j.company_id
-       where j.id = p_entity_id and j.deleted_at is null and c.deleted_at is null)
-    when 'candidate_profile' then exists (
-      select 1 from public.candidate_profiles cp join public.profiles p on p.id = cp.profile_id
-       where cp.id = p_entity_id and cp.deleted_at is null and p.deleted_at is null)
-    else false
-  end;
-$$;
-revoke all on function public.translation_entity_exists(text, uuid) from public, anon, authenticated;
-grant execute on function public.translation_entity_exists(text, uuid) to service_role;
 
--- --- 2. Zapis źródła (treść = 0190 + kontrola encji) -------------------------------------------
+-- z 0190_translation_protected_terms.sql
 create or replace function public.record_translation_source(
   p_entity_type text,
   p_entity_id uuid,
@@ -77,6 +40,8 @@ begin
 
   v_fields := public.translation_canonical_fields(p_fields);
   v_terms := public.translation_protected_terms(p_protected_terms);
+  -- Chronione nazwy wchodzą do odcisku rewizji: zmiana nazwy firmy = nowa rewizja. Bez nazw
+  -- odcisk jest taki sam jak w 0145 (rewizje encji bez nazw chronionych bez zmian).
   v_hash := encode(sha256(convert_to(p_source_locale || E'\n' || v_fields::text
               || case when cardinality(v_terms) > 0 then E'\n' || to_jsonb(v_terms)::text else '' end,
               'UTF8')), 'hex');
@@ -84,11 +49,6 @@ begin
   insert into public.translation_sources (entity_type, entity_id)
   values (p_entity_type, p_entity_id)
   on conflict (entity_type, entity_id) do nothing;
-  -- #754: encja domenowa musi istnieć (i nie być usunięta). Kontrola po wstawieniu głowy, żeby
-  -- strażnik trybu (0176) odpowiadał pierwszy; wyjątek cofa wstawienie.
-  if not public.translation_entity_exists(p_entity_type, p_entity_id) then
-    raise exception 'NOT_FOUND: translation_entity' using errcode = 'P0002';
-  end if;
   select * into v_head from public.translation_sources
    where entity_type = p_entity_type and entity_id = p_entity_id
    for update;
@@ -104,10 +64,12 @@ begin
   end if;
 
   if v_rev.id is not null and v_rev.content_hash = v_hash then
+    -- Ta sama treść. Zadania innej wersji pipeline dla tej rewizji są wygaszane i zastępowane.
     update public.translation_jobs
        set status = 'superseded', lease_id = null, lease_expires_at = null, updated_at = now()
      where revision_id = v_rev.id and pipeline_version <> p_pipeline_version
        and status in ('queued', 'retry', 'leased');
+    -- Encja ponownie aktywna: zadania wygaszone przy ukryciu wracają do kolejki.
     update public.translation_jobs
        set status = 'queued', attempts = 0, next_attempt_at = v_at, last_error_code = null,
            updated_at = now()
@@ -124,6 +86,7 @@ begin
       get diagnostics v_new = row_count;
       v_count := v_count + v_new;
     end;
+    -- Publikacja przyspiesza oczekujące zadania bieżącej rewizji (nigdy ich nie opóźnia).
     update public.translation_jobs
        set next_attempt_at = least(next_attempt_at, v_at), updated_at = now()
      where revision_id = v_rev.id and pipeline_version = p_pipeline_version
@@ -142,15 +105,18 @@ begin
      set current_revision_id = v_rev.id, current_revision_no = v_rev.revision_no, updated_at = now()
    where entity_type = p_entity_type and entity_id = p_entity_id;
 
+  -- Starsze rewizje: zaległe zadania nieaktualne (dzierżawa też — wynik zostanie odrzucony).
   update public.translation_jobs
      set status = 'superseded', lease_id = null, lease_expires_at = null, updated_at = now()
    where entity_type = p_entity_type and entity_id = p_entity_id
      and revision_id <> v_rev.id and status in ('queued', 'retry', 'leased');
 
+  -- Istniejące przekłady nie udają aktualnych (korekty ręczne zostają, ale jako nieaktualne).
   update public.translation_documents
      set is_stale = true, updated_at = now()
    where entity_type = p_entity_type and entity_id = p_entity_id and not is_stale;
 
+  -- Przekład w języku nowego źródła nie jest potrzebny: nie powstaje dla niego zadanie.
   insert into public.translation_jobs
     (revision_id, entity_type, entity_id, target_locale, pipeline_version, next_attempt_at)
   select v_rev.id, p_entity_type, p_entity_id, l.code, p_pipeline_version, v_at
@@ -162,10 +128,8 @@ begin
   return jsonb_build_object('status', 'created', 'revisionId', v_rev.id,
     'revisionNo', v_rev.revision_no, 'jobsQueued', v_count);
 end $$;
-revoke all on function public.record_translation_source(text, uuid, text, jsonb, text, integer, text[]) from public;
-grant execute on function public.record_translation_source(text, uuid, text, jsonb, text, integer, text[]) to service_role;
 
--- --- 3. Zapis wyniku (treść = 0145 + termin dzierżawy) ------------------------------------------
+-- z 0145_translation_queue.sql
 create or replace function public.complete_translation_job(
   p_job_id uuid,
   p_lease_id uuid,
@@ -187,6 +151,7 @@ begin
   select * into v_ref from public.translation_jobs where id = p_job_id;
   if not found then return 'not_found'; end if;
 
+  -- Ta sama kolejność blokad co w record_translation_source: najpierw głowa, potem zadanie.
   select * into v_head from public.translation_sources
    where entity_type = v_ref.entity_type and entity_id = v_ref.entity_id
    for share;
@@ -194,10 +159,7 @@ begin
   if not found then return 'not_found'; end if;
 
   if v_job.status = 'superseded' then return 'superseded'; end if;
-  -- #644: CAS po lease_id ORAZ ważna dzierżawa (pod blokadą wiersza zadania). Po terminie
-  -- zadanie należy do puli, nawet jeśli nikt go jeszcze nie przejął.
-  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id
-     or v_job.lease_expires_at is null or v_job.lease_expires_at <= clock_timestamp() then
+  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id then
     return 'stale_lease';
   end if;
 
@@ -213,6 +175,7 @@ begin
   v_fields := public.translation_canonical_fields(p_fields);
   select coalesce(array_agg(k order by k), '{}') into v_keys from jsonb_object_keys(v_fields) k;
   select coalesce(array_agg(k order by k), '{}') into v_src_keys from jsonb_object_keys(v_rev.fields) k;
+  -- Pełny zestaw pól tej rewizji — bez brakujących i bez dodatkowych kluczy.
   if v_keys <> v_src_keys then
     raise exception 'VALIDATION_FAILED: translation_keys' using errcode = '22023';
   end if;
@@ -255,10 +218,8 @@ begin
    where id = p_job_id;
   return 'applied';
 end $$;
-revoke all on function public.complete_translation_job(uuid, uuid, jsonb, text, integer, integer) from public;
-grant execute on function public.complete_translation_job(uuid, uuid, jsonb, text, integer, integer) to service_role;
 
--- --- 4. Błąd i odroczenie (treść = 0145 + termin dzierżawy) --------------------------------------
+-- z 0145_translation_queue.sql
 create or replace function public.fail_translation_job(
   p_job_id uuid,
   p_lease_id uuid,
@@ -276,12 +237,13 @@ begin
   select * into v_job from public.translation_jobs where id = p_job_id for update;
   if not found then return 'not_found'; end if;
   if v_job.status = 'superseded' then return 'superseded'; end if;
-  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id
-     or v_job.lease_expires_at is null or v_job.lease_expires_at <= clock_timestamp() then
+  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id then
     return 'stale_lease';
   end if;
 
   if coalesce(p_retryable, false) and v_job.attempts < v_job.max_attempts then
+    -- Backoff wykładniczy (30 s · 2^(próba−1), max 1 h) z jitterem ±20%; Retry-After dostawcy
+    -- (429) jest dolną granicą.
     v_delay := least(3600, 30 * power(2, greatest(v_job.attempts - 1, 0))) * (0.8 + random() * 0.4);
     if p_retry_after_seconds is not null then
       v_delay := greatest(v_delay, least(greatest(p_retry_after_seconds, 0), 3600));
@@ -300,9 +262,8 @@ begin
    where id = p_job_id;
   return 'failed';
 end $$;
-revoke all on function public.fail_translation_job(uuid, uuid, text, boolean, integer) from public;
-grant execute on function public.fail_translation_job(uuid, uuid, text, boolean, integer) to service_role;
 
+-- z 0145_translation_queue.sql
 create or replace function public.defer_translation_job(
   p_job_id uuid,
   p_lease_id uuid,
@@ -318,8 +279,7 @@ begin
   select * into v_job from public.translation_jobs where id = p_job_id for update;
   if not found then return 'not_found'; end if;
   if v_job.status = 'superseded' then return 'superseded'; end if;
-  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id
-     or v_job.lease_expires_at is null or v_job.lease_expires_at <= clock_timestamp() then
+  if v_job.status <> 'leased' or v_job.lease_id is distinct from p_lease_id then
     return 'stale_lease';
   end if;
   update public.translation_jobs
@@ -330,33 +290,21 @@ begin
    where id = p_job_id;
   return 'deferred';
 end $$;
-revoke all on function public.defer_translation_job(uuid, uuid, text, integer) from public;
-grant execute on function public.defer_translation_job(uuid, uuid, text, integer) to service_role;
 
--- --- 5. Ukrycie / usunięcie (treść = 0145 + typ encji + sieroty) ----------------------------------
+-- z 0145_translation_queue.sql
 create or replace function public.deactivate_translation_source(
   p_entity_type text,
   p_entity_id uuid,
   p_purge boolean default false
 ) returns integer language plpgsql security definer set search_path = public, pg_temp as $$
-declare
-  v_count integer := 0;
-  v_purge boolean := coalesce(p_purge, false);
+declare v_count integer := 0;
 begin
-  if p_entity_type is null or p_entity_type not in ('job', 'candidate_profile') then
-    raise exception 'VALIDATION_FAILED: entity_type' using errcode = '22023';
-  end if;
   perform 1 from public.translation_sources
    where entity_type = p_entity_type and entity_id = p_entity_id
    for update;
   if not found then return 0; end if;
 
-  -- #754: źródło encji, której już nie ma (albo jest usunięta), nie zostaje jako ukryte — purge.
-  if not v_purge and not public.translation_entity_exists(p_entity_type, p_entity_id) then
-    v_purge := true;
-  end if;
-
-  if v_purge then
+  if coalesce(p_purge, false) then
     select count(*) into v_count from public.translation_jobs
      where entity_type = p_entity_type and entity_id = p_entity_id;
     update public.translation_sources set current_revision_id = null
@@ -375,10 +323,8 @@ begin
   get diagnostics v_count = row_count;
   return v_count;
 end $$;
-revoke all on function public.deactivate_translation_source(text, uuid, boolean) from public;
-grant execute on function public.deactivate_translation_source(text, uuid, boolean) to service_role;
 
--- --- 6. Korekta ręczna z autorem (treść = 0145 + encja + autor) -----------------------------------
+-- z 0145_translation_queue.sql
 create or replace function public.save_manual_translation(
   p_entity_type text,
   p_entity_id uuid,
@@ -394,34 +340,11 @@ declare
   v_src_keys text[];
   v_version integer;
 begin
-  -- #755: korekta zawsze ma autora (null dopiero po usunięciu konta, ON DELETE SET NULL).
-  if p_author is null then
-    raise exception 'VALIDATION_FAILED: author' using errcode = '22023';
-  end if;
   select * into v_head from public.translation_sources
    where entity_type = p_entity_type and entity_id = p_entity_id
    for update;
-  if not found or v_head.current_revision_id is null
-     or not public.translation_entity_exists(p_entity_type, p_entity_id) then
+  if not found or v_head.current_revision_id is null then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
-  end if;
-  -- Autor: aktywne, nieusunięte konto — administrator, recruiter+ firmy oferty albo właściciel
-  -- profilu kandydata.
-  if not exists (
-    select 1 from public.profiles p
-     where p.id = p_author and p.is_active and p.deleted_at is null
-       and (p.role = 'admin'
-            or (p_entity_type = 'job' and exists (
-                  select 1 from public.jobs j
-                    join public.company_members cm on cm.company_id = j.company_id
-                   where j.id = p_entity_id and j.deleted_at is null
-                     and cm.profile_id = p.id and cm.is_active
-                     and cm.role in ('owner', 'admin', 'recruiter')))
-            or (p_entity_type = 'candidate_profile' and exists (
-                  select 1 from public.candidate_profiles cp
-                   where cp.id = p_entity_id and cp.deleted_at is null and cp.profile_id = p.id)))
-  ) then
-    raise exception 'PERMISSION_DENIED: author' using errcode = '42501';
   end if;
   select * into v_rev from public.translation_source_revisions where id = v_head.current_revision_id;
   if p_locale is null or p_locale = v_rev.source_locale
@@ -449,10 +372,5 @@ begin
   returning manual_version into v_version;
   return v_version;
 end $$;
-revoke all on function public.save_manual_translation(text, uuid, text, jsonb, uuid) from public;
-grant execute on function public.save_manual_translation(text, uuid, text, jsonb, uuid) to service_role;
 
--- --- 7. Jednorazowo: sieroty (źródła encji, których nie ma albo są usunięte) -------------------------
-select count(public.deactivate_translation_source(s.entity_type, s.entity_id, true))
-  from public.translation_sources s
- where not public.translation_entity_exists(s.entity_type, s.entity_id);
+drop function if exists public.translation_entity_exists(text, uuid);

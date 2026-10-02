@@ -24,12 +24,12 @@ Funkcje wyłącznie dla `service_role`:
   termin), nowa wersja pipeline albo ponowna aktywacja = `requeued`. Opóźnienie (≤ 1 h) scala
   częste zapisy robocze; publikacja z opóźnieniem 0 przyspiesza oczekujące zadania.
   Encja musi istnieć i nie być usunięta (oferta + firma, `candidate_profiles.id` + konto;
-  `translation_entity_exists`, 0952) — inaczej `NOT_FOUND` bez żadnego wiersza.
+  `translation_entity_exists`, 0223) — inaczej `NOT_FOUND` bez żadnego wiersza.
 - `claim_translation_jobs(limit, lease_s)` — `FOR UPDATE SKIP LOCKED` + dzierżawa
   (`lease_id`, `lease_expires_at`). Wygasła dzierżawa (restart workera) wraca do puli; po
   wyczerpaniu prób → `failed / lease_expired`.
 - `complete_translation_job(job, lease, pola, model, tokeny)` — CAS po `lease_id` i ważnej
-  dzierżawie (`lease_expires_at` w przyszłości, 0952 — po terminie `stale_lease`, także zanim
+  dzierżawie (`lease_expires_at` w przyszłości, 0223 — po terminie `stale_lease`, także zanim
   inny worker przejmie zadanie; to samo `fail`/`defer`), ponowna
   kontrola bieżącej rewizji i aktywności encji pod blokadą głowy, pełny zestaw kluczy.
   Wyniki: `applied`, `proposal` (korekta ręczna zablokowana — wynik czeka w zadaniu),
@@ -51,9 +51,9 @@ modelu). Brak bazy zadań albo błąd rezerwacji = brak wywołania (fail-closed)
 - `deactivate_translation_source(typ, id, purge)` — ukrycie (zaległe zadania `superseded`,
   spóźniony wynik niczego nie publikuje) albo purge (usunięcie konta/oferty: rewizje, zadania,
   przekłady i korekty; opóźniony worker dostaje `not_found`). Ukrycie źródła encji, której
-  już nie ma, = purge (0952).
+  już nie ma, = purge (0223).
 - `save_manual_translation` / `release_manual_translation` — korekta z autorem i wersją
-  (autor wymagany: aktywny admin, recruiter+ firmy oferty albo właściciel profilu; 0952),
+  (autor wymagany: aktywny admin, recruiter+ firmy oferty albo właściciel profilu; 0223),
   blokuje nadpisanie przez AI; reset blokady jest jawny i stosuje czekającą propozycję.
 
 Wywołanie dostawcy nigdy nie odbywa się w transakcji: claim i complete/fail to osobne,
