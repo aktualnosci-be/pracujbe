@@ -25762,11 +25762,11 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- OC778. Współbieżność (0947): ostatni aktywny właściciel firmy (#778) i blokada źródła
+-- OC778. Współbieżność (0226): ostatni aktywny właściciel firmy (#778) i blokada źródła
 --        „Kopiuj jako szkic” (#1098). Dwie RÓWNOLEGŁE sesje (dblink) odbierają rolę albo
 --        dostęp dwóm różnym właścicielom tej samej firmy — przez RPC (dezaktywacja, degradacja,
 --        wariant mieszany) i bezpośrednim UPDATE (strażnik `enforce_owner_invariants`).
---        Po 0947 druga sesja czeka na blokadę firmy i dostaje kontrolowany błąd; zawsze zostaje
+--        Po 0226 druga sesja czeka na blokadę firmy i dostaje kontrolowany błąd; zawsze zostaje
 --        aktywny właściciel. Kopia oferty czeka na zatwierdzenie trwającej edycji źródła.
 --        Kontrole ujemne: te same definicje bez blokady (podmiana zatwierdzona w osobnej
 --        sesji i przywrócona) → firma bez właściciela / kopia nie czeka na edycję.
@@ -25937,7 +25937,7 @@ select pg_temp.oc_state(:oc_cp_pid, 'oc_cp') as oc_cpn_state \gset
 select pg_temp.remote_result('oc_cp') as oc_cpn_res \gset
 select dbl.dblink_exec('oc_cp', 'rollback'); select dbl.dblink_exec('oc_ed', 'rollback');
 select dbl.dblink_disconnect('oc_ed'); select dbl.dblink_disconnect('oc_cp');
--- Przywrócenie definicji z 0947.
+-- Przywrócenie definicji z 0226.
 select dbl.dblink_exec('oc_setup', :'oc_fix_active');
 select dbl.dblink_exec('oc_setup', :'oc_fix_trg');
 select dbl.dblink_exec('oc_setup', :'oc_fix_dup');
@@ -25951,7 +25951,7 @@ select pg_temp.assert(
   pg_get_functiondef('public.set_company_member_active(uuid,boolean)'::regprocedure) like '%company_owners:%'
   and pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure) like '%company_owners:%'
   and pg_get_functiondef('public.duplicate_job_as_draft(uuid,uuid)'::regprocedure) ~* 'for share',
-  'OC778-N2 definicje z 0947 przywrócone po kontroli ujemnej');
+  'OC778-N2 definicje z 0226 przywrócone po kontroli ujemnej');
 reset role; reset app.current_uid;
 
 -- ============================================================================

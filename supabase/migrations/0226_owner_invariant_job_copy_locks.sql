@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0947_owner_invariant_job_copy_locks.sql — (numer tymczasowy) współbieżność: ostatni właściciel
+-- 0226_owner_invariant_job_copy_locks.sql — (numer tymczasowy) współbieżność: ostatni właściciel
 -- firmy (#778) i blokada źródła przy „Kopiuj jako szkic” (#1098).
 --
 -- 1. #778 — dwie sesje mogły równocześnie odebrać rolę lub dostęp DWÓM różnym aktywnym
@@ -19,7 +19,7 @@
 --
 -- Definicje bazują na najnowszych: 0086 (RPC zespołu), 0185 (strażnik), 0148 (kopia). Migracja
 -- nie zmienia danych.
--- Rollback: supabase/rollback/0947_owner_invariant_job_copy_locks.down.sql
+-- Rollback: supabase/rollback/0226_owner_invariant_job_copy_locks.down.sql
 -- (test: supabase/tests/owner-copy-locks-rollback.sql w scripts/test-rls.sh).
 -- =============================================================================
 

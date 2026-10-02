@@ -1,8 +1,8 @@
 -- =============================================================================
--- OC778-R — rollback migracji 0947 (blokada firmy przy odebraniu roli/dostępu właściciela #778,
+-- OC778-R — rollback migracji 0226 (blokada firmy przy odebraniu roli/dostępu właściciela #778,
 -- blokada źródła „Kopiuj jako szkic” #1098). Uruchamiany przez scripts/test-rls.sh po rls.sql,
 -- na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany, więc baza po teście
--- nadal ma stan po 0947.
+-- nadal ma stan po 0226.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -12,16 +12,16 @@ begin
   if p_cond is distinct from true then raise exception 'ASSERT FAILED: %', p_name; end if;
 end $$;
 
--- Punkt wyjścia: stan po 0947.
+-- Punkt wyjścia: stan po 0226.
 select pg_temp.assert(
   pg_get_functiondef('public.set_company_member_role(uuid, text)'::regprocedure) like '%company_owners:%'
   and pg_get_functiondef('public.set_company_member_active(uuid, boolean)'::regprocedure) like '%company_owners:%'
   and pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure) like '%company_owners:%'
   and pg_get_functiondef('public.duplicate_job_as_draft(uuid, uuid)'::regprocedure) like '%for share%',
-  'OC778-R0 baza w stanie po 0947');
+  'OC778-R0 baza w stanie po 0226');
 
 begin;
-\ir ../rollback/0947_owner_invariant_job_copy_locks.down.sql
+\ir ../rollback/0226_owner_invariant_job_copy_locks.down.sql
 
 select pg_temp.assert(
   pg_get_functiondef('public.set_company_member_role(uuid, text)'::regprocedure) not like '%company_owners:%'
@@ -41,5 +41,5 @@ rollback;
 
 select pg_temp.assert(
   pg_get_functiondef('public.duplicate_job_as_draft(uuid, uuid)'::regprocedure) like '%for share%',
-  'OC778-R3 po cofnięciu transakcji baza wraca do stanu po 0947');
-\echo 'OC778-R rollback 0947 OK'
+  'OC778-R3 po cofnięciu transakcji baza wraca do stanu po 0226');
+\echo 'OC778-R rollback 0226 OK'

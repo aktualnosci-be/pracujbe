@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0947_owner_invariant_job_copy_locks.sql — przywraca definicje sprzed migracji:
+-- Rollback 0226_owner_invariant_job_copy_locks.sql — przywraca definicje sprzed migracji:
 -- set_company_member_role / set_company_member_active (0086), enforce_owner_invariants (0185)
 -- i duplicate_job_as_draft (0148). UWAGA: przywraca wyścig #778 (firma bez właściciela) i odczyt
 -- źródła kopii bez blokady (#1098).

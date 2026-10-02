@@ -2008,11 +2008,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`dashboard.duplicateJobModerationLocked`); audyt `job.duplicated`. Dowód: `rls.sql` sekcja
   JD216 (kontrole ujemne: bramka recruiter+, wpis klucza), unit `job-duplicate-draft`, E2E
   `employer-job-duplicate` (demo, 4 języki, axe 320 px).
-  Źródło pod blokadą (#1098, migracja `0947` — numer tymczasowy): `duplicate_job_as_draft` czyta
+  Źródło pod blokadą (#1098, migracja `0226` — numer tymczasowy): `duplicate_job_as_draft` czyta
   ofertę źródłową `FOR SHARE`, więc trwająca edycja (`save_job_draft`/`update_published_job`
   blokują wiersz `FOR UPDATE`) kończy się przed kopiowaniem — kopia nie łączy danych sprzed i po
   edycji. Dowód: `rls.sql` sekcja OC778 (OC1098, dblink; kontrola ujemna: bez `FOR SHARE` kopia
-  nie czeka), rollback `0947_…down.sql` (`owner-copy-locks-rollback.sql`).
+  nie czeka), rollback `0226_…down.sql` (`owner-copy-locks-rollback.sql`).
 - [~] „Koszty i dodatki” w ofercie (migracja `0169`): krok 8 kreatora ma
   opcjonalne pola deklarowane przez pracodawcę — zakwaterowanie (zapewnione / pomoc / brak; przy
   „zapewnione”: koszt EUR za tydzień lub miesiąc, 0 = bez kosztów, potrącenie z pensji,
@@ -2258,7 +2258,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
   nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
   TM403-13c przez `INVITATION_LIMIT_REACHED`).
-  Ostatni właściciel przy równoległych zmianach (#778, migracja `0947` — numer tymczasowy): dwie
+  Ostatni właściciel przy równoległych zmianach (#778, migracja `0226` — numer tymczasowy): dwie
   sesje mogły równocześnie odebrać rolę albo dostęp DWÓM różnym właścicielom (każda blokowała
   tylko swój wiersz, licznik bez blokady) i zostawić firmę bez aktywnego właściciela.
   `set_company_member_role`/`set_company_member_active` i strażnik `enforce_owner_invariants`
@@ -2267,7 +2267,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   dostaje kontrolowany błąd (`NOT_FOUND` — utracone uprawnienia, albo `VALIDATION_FAILED`).
   `erase_employer_subject` już blokuje wszystkie członkostwa firmy. Dowód: `rls.sql` sekcja OC778
   (dblink: dezaktywacja, degradacja, wariant mieszany, bezpośredni UPDATE; kontrola ujemna: bez
-  blokady obie dezaktywacje przechodzą i firma nie ma właściciela), rollback `0947_…down.sql`.
+  blokady obie dezaktywacje przechodzą i firma nie ma właściciela), rollback `0226_…down.sql`.
 
   Przywrócenie wyłączonego członka przez zaproszenie (#867, migracja `0217` — numer tymczasowy):
   zaproszenie na adres osoby z NIEAKTYWNYM członkostwem wymaga, by zapraszający zarządzał jej
