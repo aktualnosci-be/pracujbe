@@ -25,6 +25,7 @@ import {
 } from '@/lib/job-costs';
 import { WORK_TIME_VALUES } from '@/lib/job-filter-options';
 import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
+import { APPLICANT_COUNTRIES, WORK_MODES } from '@/lib/job-work-mode';
 
 /**
  * Walidacja kreatora oferty pracy — dziewięć kroków + pełny jobSchema.
@@ -129,9 +130,27 @@ const step3Base = z.object({
     .max(80, 'job.error.regionTooLong')
     .regex(NO_NUL_REGEX, TEXT_INVALID),
   address: z.string().trim().max(160, 'job.error.addressTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
+  /** Dawny boolean (#792): przy wybranym `workMode` liczony z trybu, bez trybu — bez zmian. */
   remote: z.boolean().default(false),
+  /** #792 (0228): tryb pracy; brak = oferta sprzed wyboru (tryb nieznany). */
+  workMode: z.enum(WORK_MODES).optional(),
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej (JobPosting `applicantLocationRequirements`). */
+  remoteApplicantCountries: z.array(z.enum(APPLICANT_COUNTRIES)).max(APPLICANT_COUNTRIES.length).default([]),
 });
-export const step3Schema = step3Base;
+/** #792: praca w 100% zdalna wymaga co najmniej jednego kraju kandydata (lustro CHECK z 0228). */
+function refineRemoteCountries(
+  data: { workMode?: string; remoteApplicantCountries?: readonly string[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.workMode === 'remote' && (data.remoteApplicantCountries ?? []).length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['remoteApplicantCountries'],
+      message: 'job.error.remoteCountriesRequired',
+    });
+  }
+}
+export const step3Schema = step3Base.superRefine(refineRemoteCountries);
 
 /** Krok 4 — wynagrodzenie (salaryMax >= salaryMin). */
 const step4Base = z.object({
@@ -431,6 +450,7 @@ export const jobSchema = step1Base
     message: 'job.error.salaryRangeInvalid',
   })
   .superRefine(refineNoLanguageConflict)
+  .superRefine(refineRemoteCountries)
   .superRefine(refineJobCosts)
   .superRefine(refineAccommodationPublishTerms)
   .superRefine(refineApplyChannel);

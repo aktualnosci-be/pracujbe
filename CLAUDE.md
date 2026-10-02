@@ -1104,6 +1104,26 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   bez konta), więc `buildJobPostingJsonLd` emituje `directApply: true` zamiast stałego `false`.
   Dowód: `tests/unit/structured-data.test.ts` (kontrola ujemna). **Otwarte:** gdy pojawi się
   oferta bez tego przepływu (np. link zewnętrzny), wartość trzeba wyliczać z danych oferty.
+  Tryb pracy i TELECOMMUTE (#792, migracja `0228` — numer tymczasowy): krok 3 kreatora wybiera
+  tryb pracy (`onsite`/`hybrid`/`remote` = 100% zdalnie; lista z „nie podano” tylko dla oferty
+  sprzed wyboru) zamiast pola „Praca zdalna”, przy pracy w pełni zdalnej — kraje kandydata
+  (UE, EOG, CH, GB; co najmniej jeden, błąd przy liście). Kolumny `jobs.work_mode` (null = tryb
+  nieznany, starych ofert nie klasyfikujemy) i `jobs.remote_applicant_countries` z CHECK
+  (lista = lustro `src/lib/job-work-mode.ts`, test 1:1); `jobs.remote` zostaje (filtr promienia,
+  matching) i przy ustawionym trybie liczy go trigger: `remote = (work_mode = 'remote')` — praca
+  hybrydowa nie omija promienia. Zapis: `save_job_draft` (stan 0194), `update_published_job`
+  i migawka audytu (stan 0200), kopia szkicu (trigger na `job_duplications`); odczyt
+  `get_public_job` (stan 0194). JobPosting: `jobLocationType: TELECOMMUTE` +
+  `applicantLocationRequirements` (`Country`) tylko przy `work_mode = 'remote'` z krajem, bez
+  fizycznego `jobLocation` (`telecommuteFields`, #1191); stacjonarna, hybrydowa i tryb nieznany =
+  zwykłe `jobLocation`. Import AI: „praca zdalna” z ogłoszenia = tryb nieznany do sprawdzenia
+  (bez TELECOMMUTE), bez wzmianki = na miejscu. Dowód: `rls.sql` sekcja WD792 (kontrole ujemne:
+  bez triggera hybryda omija promień, bez CHECK zdalna bez kraju, `save_job_draft` z 0194),
+  rollback `supabase/rollback/0228_…down.sql` (`job-work-mode-rollback.sql`), unit
+  `job-work-mode`, `job-wizard-work-mode`, `jobs-postgres` (wiersz RPC → JSON-LD), `ai-import-map`,
+  E2E real `job-wizard` (zdalna bez kraju = błąd, JSON-LD gościa z TELECOMMUTE). **Otwarte:**
+  tryb pracy na szczególe oferty i jako filtr listy (wymaga zmiany `get_public_jobs*`, PR #1275),
+  powiadomienie kandydatów o zmianie trybu (`job_material_terms`, tylko tryb RECRUITMENT).
   BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
   `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
   (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
@@ -2066,9 +2086,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   facetów i kopii dla alertów; URL `benefits=` (CSV, bez JS powtórzony klucz), chipy, klucz
   kanoniczny zapisanego wyszukiwania `benefits`. Dowód: `rls.sql` sekcja BN976 (kontrole ujemne:
   bez warunku, bez pochodnych 0169, kopia alertów, bez CHECK), rollback `0976_…down.sql`
-  (`job-benefits-rollback.sql`; przywraca dokładnie definicje 0227 — w testach rollbacku 0976
-  przed 0227, przed 0214/0213/0194), unit `job-benefits`. Definicje funkcji = stan 0227 (grafik
-  pracy, #858) + świadczenia: `p_benefits` po `p_shift_patterns`, sygnatury 0227 usuwane (bez przeciążeń).
+  (`job-benefits-rollback.sql`; przywraca dokładnie definicje list z 0227 oraz `save_job_draft`/
+  `update_published_job`/`job_edit_audit_snapshot` z 0228 — w testach rollbacku 0976 przed 0228,
+  0227, 0214/0213/0194), unit `job-benefits`. Definicje = stan 0227 (grafik pracy, #858) i 0228
+  (tryb pracy, #792) + świadczenia: `p_benefits` po `p_shift_patterns`, sygnatury 0227 usuwane (bez przeciążeń).
   **Otwarte:** liczniki facetów per świadczenie, `jobBenefits` w JobPosting, kwoty/częstotliwość
   poza bonami żywieniowymi.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu

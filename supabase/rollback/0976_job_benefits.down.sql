@@ -6,8 +6,9 @@
 --
 -- Przywraca: get_public_jobs, get_public_jobs_count, get_public_job_filter_facets,
 -- saved_search_jobs_after, saved_search_canonical_filters, saved_search_keyset_page,
--- save_job_draft i update_published_job DOKŁADNIE w stanie 0227 (grafik pracy — p_shift_patterns /
--- shift_patterns zostają); job_edit_audit_snapshot z 0200. Uruchamiać PRZED rollbackiem 0227.
+-- DOKŁADNIE w stanie 0227 (grafik pracy zostaje); save_job_draft, update_published_job
+-- i job_edit_audit_snapshot DOKŁADNIE w stanie 0228 (tryb pracy zostaje).
+-- Uruchamiać PRZED rollbackiem 0228 i 0227.
 -- Usuwa kolumnę jobs.benefit_codes (ZAZNACZONE ŚWIADCZENIA PRZEPADAJĄ; tekstowe benefity
 -- w job_translations zostają) i funkcje pomocnicze. Zapisane wyszukiwania z kluczem `benefits`
 -- trzeba przed rollbackiem usunąć albo oczyścić — stara kanonizacja go nie zna.
@@ -811,7 +812,7 @@ revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz,
 grant execute on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
   to service_role;
 
--- --- 6. Kreator: save_job_draft (stan 0216) + shift_patterns -----------------------------------
+-- --- 6. Kreator: save_job_draft — definicja 0228 (stan 0227 + tryb pracy) -----------------------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -845,7 +846,9 @@ begin
                     -- 0194, #811: wymiar czasu pracy
                     'work_time',
                     -- 0227, #858: typy grafiku pracy
-                    'shift_patterns')
+                    'shift_patterns',
+                    -- 0228, #792: tryb pracy i kraje kandydata przy pracy w 100% zdalnej
+                    'work_mode', 'remote_applicant_countries')
     limit 1;
   if v_bad is null then
     select k into v_bad from jsonb_object_keys(tr) k
@@ -925,7 +928,14 @@ begin
       apply_email              = case when j ? 'apply_email' then nullif(btrim(coalesce(j->>'apply_email', '')), '') else apply_email end,
       apply_phone              = case when j ? 'apply_phone' then nullif(btrim(coalesce(j->>'apply_phone', '')), '') else apply_phone end,
       work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end,
-      shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end
+      shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end,
+      work_mode                = case when j ? 'work_mode' then nullif(j->>'work_mode', '') else work_mode end,
+      -- Tryb inny niż w 100% zdalny = bez krajów (CHECK), także gdy klucz krajów nie przyszedł.
+      remote_applicant_countries = case
+                                     when j ? 'work_mode' and coalesce(j->>'work_mode', '') <> 'remote' then '{}'::text[]
+                                     when j ? 'remote_applicant_countries'
+                                       then public.job_country_codes(j->'remote_applicant_countries')
+                                     else remote_applicant_countries end
     where id = p_job_id;
   end if;
 
@@ -1008,7 +1018,7 @@ end $$;
 revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 7. update_published_job (stan 0203) + shift_patterns --------------------------------------
+-- --- 7. update_published_job — definicja 0228 (stan 0227 + tryb pracy) --------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -1096,6 +1106,11 @@ begin
     work_time                = nullif(j->>'work_time', ''),
     -- 0227 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
     shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
+    -- 0228 (#792): tryb pracy i kraje kandydata (brak klucza = tryb nieznany, bez krajów).
+    work_mode                = nullif(j->>'work_mode', ''),
+    remote_applicant_countries = case when coalesce(j->>'work_mode', '') = 'remote'
+                                      then public.job_country_codes(j->'remote_applicant_countries')
+                                      else '{}'::text[] end,
     updated_at               = now()
   where id = p_job_id;
   delete from public.job_operation_context
@@ -1179,7 +1194,7 @@ end $$;
 revoke all on function public.update_published_job(uuid, jsonb, timestamptz) from public;
 grant execute on function public.update_published_job(uuid, jsonb, timestamptz) to authenticated;
 
--- --- job_edit_audit_snapshot z 0200
+-- --- job_edit_audit_snapshot — definicja 0228
 create or replace function public.job_edit_audit_snapshot(j public.jobs)
 returns jsonb language sql stable set search_path = public, pg_temp as $$
   select jsonb_build_object(
@@ -1191,6 +1206,8 @@ returns jsonb language sql stable set search_path = public, pg_temp as $$
     'accommodation_kind', j.accommodation_kind, 'accommodation_cost', j.accommodation_cost,
     'accommodation_cost_period', j.accommodation_cost_period,
     'accommodation_deducted', j.accommodation_deducted,
+    -- 0228 (#792): tryb pracy i kraje kandydata.
+    'work_mode', j.work_mode, 'remote_applicant_countries', to_jsonb(j.remote_applicant_countries),
     -- Ten sam zakres co powiadomienie kandydata (0144/0169).
     'terms', public.job_material_terms(j))
 $$;

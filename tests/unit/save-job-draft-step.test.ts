@@ -40,7 +40,7 @@ const JOB = '11111111-1111-4111-8111-111111111111';
 const STEPS: Record<number, unknown> = {
   1: { title: 'Magazynier', category: 'warehouse', occupation: 'Magazynier' },
   2: { contractType: 'temporary', workingHours: '40 h', shifts: '', startImmediately: true },
-  3: { city: 'Gandawa', region: 'Flandria', address: '', remote: false },
+  3: { city: 'Gandawa', region: 'Flandria', address: '', remote: false, workMode: 'remote', remoteApplicantCountries: ['BE'] },
   4: { salaryMin: 16, salaryMax: 18, currency: 'EUR', salaryPeriod: 'hour' },
   5: { description: 'Praca na magazynie w Gandawie, zmiana nocna, stała ekipa.', responsibilities: ['Kompletacja'] },
   6: { requirementsMandatory: ['Praca w nocy'], mandatorySkills: ['Skaner'], minExperienceYears: 1 },

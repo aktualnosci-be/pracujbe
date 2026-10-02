@@ -81,6 +81,20 @@ describe('mapExtraction', () => {
     expect(m.review).toEqual([]);
   });
 
+  it('#792: ogłoszenie bez pracy zdalnej = tryb na miejscu w szkicu', () => {
+    const m = mapExtraction(extraction());
+    expect(m.validSteps.find((s) => s.step === 3)?.data).toMatchObject({ workMode: 'onsite', remote: false });
+    expect(m.review).not.toContain('remote');
+  });
+
+  it('#792 kontrola ujemna: „praca zdalna” z ogłoszenia nie staje się pracą w 100% zdalną', () => {
+    const m = mapExtraction(extraction({ remote: 'yes' }));
+    expect(m.values.remote).toBe(true);
+    const step3 = m.validSteps.find((s) => s.step === 3)?.data as Record<string, unknown>;
+    expect(step3.workMode).toBeUndefined();
+    expect(m.review).toContain('remote');
+  });
+
   it('pola wskazane przez model jako niepewne trafiają do sprawdzenia', () => {
     const m = mapExtraction(extraction({ uncertainFields: ['category', 'salaryMax', 'nieznane', 'address'] }));
     // `address` jest puste — nie ma czego sprawdzać; nieznane pole ignorowane.

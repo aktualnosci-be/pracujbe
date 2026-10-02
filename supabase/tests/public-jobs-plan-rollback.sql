@@ -37,6 +37,8 @@ select pg_temp.assert(
 begin;
 -- 0976 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
 \ir ../rollback/0976_job_benefits.down.sql
+-- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
+\ir ../rollback/0228_job_work_mode.down.sql
 -- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
 \ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql

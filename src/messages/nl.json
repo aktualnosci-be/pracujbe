@@ -507,7 +507,8 @@
       "accommodationCostPeriodRequired": "Kies of de kosten per week of per maand zijn.",
       "accommodationCostRequired": "Vul de kosten van de huisvesting in.",
       "accommodationCostMandatory": "Vul bij voorziene huisvesting de kosten in — vul 0 in als de huisvesting gratis is.",
-      "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon."
+      "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon.",
+      "remoteCountriesRequired": "Kies minstens één land voor volledig thuiswerk."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -1744,7 +1745,6 @@
     "regionPlaceholder": "bijv. Vlaanderen",
     "addressLabel": "Adres",
     "addressPlaceholder": "Straat en nummer (optioneel)",
-    "remote": "Thuiswerk",
     "salaryMinLabel": "Loon vanaf",
     "salaryMaxLabel": "Loon tot",
     "currencyLabel": "Valuta",
@@ -1896,7 +1896,16 @@
     "workTimePart": "Deeltijds",
     "workTimeBoth": "Voltijds of deeltijds",
     "benefitCodesLegend": "Extralegale voordelen",
-    "benefitCodesHint": "Vink aan wat je aanbiedt. Kandidaten kunnen vacatures op deze voordelen filteren. Maaltijdcheques en vergoeding woon-werkverkeer tellen ook mee vanuit „Kosten en extra’s”."
+    "benefitCodesHint": "Vink aan wat je aanbiedt. Kandidaten kunnen vacatures op deze voordelen filteren. Maaltijdcheques en vergoeding woon-werkverkeer tellen ook mee vanuit „Kosten en extra’s”.",
+    "workModeLabel": "Werkregime",
+    "workModeHint": "„Volledig thuiswerk” betekent dat het werk altijd op afstand gebeurt. Moet je soms ter plaatse komen, kies dan „Hybride”.",
+    "workMode": {
+      "onsite": "Ter plaatse",
+      "hybrid": "Hybride (deels ter plaatse)",
+      "remote": "Volledig thuiswerk (100%)"
+    },
+    "remoteCountriesLegend": "Vanuit welke landen mogen kandidaten werken?",
+    "remoteCountriesHint": "Kies minstens één land. De kandidaat moet in een van deze landen wonen."
   },
   "jobImport": {
     "title": "Importeren uit een vacature",
@@ -4309,6 +4318,40 @@
     "extra_leave": "Extra verlofdagen",
     "training": "Opleidingen op kosten van de werkgever",
     "phone_laptop": "Gsm of laptop van het werk"
+  },
+  "countryNames": {
+    "BE": "België",
+    "NL": "Nederland",
+    "LU": "Luxemburg",
+    "FR": "Frankrijk",
+    "DE": "Duitsland",
+    "PL": "Polen",
+    "AT": "Oostenrijk",
+    "BG": "Bulgarije",
+    "HR": "Kroatië",
+    "CY": "Cyprus",
+    "CZ": "Tsjechië",
+    "DK": "Denemarken",
+    "EE": "Estland",
+    "FI": "Finland",
+    "GR": "Griekenland",
+    "HU": "Hongarije",
+    "IE": "Ierland",
+    "IT": "Italië",
+    "LV": "Letland",
+    "LT": "Litouwen",
+    "MT": "Malta",
+    "PT": "Portugal",
+    "RO": "Roemenië",
+    "SK": "Slowakije",
+    "SI": "Slovenië",
+    "ES": "Spanje",
+    "SE": "Zweden",
+    "IS": "IJsland",
+    "LI": "Liechtenstein",
+    "NO": "Noorwegen",
+    "CH": "Zwitserland",
+    "GB": "Verenigd Koninkrijk"
   },
   "push": {
     "savedSearchTitle": "Nieuwe vacatures uit je opgeslagen zoekopdracht",

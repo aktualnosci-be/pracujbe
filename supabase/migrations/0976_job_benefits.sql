@@ -18,9 +18,9 @@
 --     zapisanego wyszukiwania `benefits` (`saved_search_canonical_filters`, `saved_search_keyset_page`).
 --     Nowy parametr jest OSTATNI (po `p_shift_patterns` z 0227) i ma wartość domyślną; sygnatury
 --     z 0227 są usuwane (bez przeciążeń). Definicje funkcji = stan 0227 (grafik pracy) + świadczenia.
---   * Zapis: `save_job_draft` i `update_published_job` (stan 0227) — klucz
+--   * Zapis: `save_job_draft` i `update_published_job` (stan 0228 — tryb pracy) — klucz
 --     `benefit_codes` (`job_benefit_codes_from_jsonb`: tablica znanych kodów, deduplikacja,
---     porządek katalogu); migawka audytu edycji (stan 0200) + `benefit_codes`; kopia szkicu
+--     porządek katalogu); migawka audytu edycji (stan 0228) + `benefit_codes`; kopia szkicu
 --     przez trigger na `job_duplications` (jak 0169/0194).
 --   * Odczyt: `get_public_job_benefits(p_job_id, p_locale)` — tylko oferta publiczna
 --     (`job_is_public`), kody efektywne + tekstowe „inne” z tego samego tłumaczenia, które
@@ -900,7 +900,7 @@ revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz,
 grant execute on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
   to service_role;
 
--- --- 6. Kreator: save_job_draft (stan 0227) + benefit_codes -------------------------------------
+-- --- 6. Kreator: save_job_draft (stan 0228) + benefit_codes -------------------------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -935,6 +935,8 @@ begin
                     'work_time',
                     -- 0227, #858: typy grafiku pracy
                     'shift_patterns',
+                    -- 0228, #792: tryb pracy i kraje kandydata przy pracy w 100% zdalnej
+                    'work_mode', 'remote_applicant_countries',
                     -- 0976, #826: świadczenia z katalogu
                     'benefit_codes')
     limit 1;
@@ -1017,6 +1019,13 @@ begin
       apply_phone              = case when j ? 'apply_phone' then nullif(btrim(coalesce(j->>'apply_phone', '')), '') else apply_phone end,
       work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end,
       shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end,
+      work_mode                = case when j ? 'work_mode' then nullif(j->>'work_mode', '') else work_mode end,
+      -- Tryb inny niż w 100% zdalny = bez krajów (CHECK), także gdy klucz krajów nie przyszedł.
+      remote_applicant_countries = case
+                                     when j ? 'work_mode' and coalesce(j->>'work_mode', '') <> 'remote' then '{}'::text[]
+                                     when j ? 'remote_applicant_countries'
+                                       then public.job_country_codes(j->'remote_applicant_countries')
+                                     else remote_applicant_countries end,
       benefit_codes            = case when j ? 'benefit_codes' then public.job_benefit_codes_from_jsonb(j->'benefit_codes') else benefit_codes end
     where id = p_job_id;
   end if;
@@ -1100,7 +1109,7 @@ end $$;
 revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 7. update_published_job (stan 0227) + benefit_codes ------------------------------------------
+-- --- 7. update_published_job (stan 0228) + benefit_codes ------------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -1188,6 +1197,11 @@ begin
     work_time                = nullif(j->>'work_time', ''),
     -- 0227 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
     shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
+    -- 0228 (#792): tryb pracy i kraje kandydata (brak klucza = tryb nieznany, bez krajów).
+    work_mode                = nullif(j->>'work_mode', ''),
+    remote_applicant_countries = case when coalesce(j->>'work_mode', '') = 'remote'
+                                      then public.job_country_codes(j->'remote_applicant_countries')
+                                      else '{}'::text[] end,
     -- 0976 (#826): świadczenia z katalogu (brak klucza = brak deklaracji).
     benefit_codes            = public.job_benefit_codes_from_jsonb(j->'benefit_codes'),
     updated_at               = now()
@@ -1273,7 +1287,7 @@ end $$;
 revoke all on function public.update_published_job(uuid, jsonb, timestamptz) from public;
 grant execute on function public.update_published_job(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 8. Migawka audytu edycji (stan 0200) + benefit_codes ---------------------------------------
+-- --- 8. Migawka audytu edycji (stan 0228) + benefit_codes ---------------------------------------
 create or replace function public.job_edit_audit_snapshot(j public.jobs)
 returns jsonb language sql stable set search_path = public, pg_temp as $$
   select jsonb_build_object(
@@ -1285,6 +1299,8 @@ returns jsonb language sql stable set search_path = public, pg_temp as $$
     'accommodation_kind', j.accommodation_kind, 'accommodation_cost', j.accommodation_cost,
     'accommodation_cost_period', j.accommodation_cost_period,
     'accommodation_deducted', j.accommodation_deducted,
+    -- 0228 (#792): tryb pracy i kraje kandydata.
+    'work_mode', j.work_mode, 'remote_applicant_countries', to_jsonb(j.remote_applicant_countries),
     -- 0976 (#826): świadczenia z katalogu.
     'benefit_codes', to_jsonb(j.benefit_codes),
     -- Ten sam zakres co powiadomienie kandydata (0144/0169).

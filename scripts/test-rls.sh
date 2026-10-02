@@ -55,6 +55,8 @@ echo ">> asercje RLS/triggery"
 echo ">> rollback 0976 (świadczenia oferty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-benefits-rollback.sql"
 
+echo ">> rollback 0228 (tryb pracy oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-work-mode-rollback.sql"
 echo ">> rollback 0227 (grafik pracy oferty i filtr, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-shift-patterns-rollback.sql"
 echo ">> rollback 0226 (blokady: ostatni właściciel firmy, źródło kopii oferty; w transakcji cofanej)"

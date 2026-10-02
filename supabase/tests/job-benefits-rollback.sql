@@ -54,9 +54,13 @@ select pg_temp.assert(
   and position('benefit_codes' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) = 0
   and position('shift_patterns' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) > 0
   and position('shift_patterns' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) > 0
+  and position('work_mode' in pg_get_functiondef('public.save_job_draft(uuid,jsonb,timestamptz)'::regprocedure)) > 0
+  and position('work_mode' in pg_get_functiondef('public.update_published_job(uuid,jsonb,timestamptz)'::regprocedure)) > 0
+  and position('work_mode' in pg_get_functiondef('public.job_edit_audit_snapshot(public.jobs)'::regprocedure)) > 0
+  and position('benefit_codes' in pg_get_functiondef('public.job_edit_audit_snapshot(public.jobs)'::regprocedure)) = 0
   and position('shiftPatterns' in pg_get_functiondef('public.saved_search_canonical_filters(jsonb,text)'::regprocedure)) > 0
   and position('''benefits''' in pg_get_functiondef('public.saved_search_canonical_filters(jsonb,text)'::regprocedure)) = 0,
-  'BN976-R rollback przywraca definicje stanu 0227');
+  'BN976-R rollback przywraca definicje stanu 0227 (listy) i 0228 (kreator, edycja, audyt)');
 rollback;
 select pg_temp.assert(
   to_regprocedure('public.get_public_job_benefits(uuid,text)') is not null
