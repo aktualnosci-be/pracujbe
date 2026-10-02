@@ -102,9 +102,10 @@ describe('inwentarz AI (#489)', () => {
           expect(feature.allowedInClassifieds, feature.id).toBe(false);
         }
       }
-      // Oczekiwany podział: import ogłoszeń, asystent, tłumaczenie ofert i kontrola treści działają.
+      // Oczekiwany podział: import ogłoszeń, asystent, tłumaczenie ofert, kontrola treści
+      // i „Wyjaśnij ofertę” (#773) działają.
       expect(AI_FEATURES.filter((f) => f.allowedInClassifieds).map((f) => f.id).sort()).toEqual(
-        ['content_translation', 'job_fraud_check', 'job_listing_import', 'job_offer_assist'],
+        ['content_translation', 'job_fraud_check', 'job_listing_import', 'job_offer_assist', 'job_offer_explain'],
       );
     });
 

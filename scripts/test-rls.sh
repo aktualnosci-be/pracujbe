@@ -121,6 +121,8 @@ echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji c
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
+echo ">> rollback 0220 (funkcja AI „Wyjaśnij ofertę” w budżecie, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/ai-job-explain-rollback.sql"
 echo ">> rollback 0203 (tytuł oferty bez heurystyki zaślepki, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-title-completeness-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
@@ -158,6 +160,8 @@ echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofane
 echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
 
+echo ">> rollback 0219 (Web Push alertów zapisanych wyszukiwań, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/web-push-rollback.sql"
 echo ">> rollback 0213 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/public-jobs-plan-rollback.sql"
 

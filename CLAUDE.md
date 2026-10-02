@@ -988,6 +988,28 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `job-qualifications`, `jobs-postgres`; integracja `public-job-qualifications` (PG16, kontrola
   ujemna: szkic i firma niezweryfikowana = pusto); E2E `job-qualifications` (4 języki, axe 320/1280,
   kontrola ujemna oferty bez kwalifikacji), `job-posting-fixture` (pola JSON-LD).
+- [x] „Wyjaśnij ofertę” prostym językiem (#773, migracja `0220` — numer tymczasowy; za flagą
+  `AI_JOB_EXPLAIN_ENABLED`, domyślnie wyłączone, atrapa `AI_JOB_EXPLAIN_PROVIDER=fixture` poza produkcją):
+  sekcja `JobExplainPanel` (osobny chunk `JobExplainPanelLazy`) pod treścią szczegółu oferty — na
+  żądanie, w wybranym języku PL/NL/FR/EN; treść oferty bez zmian. Akcja `explainJobOffer`: tylko oferta
+  publiczna (`getJobBySlug`, oryginał zamiast przekładu maszynowego), źródła = ponumerowane fragmenty
+  (`src/lib/ai-explain/sources.ts`: tytuł, pola strukturalne po angielsku dla modelu i w języku strony
+  dla czytelnika, zdania opisu, listy; bez kanału aplikowania, opisu firmy, e-maili/telefonów/
+  identyfikatorów), pamięć podręczna procesu (oferta × język × SHA-256 treści), Turnstile `job_explain`
+  (fail-closed, decyzja właściciela; przed odczytem oferty i pamięcią), limit per adres
+  10/h i 30/dobę (fail-closed), `withAiBudget` (#36), OpenAI `gpt-6-luna` (`src/lib/ai/openai.ts`,
+  strict schema, treść jako dane w `<offer_text>`). Bramki (`guard.ts`, ekstrakcja faktów tłumaczeń):
+  objaśnienie bez istniejącego źródła, z kontaktem, z innymi liczbami/walutą/datą/godziną/
+  brutto-netto/okresem stawki niż wskazane fragmenty, nową jednostką/kwalifikacją albo niezgodną
+  negacją jest pomijane (liczone); luki „brak/sprzeczne/niejasne” zamiast zgadywania; polecenia dla
+  AI w treści = brak wywołania. UI: źródło przy każdym objaśnieniu (`<q lang>`), zastrzeżenie (nie
+  porada prawna, wiąże treść oferty), stan ładowania, błąd z ponowieniem, fokus na wyniku. Inwentarz
+  AI `job_offer_explain` (`allowedInClassifieds: true`, wejście = treść oferty); baza: funkcja
+  w CHECK `ai_usage_ledger_feature` i allow-liście `ai_budget_reserve`. Dowód: `rls.sql` sekcja
+  AIX773, rollback `0220_…down.sql` (`ai-job-explain-rollback.sql`, też w `portal-legal-mode-rollback.sql`
+  przed 0176), unit `job-explain`, `job-explain-action`, `job-explain-panel` (kontrole ujemne), E2E
+  `job-explain` (4 języki, klawiatura, axe 1280/320 px). **Otwarte:** ewaluacja na reprezentatywnych
+  ofertach z prawdziwym modelem przed włączeniem (właściciel), data w objaśnieniu tylko w zapisie ze źródła (ISO).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
   Katalog miast i próg podaży (#920, bez migracji): hub, strona miasta (metadane, „Inne miasta”)
   i sitemap biorą miasta z jednego modułu `src/lib/locations/city-landings.ts` (rdzeń 10 miast +
@@ -2885,6 +2907,31 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w funkcji bez `enqueue_email` = wiadomość serwisowa albo uzasadniony wyjątek rekrutacyjny;
   kontrola ujemna na definicjach sprzed 0942). Dowód: `rls.sql` sekcja NT1120 (kontrola ujemna
   po rollbacku), rollback `0942_…down.sql` (`notification-inapp-service-rollback.sql`).
+
+- [x] Web Push alertów zapisanych wyszukiwań (#724, migracja `0219` — numer tymczasowy; za flagą
+  `WEB_PUSH_ENABLED` + klucze VAPID `WEB_PUSH_VAPID_*` ze zmiennych środowiska, domyślnie wyłączone;
+  klucze: `node scripts/push/generate-vapid-keys.mjs`). Decyzja produktowa: portal ogłoszeniowy —
+  push WYŁĄCZNIE dla `job_match`/`saved_search` (`push_notification_allowed`, propozycje i wiadomości
+  nigdy). Rejestr urządzeń `push_subscriptions` (endpoint tylko z listy usług FCM/Mozilla/Windows/Apple
+  — `push_endpoint_allowed`, lustro `src/lib/push/endpoint.ts`, ochrona przed SSRF; klucze p256dh/auth;
+  etykieta „przeglądarka · system” bez pełnego UA; odczyt własny pod RLS, zapis tylko RPC
+  `register_/unregister_/revoke_push_subscription`, kandydat, limit 10 urządzeń, przejęcie endpointu
+  przez inne konto wygasza kolejkę poprzedniego, ostatnie wycofane → `push_enabled = false`).
+  Kolejka `push_deliveries` z triggera AFTER INSERT na `notifications` (unikat = deduplikacja;
+  powiadomienie pominięte filtrem in-app nie ma push), `claim_push_deliveries` (service_role,
+  SKIP LOCKED, wygasza po 24 h i przy wyłączonym push/alercie/urządzeniu, język ODBIORCY),
+  `finish_push_delivery` (404/410 → urządzenie `gone`, 429/5xx → retry z Retry-After, 5 porażek →
+  `failed`), `purge_push_data` (7 dni / 30 dni) w `/api/maintenance` po alertach. Wysyłka bez
+  pakietów npm: RFC 8291 `aes128gcm` (`src/lib/push/encrypt.ts`, wektor RFC w teście) i VAPID ES256
+  (`vapid.ts`) na `node:crypto`; payload = tytuł/treść z `push.*` i ścieżka panelu, bez nazwy
+  wyszukiwania. `public/sw.js`: `push`/`notificationclick` (adres tylko z tego serwisu). UI:
+  sekcja `PushNotificationsSettings` w `/candidate/ustawienia` tylko przy włączonej funkcji — zgoda
+  przeglądarki dopiero po kliknięciu, stany: brak obsługi, zablokowane, włączone/wyłączone, lista
+  urządzeń z usuwaniem. Formularz preferencji bierze `push_enabled` z bazy. Dowód: `rls.sql` sekcja
+  WP724 (kontrole ujemne: bramka typu, trigger), rollback `0219_…down.sql` (`web-push-rollback.sql`),
+  unit `web-push-crypto`, `web-push-endpoint`, `web-push-worker`, `web-push-actions`,
+  `web-push-service-worker`, `push-notifications-settings`. **Otwarte:** metryki dostarczalności
+  w `/admin/operacje`, push w eksporcie danych konta (#486), E2E z prawdziwą przeglądarką.
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
