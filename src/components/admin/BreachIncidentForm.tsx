@@ -97,19 +97,23 @@ function toLocal(form: BreachForm): LocalForm {
   };
 }
 
-/** Pole lokalne → ISO; wpis, którego nie da się odczytać, zostaje jako błąd formatu. */
-function toIso(value: string): string {
+/**
+ * Pole lokalne → ISO; wpis, którego nie da się odczytać, zostaje jako błąd formatu.
+ * `previous` = zapisana chwila pola (#1112: niezmienione pole w godzinie jesiennej zmiany
+ * czasu zachowuje zapisaną chwilę zamiast przesunięcia o godzinę).
+ */
+function toIso(value: string, previous: string): string {
   if (value.trim().length === 0) return '';
-  return appLocalInputToUtc(value) ?? 'invalid';
+  return appLocalInputToUtc(value, previous) ?? 'invalid';
 }
 
-function toForm(local: LocalForm): BreachForm {
+function toBreachForm(local: LocalForm, initial: BreachForm): BreachForm {
   return {
     ...local,
-    detectedAt: toIso(local.detectedAt),
-    occurredAt: toIso(local.occurredAt),
-    authorityNotifiedAt: toIso(local.authorityNotifiedAt),
-    subjectsNotifiedAt: toIso(local.subjectsNotifiedAt),
+    detectedAt: toIso(local.detectedAt, initial.detectedAt),
+    occurredAt: toIso(local.occurredAt, initial.occurredAt),
+    authorityNotifiedAt: toIso(local.authorityNotifiedAt, initial.authorityNotifiedAt),
+    subjectsNotifiedAt: toIso(local.subjectsNotifiedAt, initial.subjectsNotifiedAt),
   };
 }
 
@@ -177,7 +181,7 @@ export function BreachIncidentForm({
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (disabled) return;
-    const form = toForm(values);
+    const form = toBreachForm(values, initial);
     const found = breachFormErrors(form);
     if (Object.keys(found).length > 0) {
       setErrors(found);
@@ -229,7 +233,7 @@ export function BreachIncidentForm({
   /** #835: zapisz bieżącą treść formularza jako edycję wpisu znalezionego przez konflikt klucza. */
   const reconcile = () => {
     if (disabled || !conflict) return;
-    const form = toForm(values);
+    const form = toBreachForm(values, initial);
     const found = breachFormErrors(form);
     if (Object.keys(found).length > 0) {
       setErrors(found);

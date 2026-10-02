@@ -28,9 +28,10 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 /**
  * AgePolicyForm — zmiana progu wieku konta kandydata (#492, `/admin/ustawienia`).
  *
- * Wybór 16/18 (jedyne dozwolone wartości, jak CHECK w bazie), pole „zatwierdzone przez
- * właściciela” (parametr `p_confirmed` RPC — patrz komentarz w migracji 0126: `false` = wartość
- * robocza) i uzasadnienie (ZAWSZE wymagane, limit jak w bazie). Kliknięcie „Zapisz” NIE zmienia
+ * Wybór 16/18 (jedyne dozwolone wartości, jak CHECK w bazie) i uzasadnienie (ZAWSZE wymagane,
+ * limit jak w bazie). Formularz NIE ustala statusu „zatwierdzone przez właściciela” (#639,
+ * migracja 0209): zmiana administratora zawsze zapisuje wartość roboczą, a zatwierdza ją tylko
+ * właściciel drogą operatorską — dialog pokazuje to jako „status po zapisie”. Kliknięcie „Zapisz” NIE zmienia
  * progu od razu: otwiera dialog potwierdzenia z przejściem „obecny → nowy próg” (jak zmiana
  * statusu firmy, #310) — dopiero potwierdzenie woła Server Action.
  *
@@ -42,12 +43,11 @@ const AGE_OPTIONS = [CANDIDATE_MIN_AGE_LOWEST, CANDIDATE_ADULT_AGE] as const;
 
 export interface AgePolicyFormProps {
   minAge: number;
-  confirmed: boolean;
   /** Znacznik ostatniej zmiany progu widziany przez admina (CAS, #1102); `null` = brak zmiany. */
   updatedAt: string | null;
 }
 
-export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormProps): React.JSX.Element {
+export function AgePolicyForm({ minAge, updatedAt }: AgePolicyFormProps): React.JSX.Element {
   const router = useRouter();
   const t = useTranslations('admin');
   const tRoot = useTranslations();
@@ -55,7 +55,6 @@ export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormPro
 
   const [pending, startTransition] = React.useTransition();
   const [selectedAge, setSelectedAge] = React.useState<number>(isCandidateAgeBand(minAge) ? minAge : CANDIDATE_ADULT_AGE);
-  const [selectedConfirmed, setSelectedConfirmed] = React.useState(confirmed);
   const [reasonValue, setReasonValue] = React.useState('');
   const [reasonError, setReasonError] = React.useState<'required' | 'tooLong' | null>(null);
   const [confirming, setConfirming] = React.useState(false);
@@ -68,7 +67,6 @@ export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormPro
   const reasonErrorId = `${idBase}-reason-error`;
 
   const ageLabel = (age: number) => (age === CANDIDATE_ADULT_AGE ? t('agePolicyOption18') : t('agePolicyOption16'));
-  const confirmedLabel = (value: boolean) => (value ? t('agePolicyConfirmedYes') : t('agePolicyConfirmedNo'));
 
   const openConfirm = () => {
     const localError = agePolicyReasonError(reasonValue);
@@ -89,7 +87,7 @@ export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormPro
     if (pending) return;
     startTransition(async () => {
       try {
-        const res = await setCandidateMinAge(selectedAge, selectedConfirmed, reasonValue, updatedAt);
+        const res = await setCandidateMinAge(selectedAge, reasonValue, updatedAt);
         if (!res.ok && res.field === 'reason') {
           setConfirming(false);
           setReasonError(res.reason ?? 'required');
@@ -152,18 +150,7 @@ export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormPro
         </div>
       </fieldset>
 
-      <label htmlFor={`${idBase}-confirmed`} className={CHECK_ROW}>
-        <input
-          id={`${idBase}-confirmed`}
-          type="checkbox"
-          checked={selectedConfirmed}
-          disabled={pending}
-          onChange={(event) => setSelectedConfirmed(event.target.checked)}
-          className={CHECKBOX}
-        />
-        {t('agePolicyConfirmedField')}
-      </label>
-      <p className={FORM_HINT}>{t('agePolicyConfirmedHint')}</p>
+      <p className={cn(FORM_HINT, 'mt-3')}>{t('agePolicyConfirmedHint')}</p>
 
       <div className={cn(FORM_FIELD, 'mt-4')}>
         <label htmlFor={reasonId} className={FORM_LABEL_TEXT}>
@@ -217,7 +204,7 @@ export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormPro
           details={[
             { key: 'current', label: t('agePolicyCurrentLabel'), value: ageLabel(isCandidateAgeBand(minAge) ? minAge : CANDIDATE_ADULT_AGE) },
             { key: 'new', label: t('agePolicyNewLabel'), value: ageLabel(selectedAge) },
-            { key: 'confirmed', label: t('agePolicyConfirmedField'), value: confirmedLabel(selectedConfirmed) },
+            { key: 'confirmed', label: t('agePolicyAfterSaveLabel'), value: t('agePolicyConfirmedNo') },
           ]}
           confirmLabel={t('agePolicySubmit')}
           tone={selectedAge > minAge ? 'warning' : 'neutral'}

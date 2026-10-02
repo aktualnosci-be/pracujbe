@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,11 +123,20 @@ describe('token wypisania', () => {
   });
 });
 
-describe('lustro SQL ↔ TS (migracja 0087)', () => {
-  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0087_email_unsubscribe_budget.sql'), 'utf8');
+/** Treść NAJNOWSZEJ migracji, która (re)definiuje funkcję — lustro TS ma odpowiadać stanowi końcowemu. */
+function latestDefinition(fn: string): string {
+  const dir = join(process.cwd(), 'supabase/migrations');
+  const files = readdirSync(dir).filter((f) => /^0\d+_.*\.sql$/.test(f)).sort();
+  const defining = files.filter((f) => readFileSync(join(dir, f), 'utf8').includes(`function public.${fn}(`));
+  return readFileSync(join(dir, defining[defining.length - 1]!), 'utf8');
+}
+
+describe('lustro SQL ↔ TS (migracje 0087, 0215)', () => {
+  const sqlCategory = latestDefinition('email_preference_category');
+  const sqlPool = latestDefinition('email_send_pool');
 
   it('kategorie typów maili zgodne z email_preference_category', () => {
-    const body = sql.slice(sql.indexOf('function public.email_preference_category'), sql.indexOf('revoke all on function public.email_preference_category'));
+    const body = sqlCategory.slice(sqlCategory.indexOf('function public.email_preference_category'), sqlCategory.indexOf('revoke all on function public.email_preference_category'));
     const fromSql = Object.fromEntries(
       [...body.matchAll(/when '(\w+)'\s+then '(\w+)'/g)].map((m) => [m[1], m[2]]),
     );
@@ -138,7 +147,7 @@ describe('lustro SQL ↔ TS (migracja 0087)', () => {
   });
 
   it('pule budżetu zgodne z email_send_pool', () => {
-    const body = sql.slice(sql.indexOf('function public.email_send_pool'), sql.indexOf('revoke all on function public.email_send_pool'));
+    const body = sqlPool.slice(sqlPool.indexOf('function public.email_send_pool'), sqlPool.indexOf('revoke all on function public.email_send_pool'));
     const list = (pool: string) =>
       [...body.match(new RegExp(`in \\(([^)]*)\\)\\s+then '${pool}'`))![1]!.matchAll(/'(\w+)'/g)].map((m) => m[1]);
     expect(list('auth')).toEqual([...EMAIL_AUTH_TEMPLATES]);
