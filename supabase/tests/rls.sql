@@ -24767,150 +24767,6 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
--- WD792. Tryb pracy oferty i kraje kandydata (#792, migracja 0956 — numer tymczasowy).
---   * CHECK: tryb z listy, praca w 100% zdalna = co najmniej jeden kraj z listy dozwolonej,
---     inny tryb = bez krajów, bez powtórzeń.
---   * `remote` liczy trigger z trybu (hybryda = false); tryb nieznany zostawia dawny boolean.
---   * save_job_draft / update_published_job zapisują tryb i kraje, get_public_job je zwraca,
---     kopia szkicu je przenosi, migawka audytu edycji je zawiera.
---   * Kontrole ujemne: bez triggera hybryda z `remote = true` omija filtr promienia; bez CHECK
---     tryb zdalny bez kraju przechodzi; save_job_draft z 0194 odrzuca nowe klucze.
--- ============================================================================
-\echo '--- WD792 tryb pracy i kraje kandydata ---'
-\set WDC  'f7920000-0000-4000-8000-0000000000c1'
-\set WDE  'f7920000-0000-4000-8000-0000000000e1'
-\set WDJ  'f7920000-0000-4000-8000-000000000001'
-\set WDJ2 'f7920000-0000-4000-8000-000000000002'
-\set WDJC 'f7920000-0000-4000-8000-000000000003'
-reset role; reset app.current_uid;
-insert into auth.users(id,email,name,raw_user_meta_data) values
-  (:'WDE','wde@test.be','Wanda E','{"role":"employer","first_name":"Wanda","last_name":"E","locale":"fr"}');
-insert into public.companies(id,name,status) values (:'WDC','Firma WD792','verified');
-insert into public.company_members(company_id,profile_id,role,is_active) values (:'WDC',:'WDE','owner',true);
-insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale, remote) values
-  (:'WDJ', :'WDC', :'WDE', 'draft-wd792', 'Konsultant WD792', 'warehouse', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', true),
-  (:'WDJ2', :'WDC', :'WDE', 'draft-wd792-2', 'Konsultant WD792 b', 'warehouse', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', false);
-insert into public.job_translations(job_id, locale, title, description, responsibilities) values
-  (:'WDJ', 'pl', 'Konsultant WD792', 'Obsługa klientów zdalnie, cały czas z domu.', array['Rozmowy z klientami']);
-insert into public.job_requirements(job_id, locale, kind, position, content) values
-  (:'WDJ', 'pl', 'mandatory', 0, 'Dyspozycyjność');
-
--- WD1: stara oferta (bez trybu) zostaje nieznana; `remote` bez zmian.
-select pg_temp.assert((select work_mode is null and remote and remote_applicant_countries = '{}' from public.jobs where id = :'WDJ'),
-  'WD1 oferta bez trybu: tryb nieznany, dawny boolean bez zmian, bez krajów');
-
--- WD2: CHECK na każdej ścieżce (tu DML superusera).
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L where id = %L', 'sometimes', :'WDJ'),
-  'jobs_work_mode_check', 'WD2a tryb spoza listy odrzucony');
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L where id = %L', 'remote', :'WDJ'),
-  'jobs_remote_applicant_countries_check', 'WD2b praca w 100% zdalna bez kraju odrzucona');
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'hybrid', '{BE}', :'WDJ'),
-  'jobs_remote_applicant_countries_check', 'WD2c kraje przy pracy hybrydowej odrzucone');
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'remote', '{BE,US}', :'WDJ'),
-  'jobs_remote_applicant_countries_check', 'WD2d kraj spoza listy odrzucony');
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'remote', '{BE,BE}', :'WDJ'),
-  'jobs_remote_applicant_countries_check', 'WD2e powtórzony kraj odrzucony');
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'remote', '{be}', :'WDJ'),
-  'jobs_remote_applicant_countries_check', 'WD2f kod małymi literami odrzucony (bez cichej normalizacji w DML)');
-
--- WD3: save_job_draft zapisuje tryb i kraje (normalizacja jsonb → text[]), `remote` z trybu.
-set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select public.save_job_draft(:'WDJ'::uuid,
-  '{"job": {"work_mode": "remote", "remote_applicant_countries": [" be", "NL", "BE", ""], "remote": false}}'::jsonb);
-reset role; reset app.current_uid;
-select pg_temp.assert((select work_mode = 'remote' and remote and remote_applicant_countries = '{BE,NL}' from public.jobs where id = :'WDJ'),
-  'WD3a save_job_draft: zdalna, kraje znormalizowane, remote = true mimo klucza false');
-set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select public.save_job_draft(:'WDJ'::uuid, '{"job": {"work_mode": "hybrid", "remote": true}}'::jsonb);
-reset role; reset app.current_uid;
-select pg_temp.assert((select work_mode = 'hybrid' and not remote and remote_applicant_countries = '{}' from public.jobs where id = :'WDJ'),
-  'WD3b hybryda: remote = false, kraje wyczyszczone (także bez klucza krajów)');
-set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJ',
-    '{"job": {"work_mode": "remote", "remote_applicant_countries": []}}'),
-  'jobs_remote_applicant_countries_check', 'WD3c save_job_draft: zdalna bez kraju odrzucona');
-select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJ',
-    '{"job": {"work_mode": "remote", "remote_applicant_countries": ["XX"]}}'),
-  'jobs_remote_applicant_countries_check', 'WD3d save_job_draft: kraj spoza listy odrzucony');
-select public.save_job_draft(:'WDJ'::uuid, '{"job": {"title": "Konsultant WD792 zdalnie"}}'::jsonb);
-reset role; reset app.current_uid;
-select pg_temp.assert((select work_mode = 'hybrid' from public.jobs where id = :'WDJ'), 'WD3e krok bez klucza nie zmienia trybu');
-set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select public.save_job_draft(:'WDJ'::uuid,
-  '{"job": {"work_mode": "remote", "remote_applicant_countries": ["BE", "FR"], "apply_email": "praca@wd792.be"}}'::jsonb);
-select public.publish_job(:'WDJ'::uuid, 'konsultant-wd792') as wd_slug \gset
-reset role; reset app.current_uid;
-
--- WD4: get_public_job zwraca tryb i kraje (oferta publiczna); oferta bez trybu = null.
-set role anon; select pg_temp.assert_client_role();
-select pg_temp.assert(
-  (select work_mode = 'remote' and remote_applicant_countries = '{BE,FR}' from public.get_public_job(:'wd_slug', 'pl')),
-  'WD4 get_public_job zwraca tryb pracy i kraje kandydata');
-reset role;
-
--- WD5: update_published_job zapisuje tryb (kontekst rewizji), migawka audytu go zawiera.
-select set_config('pb.wd_base', jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job}',
-  (current_setting('pb.rr_ok')::jsonb -> 'job') || $j${"title": "Konsultant WD792", "city": "Gent", "region": "Flandria",
-   "apply_email": "praca@wd792.be", "accommodation": false, "work_mode": "onsite", "remote_applicant_countries": ["BE"]}$j$::jsonb)::text, false);
-set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select public.update_published_job(:'WDJ'::uuid, current_setting('pb.wd_base')::jsonb) is not null as ok \gset wd5_
-reset role; reset app.current_uid;
-select pg_temp.assert((select work_mode = 'onsite' and not remote and remote_applicant_countries = '{}' and status = 'active'
-                         from public.jobs where id = :'WDJ'),
-  'WD5a rewizja: tryb na miejscu, kraje wyczyszczone, remote = false');
-select pg_temp.assert(
-  (select (before_data ->> 'work_mode') = 'remote' and (after_data ->> 'work_mode') = 'onsite'
-     and (before_data -> 'remote_applicant_countries') = '["BE", "FR"]'::jsonb
-     from public.audit_logs where entity_id = :'WDJ' and action = 'job.update_published'
-     order by created_at desc limit 1),
-  'WD5b audyt edycji zawiera tryb i kraje przed/po');
-set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb)', :'WDJ',
-    jsonb_set(current_setting('pb.wd_base')::jsonb, '{job,work_mode}', '"remote"') #- '{job,remote_applicant_countries}'),
-  'jobs_remote_applicant_countries_check', 'WD5c rewizja: zdalna bez kraju odrzucona');
-select pg_temp.expect_error(format('update public.jobs set work_mode = %L where id = %L', 'hybrid', :'WDJ'),
-  'JOB_NOT_DRAFT', 'WD5d bezpośredni zapis trybu opublikowanej oferty zablokowany (0077)');
-reset role; reset app.current_uid;
-select pg_temp.assert((select work_mode = 'onsite' from public.jobs where id = :'WDJ'), 'WD5e odrzucone zapisy nie zmieniły trybu');
-
--- WD6: kopia szkicu przenosi tryb i kraje.
-update public.jobs set work_mode = 'remote', remote_applicant_countries = '{NL}' where id = :'WDJ';
-insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
-  (:'WDJC',:'WDC',:'WDE','draft-wd792-copy','Kopia WD792','warehouse','permanent','Gent','Flandria','draft','pl');
-insert into public.job_duplications(company_id, created_by, client_key, source_job_id, new_job_id)
-  values (:'WDC', :'WDE', gen_random_uuid(), :'WDJ', :'WDJC');
-select pg_temp.assert((select work_mode = 'remote' and remote and remote_applicant_countries = '{NL}' from public.jobs where id = :'WDJC'),
-  'WD6 kopia szkicu przenosi tryb pracy i kraje');
-
--- WD7 (promień, 0194): hybryda nie omija filtra promienia (remote = false z trybu).
-update public.jobs set work_mode = 'hybrid', remote = true, city = 'Arlon', region = 'Walonia', status = 'active',
-       published_at = now() where id = :'WDJ2';
-select pg_temp.assert((select not remote from public.jobs where id = :'WDJ2'), 'WD7a trigger: hybryda z remote = true zapisana jako false');
-select pg_temp.assert(not exists (select 1 from public.get_public_jobs(p_locale => 'pl', p_keyword => 'WD792 b',
-                                   p_near => 'Gent', p_radius_km => 25)),
-  'WD7b hybryda w Arlon poza promieniem 25 km od Gent');
-
--- WD-N: kontrole ujemne (transakcje cofane).
-begin;
-drop trigger trg_jobs_sync_remote_from_work_mode on public.jobs;
-update public.jobs set remote = true where id = :'WDJ2';
-select pg_temp.assert(exists (select 1 from public.get_public_jobs(p_locale => 'pl', p_keyword => 'WD792 b',
-                               p_near => 'Gent', p_radius_km => 25)),
-  'WD-N1 kontrola ujemna: bez triggera hybryda z remote = true omija promień (WD7 wykrywa regresję)');
-rollback;
-begin;
-alter table public.jobs drop constraint jobs_remote_applicant_countries_check;
-update public.jobs set work_mode = 'remote', remote_applicant_countries = '{}' where id = :'WDJ2';
-select pg_temp.assert((select work_mode = 'remote' and remote_applicant_countries = '{}' from public.jobs where id = :'WDJ2'),
-  'WD-N2 kontrola ujemna: bez CHECK praca zdalna bez kraju przechodzi (WD2b wykrywa regresję)');
-rollback;
-begin;
-\ir ../rollback/0956_job_work_mode.down.sql
-set local role authenticated; set local app.current_uid = :'WDE'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJC',
-    '{"job": {"work_mode": "onsite"}}'),
-  'nieznane pole', 'WD-N3 kontrola ujemna: save_job_draft z 0194 nie zna trybu pracy');
-=======
 -- ============================================================================
 -- EX1232. Eksport pracodawcy: odwołania i zgłoszenia treści (#1232, migracja 0207)
 -- ============================================================================
@@ -25090,7 +24946,151 @@ reset role; reset app.current_uid;
 
 -- ============================================================================
 
--- =====================================================================rollback;
+-- ============================================================================
+-- WD792. Tryb pracy oferty i kraje kandydata (#792, migracja 0956 — numer tymczasowy).
+--   * CHECK: tryb z listy, praca w 100% zdalna = co najmniej jeden kraj z listy dozwolonej,
+--     inny tryb = bez krajów, bez powtórzeń.
+--   * `remote` liczy trigger z trybu (hybryda = false); tryb nieznany zostawia dawny boolean.
+--   * save_job_draft / update_published_job zapisują tryb i kraje, get_public_job je zwraca,
+--     kopia szkicu je przenosi, migawka audytu edycji je zawiera.
+--   * Kontrole ujemne: bez triggera hybryda z `remote = true` omija filtr promienia; bez CHECK
+--     tryb zdalny bez kraju przechodzi; save_job_draft z 0194 odrzuca nowe klucze.
+-- ============================================================================
+\echo '--- WD792 tryb pracy i kraje kandydata ---'
+\set WDC  'f7920000-0000-4000-8000-0000000000c1'
+\set WDE  'f7920000-0000-4000-8000-0000000000e1'
+\set WDJ  'f7920000-0000-4000-8000-000000000001'
+\set WDJ2 'f7920000-0000-4000-8000-000000000002'
+\set WDJC 'f7920000-0000-4000-8000-000000000003'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'WDE','wde@test.be','Wanda E','{"role":"employer","first_name":"Wanda","last_name":"E","locale":"fr"}');
+insert into public.companies(id,name,status) values (:'WDC','Firma WD792','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'WDC',:'WDE','owner',true);
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale, remote) values
+  (:'WDJ', :'WDC', :'WDE', 'draft-wd792', 'Konsultant WD792', 'warehouse', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', true),
+  (:'WDJ2', :'WDC', :'WDE', 'draft-wd792-2', 'Konsultant WD792 b', 'warehouse', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', false);
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'WDJ', 'pl', 'Konsultant WD792', 'Obsługa klientów zdalnie, cały czas z domu.', array['Rozmowy z klientami']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'WDJ', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- WD1: stara oferta (bez trybu) zostaje nieznana; `remote` bez zmian.
+select pg_temp.assert((select work_mode is null and remote and remote_applicant_countries = '{}' from public.jobs where id = :'WDJ'),
+  'WD1 oferta bez trybu: tryb nieznany, dawny boolean bez zmian, bez krajów');
+
+-- WD2: CHECK na każdej ścieżce (tu DML superusera).
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L where id = %L', 'sometimes', :'WDJ'),
+  'jobs_work_mode_check', 'WD2a tryb spoza listy odrzucony');
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L where id = %L', 'remote', :'WDJ'),
+  'jobs_remote_applicant_countries_check', 'WD2b praca w 100% zdalna bez kraju odrzucona');
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'hybrid', '{BE}', :'WDJ'),
+  'jobs_remote_applicant_countries_check', 'WD2c kraje przy pracy hybrydowej odrzucone');
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'remote', '{BE,US}', :'WDJ'),
+  'jobs_remote_applicant_countries_check', 'WD2d kraj spoza listy odrzucony');
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'remote', '{BE,BE}', :'WDJ'),
+  'jobs_remote_applicant_countries_check', 'WD2e powtórzony kraj odrzucony');
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L, remote_applicant_countries = %L where id = %L', 'remote', '{be}', :'WDJ'),
+  'jobs_remote_applicant_countries_check', 'WD2f kod małymi literami odrzucony (bez cichej normalizacji w DML)');
+
+-- WD3: save_job_draft zapisuje tryb i kraje (normalizacja jsonb → text[]), `remote` z trybu.
+set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'WDJ'::uuid,
+  '{"job": {"work_mode": "remote", "remote_applicant_countries": [" be", "NL", "BE", ""], "remote": false}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_mode = 'remote' and remote and remote_applicant_countries = '{BE,NL}' from public.jobs where id = :'WDJ'),
+  'WD3a save_job_draft: zdalna, kraje znormalizowane, remote = true mimo klucza false');
+set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'WDJ'::uuid, '{"job": {"work_mode": "hybrid", "remote": true}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_mode = 'hybrid' and not remote and remote_applicant_countries = '{}' from public.jobs where id = :'WDJ'),
+  'WD3b hybryda: remote = false, kraje wyczyszczone (także bez klucza krajów)');
+set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJ',
+    '{"job": {"work_mode": "remote", "remote_applicant_countries": []}}'),
+  'jobs_remote_applicant_countries_check', 'WD3c save_job_draft: zdalna bez kraju odrzucona');
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJ',
+    '{"job": {"work_mode": "remote", "remote_applicant_countries": ["XX"]}}'),
+  'jobs_remote_applicant_countries_check', 'WD3d save_job_draft: kraj spoza listy odrzucony');
+select public.save_job_draft(:'WDJ'::uuid, '{"job": {"title": "Konsultant WD792 zdalnie"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_mode = 'hybrid' from public.jobs where id = :'WDJ'), 'WD3e krok bez klucza nie zmienia trybu');
+set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'WDJ'::uuid,
+  '{"job": {"work_mode": "remote", "remote_applicant_countries": ["BE", "FR"], "apply_email": "praca@wd792.be"}}'::jsonb);
+select public.publish_job(:'WDJ'::uuid, 'konsultant-wd792') as wd_slug \gset
+reset role; reset app.current_uid;
+
+-- WD4: get_public_job zwraca tryb i kraje (oferta publiczna); oferta bez trybu = null.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select work_mode = 'remote' and remote_applicant_countries = '{BE,FR}' from public.get_public_job(:'wd_slug', 'pl')),
+  'WD4 get_public_job zwraca tryb pracy i kraje kandydata');
+reset role;
+
+-- WD5: update_published_job zapisuje tryb (kontekst rewizji), migawka audytu go zawiera.
+select set_config('pb.wd_base', jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job}',
+  (current_setting('pb.rr_ok')::jsonb -> 'job') || $j${"title": "Konsultant WD792", "city": "Gent", "region": "Flandria",
+   "apply_email": "praca@wd792.be", "accommodation": false, "work_mode": "onsite", "remote_applicant_countries": ["BE"]}$j$::jsonb)::text, false);
+set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select public.update_published_job(:'WDJ'::uuid, current_setting('pb.wd_base')::jsonb) is not null as ok \gset wd5_
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_mode = 'onsite' and not remote and remote_applicant_countries = '{}' and status = 'active'
+                         from public.jobs where id = :'WDJ'),
+  'WD5a rewizja: tryb na miejscu, kraje wyczyszczone, remote = false');
+select pg_temp.assert(
+  (select (before_data ->> 'work_mode') = 'remote' and (after_data ->> 'work_mode') = 'onsite'
+     and (before_data -> 'remote_applicant_countries') = '["BE", "FR"]'::jsonb
+     from public.audit_logs where entity_id = :'WDJ' and action = 'job.update_published'
+     order by created_at desc limit 1),
+  'WD5b audyt edycji zawiera tryb i kraje przed/po');
+set role authenticated; set app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb)', :'WDJ',
+    jsonb_set(current_setting('pb.wd_base')::jsonb, '{job,work_mode}', '"remote"') #- '{job,remote_applicant_countries}'),
+  'jobs_remote_applicant_countries_check', 'WD5c rewizja: zdalna bez kraju odrzucona');
+select pg_temp.expect_error(format('update public.jobs set work_mode = %L where id = %L', 'hybrid', :'WDJ'),
+  'JOB_NOT_DRAFT', 'WD5d bezpośredni zapis trybu opublikowanej oferty zablokowany (0077)');
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_mode = 'onsite' from public.jobs where id = :'WDJ'), 'WD5e odrzucone zapisy nie zmieniły trybu');
+
+-- WD6: kopia szkicu przenosi tryb i kraje.
+update public.jobs set work_mode = 'remote', remote_applicant_countries = '{NL}' where id = :'WDJ';
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'WDJC',:'WDC',:'WDE','draft-wd792-copy','Kopia WD792','warehouse','permanent','Gent','Flandria','draft','pl');
+insert into public.job_duplications(company_id, created_by, client_key, source_job_id, new_job_id)
+  values (:'WDC', :'WDE', gen_random_uuid(), :'WDJ', :'WDJC');
+select pg_temp.assert((select work_mode = 'remote' and remote and remote_applicant_countries = '{NL}' from public.jobs where id = :'WDJC'),
+  'WD6 kopia szkicu przenosi tryb pracy i kraje');
+
+-- WD7 (promień, 0194): hybryda nie omija filtra promienia (remote = false z trybu).
+update public.jobs set work_mode = 'hybrid', remote = true, city = 'Arlon', region = 'Walonia', status = 'active',
+       published_at = now() where id = :'WDJ2';
+select pg_temp.assert((select not remote from public.jobs where id = :'WDJ2'), 'WD7a trigger: hybryda z remote = true zapisana jako false');
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs(p_locale => 'pl', p_keyword => 'WD792 b',
+                                   p_near => 'Gent', p_radius_km => 25)),
+  'WD7b hybryda w Arlon poza promieniem 25 km od Gent');
+
+-- WD-N: kontrole ujemne (transakcje cofane).
+begin;
+drop trigger trg_jobs_sync_remote_from_work_mode on public.jobs;
+update public.jobs set remote = true where id = :'WDJ2';
+select pg_temp.assert(exists (select 1 from public.get_public_jobs(p_locale => 'pl', p_keyword => 'WD792 b',
+                               p_near => 'Gent', p_radius_km => 25)),
+  'WD-N1 kontrola ujemna: bez triggera hybryda z remote = true omija promień (WD7 wykrywa regresję)');
+rollback;
+begin;
+alter table public.jobs drop constraint jobs_remote_applicant_countries_check;
+update public.jobs set work_mode = 'remote', remote_applicant_countries = '{}' where id = :'WDJ2';
+select pg_temp.assert((select work_mode = 'remote' and remote_applicant_countries = '{}' from public.jobs where id = :'WDJ2'),
+  'WD-N2 kontrola ujemna: bez CHECK praca zdalna bez kraju przechodzi (WD2b wykrywa regresję)');
+rollback;
+begin;
+\ir ../rollback/0956_job_work_mode.down.sql
+set local role authenticated; set local app.current_uid = :'WDE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJC',
+    '{"job": {"work_mode": "onsite"}}'),
+  'nieznane pole', 'WD-N3 kontrola ujemna: save_job_draft z 0194 nie zna trybu pracy');
+rollback;
 reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
