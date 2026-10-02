@@ -1,5 +1,5 @@
 /**
- * Wiadomości serwisowe tylko w panelu (#1120, migracja 0942 — lustro
+ * Wiadomości serwisowe tylko w panelu (#1120, migracja 0221 — lustro
  * `public.notification_inapp_required`). Decyzje administratora bez odpowiednika e-mail:
  * preferencja „Powiadomienia w aplikacji” ich nie ukrywa, bo inaczej użytkownik nie dowie się
  * o nich żadnym kanałem. Wszystkie są typu `system` i trafiają do właścicieli/rekruterów firmy,

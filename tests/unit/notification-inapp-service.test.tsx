@@ -22,7 +22,7 @@ import { descriptionKey } from '@/lib/settings/email-preference-fields';
 
 /**
  * #1120 (NOTIF-04): opt-out „Powiadomienia w aplikacji” nie może ukrywać decyzji, które nie
- * mają odpowiednika e-mail. Reguła w bazie: `notification_inapp_required` (migracja 0942).
+ * mają odpowiednika e-mail. Reguła w bazie: `notification_inapp_required` (migracja 0221).
  */
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -109,10 +109,10 @@ describe('wiadomości serwisowe a opt-out in-app (#1120)', () => {
     for (const k of Object.keys(NO_EMAIL_EXCEPTIONS)) expect(inAppOnlyKinds(defs).has(k)).toBe(true);
   });
 
-  it('kontrola ujemna: definicje sprzed 0942 nie mają reguły, a strażnik wskazuje decyzje bez e-maila', () => {
+  it('kontrola ujemna: definicje sprzed 0221 nie mają reguły, a strażnik wskazuje decyzje bez e-maila', () => {
     const before = latestDefinitions(
       migrationFiles()
-        .filter((f) => !path.basename(f).startsWith('0942_'))
+        .filter((f) => !path.basename(f).startsWith('0221_'))
         .map((f) => readFileSync(path.join(ROOT, f), 'utf8')),
     );
     expect(sqlRequiredKinds(before)).toBeNull();

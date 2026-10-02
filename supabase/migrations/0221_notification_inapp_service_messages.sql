@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0942_notification_inapp_service_messages.sql (numer tymczasowy — ostateczny nada integrator)
+-- 0221_notification_inapp_service_messages.sql (numer tymczasowy — ostateczny nada integrator)
 -- #1120 (audyt 2026-09-28, NOTIF-04): preferencja „Powiadomienia w aplikacji” (0035) ukrywała
 --   KAŻDE powiadomienie, także decyzje administratora, które nie mają żadnego e-maila:
 --   zatwierdzenie/odrzucenie strony WWW i logo firmy (0156), opisu firmy (0198/0201) i treści
@@ -12,7 +12,7 @@
 --   zmian (wyłączenie działa). Ustawienia opisują, których komunikatów to nie dotyczy.
 --   Powiadomienia procesu rekrutacyjnego nadal pomija trigger trybu (0175, `trg_aa_…` przed tym).
 --
--- Rollback: supabase/rollback/0942_notification_inapp_service_messages.down.sql.
+-- Rollback: supabase/rollback/0221_notification_inapp_service_messages.down.sql.
 -- =============================================================================
 
 create or replace function public.notification_inapp_required(p_type text, p_data jsonb)

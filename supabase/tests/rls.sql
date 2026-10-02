@@ -26574,7 +26574,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0942)
+-- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0221)
 -- ============================================================================
 \echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'
 begin;
@@ -26614,12 +26614,12 @@ select pg_temp.assert(
   'NT1120-5 in_app_enabled=true → powiadomienie utworzone');
 -- Kontrola ujemna: filtr z 0035 ukrywa decyzję bez e-maila.
 update public.notification_preferences set in_app_enabled = false where profile_id = :'EMPA';
-\ir ../rollback/0942_notification_inapp_service_messages.down.sql
+\ir ../rollback/0221_notification_inapp_service_messages.down.sql
 insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
   (:'EMPA', 'system', 'nt1120-neg', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}');
 select pg_temp.assert(
   (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-neg') = 0,
-  'NT1120-N kontrola ujemna: bez 0942 decyzja o linkach firmy znika przy opt-oucie');
+  'NT1120-N kontrola ujemna: bez 0221 decyzja o linkach firmy znika przy opt-oucie');
 rollback;
 reset role; reset app.current_uid;
 
