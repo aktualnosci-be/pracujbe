@@ -118,3 +118,16 @@ export function utcToAppLocalInput(iso: string | null | undefined): string {
     local.getUTCHours(),
   )}:${pad(local.getUTCMinutes())}`;
 }
+
+/**
+ * Najwcześniejszy i najpóźniejszy dzień wznowienia pauzy alertów (#810) jako `YYYY-MM-DD` w
+ * Europe/Brussels: jutro .. +366 dni — te same granice co `set_saved_search_alerts_pause` (0215).
+ */
+export function pauseDateRange(now: Date = new Date()): { min: string; max: string } {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  const [y, m, d] = ymd.split('-').map(Number) as [number, number, number];
+  const at = (days: number): string => new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  return { min: at(1), max: at(366) };
+}
