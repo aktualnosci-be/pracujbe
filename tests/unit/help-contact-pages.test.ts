@@ -21,6 +21,13 @@ vi.mock('@/lib/jobs', () => ({
   getCityCounts: async () => ({}),
   getJobsAvailableLocales: async () => ({}),
 }));
+// Sitemapa ofert idzie kursorowym RPC (#1042) — tu katalog pusty, bez bazy.
+vi.mock('@/lib/sitemap-jobs', () => ({
+  SITEMAP_JOBS_PAGE: 1000,
+  getSitemapJobShardStarts: async () => [],
+  getSitemapJobsShard: async () => [],
+  getSitemapCompanySlugs: async () => [],
+}));
 vi.mock('@/lib/guides/guides', () => ({ getAllGuideSlugs: () => [] }));
 vi.mock('@/i18n/navigation', () => ({ Link: () => null, usePathname: () => '/' }));
 vi.mock('next-intl/server', () => ({
