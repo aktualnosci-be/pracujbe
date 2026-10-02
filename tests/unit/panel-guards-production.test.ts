@@ -23,13 +23,18 @@ const m = vi.hoisted(() => {
     Redirect,
     NotFound,
     identity: null as null | { id: string; role: 'candidate' | 'employer' | 'admin' },
+    requestHeaders: new Headers(),
     getNotifications: vi.fn(async () => ({ status: 'ready', items: [], unread: 0 })),
   };
 });
 
 vi.mock('@/i18n/navigation', () => ({
-  redirect: (args: { href: string; locale: string }) => {
-    throw new m.Redirect(`/${args.locale}${args.href}`);
+  redirect: (args: { href: string | { pathname: string; query: { next: string } }; locale: string }) => {
+    const href =
+      typeof args.href === 'string'
+        ? args.href
+        : `${args.href.pathname}?next=${encodeURIComponent(args.href.query.next)}`;
+    throw new m.Redirect(`/${args.locale}${href}`);
   },
   Link: () => null,
 }));
@@ -38,6 +43,7 @@ vi.mock('next/navigation', () => ({
     throw new m.NotFound();
   },
 }));
+vi.mock('next/headers', () => ({ headers: async () => m.requestHeaders }));
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
 vi.mock('@/lib/auth/current', () => ({
   getCurrentIdentity: async () => m.identity,
@@ -91,6 +97,7 @@ function stubProduction() {
 
 beforeEach(() => {
   m.identity = null;
+  m.requestHeaders = new Headers();
   m.getNotifications.mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -143,4 +150,29 @@ describe('#12: panele w produkcji bez sesji', () => {
     expect(await outcome(CandidateLayout as Layout)).toEqual({ rendered: true });
     expect(m.getNotifications).toHaveBeenCalledWith('pl', 'candidate');
   });
+
+  it('#1090: gość z linku do obiektu panelu → logowanie z powrotem na tę stronę', async () => {
+    stubProduction();
+    const cases = [
+      [CandidateLayout, '/fr/candidate/aplikacje/0b3c1f7e-7f38-4a55-9d1b-1d6f5b2f0a11'],
+      [EmployerLayout, '/nl/employer/aplikacje?oferta=x'],
+      [AdminLayout, '/en/admin/zgloszenia'],
+    ] as const;
+    for (const [layout, path] of cases) {
+      m.requestHeaders = new Headers({ 'x-pracujbe-return-path': path });
+      const locale = path.slice(1, 3);
+      expect(await outcome(layout as Layout, locale)).toEqual({
+        redirect: `/${locale}/logowanie?next=${encodeURIComponent(path)}`,
+      });
+    }
+  });
+
+  it.each(['//evil.example/x', 'https://evil.example/pl/candidate', '/candidate/bez-jezyka', '/pl\\\\evil'])(
+    '#1090 kontrola ujemna: niebezpieczny powrót %s → zwykłe logowanie',
+    async (value) => {
+      stubProduction();
+      m.requestHeaders = new Headers({ 'x-pracujbe-return-path': value });
+      expect(await outcome(CandidateLayout as Layout)).toEqual({ redirect: '/pl/logowanie' });
+    },
+  );
 });

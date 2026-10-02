@@ -38,6 +38,16 @@ export interface NewsletterEmailProps {
   locale: Locale;
   jobs: readonly NewsletterJob[];
   transport?: NewsletterTransport;
+  /** Rola odbiorcy (`profiles.role`) — link ustawień powiadomień do właściwego panelu (#1118). */
+  recipientRole?: string | null;
+}
+
+/**
+ * Ścieżka ustawień powiadomień (bez prefiksu języka) dla roli odbiorcy (#1118): pracodawca ma
+ * ustawienia w panelu pracodawcy, pozostali (kandydat, nieznana rola) — w panelu kandydata.
+ */
+export function newsletterPreferencesPath(role: string | null | undefined): string {
+  return role === "employer" ? "/employer/ustawienia" : "/candidate/ustawienia";
 }
 
 /**
@@ -118,11 +128,12 @@ export function NewsletterEmail({
   locale,
   jobs,
   transport,
+  recipientRole,
 }: NewsletterEmailProps): ReactElement {
   assertRenderableJobs(jobs, locale);
   const copy = newsletterCopy[locale];
   const jobsHref = `${env.siteUrl}/${locale}/oferty-pracy`;
-  const preferencesHref = `${env.siteUrl}/${locale}/candidate/ustawienia`;
+  const preferencesHref = `${env.siteUrl}/${locale}${newsletterPreferencesPath(recipientRole)}`;
 
   return (
     <EmailLayout
@@ -151,6 +162,7 @@ function renderNewsletterText(
   locale: Locale,
   jobs: readonly NewsletterJob[],
   transport?: NewsletterTransport,
+  recipientRole?: string | null,
 ): string {
   const copy = newsletterCopy[locale];
   const footer = layoutCopy[locale];
@@ -170,7 +182,7 @@ function renderNewsletterText(
     `${copy.viewAll}: ${site}/oferty-pracy`,
     "",
     copy.preferencesNote,
-    `${copy.preferences}: ${site}/candidate/ustawienia`,
+    `${copy.preferences}: ${site}${newsletterPreferencesPath(recipientRole)}`,
     "",
     footer.tagline,
     footer.footerNote,
@@ -191,18 +203,24 @@ export async function renderNewsletterEmail(
   locale: Locale,
   jobs: readonly NewsletterJob[],
   transport?: NewsletterTransport,
+  recipientRole?: string | null,
 ): Promise<NewsletterRenderFoundation> {
   assertRenderableJobs(jobs, locale);
   const ready = Boolean(
     transport?.unsubscribeUrl && transport.sender?.identity && transport.sender.postalAddress,
   );
   const html = await render(
-    <NewsletterEmail locale={locale} jobs={jobs} transport={ready ? transport : undefined} />,
+    <NewsletterEmail
+      locale={locale}
+      jobs={jobs}
+      transport={ready ? transport : undefined}
+      recipientRole={recipientRole}
+    />,
   );
   return {
     transportReady: ready,
     subject: newsletterCopy[locale].subject,
     html,
-    text: renderNewsletterText(locale, jobs, ready ? transport : undefined),
+    text: renderNewsletterText(locale, jobs, ready ? transport : undefined, recipientRole),
   };
 }

@@ -123,8 +123,12 @@ export type KeyUsageIndex = {
 
 const WORD = /[A-Za-z_$][A-Za-z0-9_$]*/g;
 
+/** Slug z myślnikami (`sint-niklaas`) — klucz `locations.*` = slug miejscowości (#920). */
+const SLUG = /[a-z0-9]+(?:-[a-z0-9]+)+/g;
+
 function addWords(index: KeyUsageIndex, text: string) {
   for (const word of text.match(WORD) ?? []) index.words.add(word);
+  for (const slug of text.match(SLUG) ?? []) index.words.add(slug);
 }
 
 /** Ostatni fragment klucza przed `${…}` (po kropce) i pierwszy po nim. */

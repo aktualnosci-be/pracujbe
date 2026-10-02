@@ -11,7 +11,7 @@ import { checkAccountRateLimit } from '@/lib/rate-limit-account';
 import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
-import { issueTeamInviteToken } from '@/lib/team/invite-token';
+import { issueTeamInviteToken, teamInviteTokenForOperation } from '@/lib/team/invite-token';
 import { isLocale } from '@/i18n/routing';
 import {
   memberRoleSchema,
@@ -87,6 +87,19 @@ async function limited(bucket: string, max: number, accountId: string): Promise<
   return !(await checkAccountRateLimit(bucket, accountId, { max, windowSeconds: RATE_WINDOW_SECONDS }));
 }
 
+const CLIENT_KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * #1113: token linku rejestracji. Z poprawnym kluczem operacji (UUID z przeglądarki) — wyliczony
+ * z operacji (ponowienie = ten sam token); bez klucza albo z niepoprawnym — losowy jak dotąd.
+ */
+function operationToken(clientKey: string | undefined, parts: string[]): { nonce: string; hash: string } | null {
+  if (typeof clientKey === 'string' && CLIENT_KEY_RE.test(clientKey)) {
+    return teamInviteTokenForOperation([...parts, clientKey.toLowerCase()]);
+  }
+  return issueTeamInviteToken();
+}
+
 function fail(error: ErrorCode | TeamError): TeamActionResult {
   return { ok: false, error };
 }
@@ -99,22 +112,32 @@ function fail(error: ErrorCode | TeamError): TeamActionResult {
 export async function inviteTeamMember(
   input: TeamInviteInput,
   expectedCompanyId: string,
+  clientKey?: string,
 ): Promise<TeamActionResult> {
   const parsed = teamInviteSchema.safeParse(input);
   if (!parsed.success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  // Token liczymy zawsze (baza wie, czy adres ma konto — akcja nie). Bez sekretu w produkcji
-  // link rejestracji nie powstałby, więc zaproszenia nie przyjmujemy (nie udajemy wysyłki).
-  const signupToken = issueTeamInviteToken();
-  if (!signupToken) {
-    captureError(new Error('team invite token secret missing'), { area: 'team.invite.token' });
-    return fail('INTERNAL');
-  }
 
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
     if (await limited('team-invite', INVITE_RATE_MAX, me.id)) return fail('RATE_LIMITED');
+    // Token liczymy zawsze (baza wie, czy adres ma konto — akcja nie). Bez sekretu w produkcji
+    // link rejestracji nie powstałby, więc zaproszenia nie przyjmujemy (nie udajemy wysyłki).
+    // #1113: z kluczem operacji ponowienie po błędzie sieci daje ten sam token (bez drugiego
+    // e-maila i bez unieważnienia pierwszego linku).
+    const signupToken = operationToken(clientKey, [
+      'invite',
+      me.id,
+      expectedCompanyId,
+      parsed.data.email.trim().toLowerCase(),
+      parsed.data.role,
+      parsed.data.locale,
+    ]);
+    if (!signupToken) {
+      captureError(new Error('team invite token secret missing'), { area: 'team.invite.token' });
+      return fail('INTERNAL');
+    }
     const invited = await withPortalTransaction(me, async (tx): Promise<TeamError | null> => {
       const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
       if (!expected.ok) return expected.error;
@@ -162,19 +185,21 @@ export async function revokeTeamInvitation(invitationId: string): Promise<TeamAc
 export async function renewTeamInvitation(
   invitationId: string,
   expectedCompanyId: string,
+  clientKey?: string,
 ): Promise<TeamActionResult> {
   if (!uuidSchema.safeParse(invitationId).success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  const signupToken = issueTeamInviteToken();
-  if (!signupToken) {
-    captureError(new Error('team invite token secret missing'), { area: 'team.renew.token' });
-    return fail('INTERNAL');
-  }
 
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
     if (await limited('team-invite', INVITE_RATE_MAX, me.id)) return fail('RATE_LIMITED');
+    // #1113: ponowienie TEGO SAMEGO odnowienia (klucz operacji) = ten sam nowy link.
+    const signupToken = operationToken(clientKey, ['renew', me.id, expectedCompanyId, invitationId]);
+    if (!signupToken) {
+      captureError(new Error('team invite token secret missing'), { area: 'team.renew.token' });
+      return fail('INTERNAL');
+    }
     const renewed = await withPortalTransaction(me, async (tx): Promise<TeamError | null> => {
       // Firma widoku (EMP-02, jak przy zapraszaniu): zmiana aktywnej firmy w innej karcie
       // nie przenosi odnowienia do nowej firmy — `ACTIVE_COMPANY_CHANGED`.

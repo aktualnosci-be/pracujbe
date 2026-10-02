@@ -3,9 +3,9 @@
 import { headers } from 'next/headers';
 
 import { isProductionMode } from '@/lib/env';
-import { AppError, type ErrorCode } from '@/lib/errors';
+import type { ErrorCode } from '@/lib/errors';
 import { checkAccountRateLimit } from '@/lib/rate-limit-account';
-import { captureError } from '@/lib/error-report';
+import { captureActionError } from '@/lib/db/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
 
@@ -42,8 +42,9 @@ async function candidateContext(): Promise<Session> {
   return { ok: true, deps, userId: session.id };
 }
 
-function unexpected(area: string): { ok: false; error: 'INTERNAL' } {
-  captureError(new AppError('INTERNAL'), { area });
+function unexpected(area: string, error: unknown): { ok: false; error: 'INTERNAL' } {
+  // #1068: błąd bazy z SQLSTATE (bez komunikatu), inny wyjątek z samym obszarem.
+  captureActionError(error, area);
   return { ok: false, error: 'INTERNAL' };
 }
 
@@ -64,8 +65,8 @@ export async function uploadCandidateCv(formData: FormData): Promise<UploadResul
     }
     const { storeCandidateCv } = await import('@/lib/files/candidate-cv');
     return await storeCandidateCv(context.deps, context.userId, file);
-  } catch {
-    return unexpected('files.uploadCandidateCv');
+  } catch (error) {
+    return unexpected('files.uploadCandidateCv', error);
   }
 }
 
@@ -76,8 +77,8 @@ export async function prepareCvDownload(fileId: string): Promise<DownloadLinkRes
     if (!context.ok) return context;
     const { issueCvDownloadLink } = await import('@/lib/files/candidate-cv');
     return await issueCvDownloadLink(context.deps, context.userId, fileId);
-  } catch {
-    return unexpected('files.prepareCvDownload');
+  } catch (error) {
+    return unexpected('files.prepareCvDownload', error);
   }
 }
 
@@ -88,7 +89,7 @@ export async function deleteCandidateFile(fileId: string): Promise<SimpleResult>
     if (!context.ok) return context;
     const { removeCandidateCv } = await import('@/lib/files/candidate-cv');
     return await removeCandidateCv(context.deps, context.userId, fileId);
-  } catch {
-    return unexpected('files.deleteCandidateFile');
+  } catch (error) {
+    return unexpected('files.deleteCandidateFile', error);
   }
 }

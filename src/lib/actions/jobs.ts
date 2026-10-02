@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 
 import { getActiveCompanyId, getExpectedActiveCompany } from '@/lib/company-context';
-import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -525,6 +525,8 @@ export async function updateJobDraft(
       const content = buildDraftStepContent(step, parsed);
       if (!content) return 'VALIDATION_FAILED';
       if (screeningOff) delete content['screening_questions'];
+      // #834: postęp kreatora — RPC podnosi `jobs.draft_step` w tej samej transakcji co treść.
+      content['draft_step'] = step;
       // #1048 (I18N-01): krok 1 niesie jawny język ogłoszenia — zmiana PRZED zapisem treści,
       // żeby tłumaczenie i wymagania trafiły do właściwego języka. Zmiana języka modyfikuje
       // `jobs` (nowa wersja szkicu), więc token wersji (#1070) sprawdzamy tu PRZED zmianą
@@ -726,7 +728,9 @@ async function readJobVersion(me: PortalIdentity, jobId: string): Promise<string
     );
     const value = row?.['updated_at'];
     return value instanceof Date ? value.toISOString() : typeof value === 'string' ? value : null;
-  } catch {
+  } catch (error) {
+    // #1068: awaria odczytu wersji nie może być cicha (CAS sygnału AI traci token).
+    captureActionError(error, 'jobs.readJobVersion');
     return null;
   }
 }
@@ -789,7 +793,8 @@ async function loadScreeningReviewNotices(
            FROM public.screening_question_reviews WHERE job_id = $1`, [jobId]);
       return buildScreeningReviewNotices(questions, reviews);
     });
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'jobs.loadScreeningReviewNotices');
     return [];
   }
 }

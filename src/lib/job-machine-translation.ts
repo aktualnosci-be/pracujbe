@@ -18,6 +18,12 @@ export interface JobMachineTranslation {
   sourceLocale: Locale;
   /** `ai` = tłumaczenie automatyczne, `manual` = korekta ręczna. */
   origin: JobTranslationOrigin;
+  /**
+   * Niepuste pola szczegółu, które zostały w oryginale (brak klucza w przekładzie, #896) —
+   * strona oznacza je `lang` = `sourceLocale` (WCAG 3.1.2). Listy są zawsze przełożone
+   * w całości (inaczej przekład nie jest nakładany), więc lista zawiera tylko pola tekstowe.
+   */
+  untranslated?: readonly TranslatableScalar[];
 }
 
 export interface MachineTranslationInput {
@@ -33,6 +39,8 @@ const SCALARS = {
   shifts: 'shifts',
   company_description: 'companyDescription',
 } as const satisfies Record<string, keyof JobDetail>;
+
+export type TranslatableScalar = (typeof SCALARS)[keyof typeof SCALARS];
 
 const LISTS = {
   responsibilities: 'responsibilities',
@@ -75,9 +83,14 @@ export function applyJobMachineTranslation(
   if (typeof title !== 'string' || title.trim() === '') return job;
 
   const next: JobDetail = { ...job };
-  for (const [key, target] of Object.entries(SCALARS)) {
+  const untranslated: TranslatableScalar[] = [];
+  for (const [key, target] of Object.entries(SCALARS) as Array<[string, TranslatableScalar]>) {
     const value = record[key];
-    if (value === undefined) continue;
+    if (value === undefined) {
+      const original = job[target];
+      if (typeof original === 'string' && original.trim() !== '') untranslated.push(target);
+      continue;
+    }
     if (typeof value !== 'string') return job;
     next[target] = value;
   }
@@ -86,7 +99,7 @@ export function applyJobMachineTranslation(
     if (!list || list.length !== job[target].length) return job;
     next[target] = list;
   }
-  return { ...next, machineTranslation: { sourceLocale, origin } };
+  return { ...next, machineTranslation: { sourceLocale, origin, untranslated } };
 }
 
 /**
@@ -110,5 +123,6 @@ export function applyJobListMachineTranslation<T extends JobListItem>(
   if (typeof title !== 'string' || title.trim() === '') return job;
   const highlights = readList(record, 'highlights');
   if (!highlights || highlights.length !== job.highlights.length) return job;
-  return { ...job, title, highlights, machineTranslation: { sourceLocale, origin } };
+  // #1223: przekład jest w języku strony — karta nie oznacza go innym `lang`.
+  return { ...job, title, highlights, contentLocale: requestedLocale, machineTranslation: { sourceLocale, origin } };
 }

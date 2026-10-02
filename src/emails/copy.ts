@@ -38,6 +38,7 @@ export const EMAIL_TYPES = [
   'teamInvitation',
   'teamInvitationSignup',
   'jobMatch',
+  'followedCompanyJobs',
   'guestApplicationConfirm',
   'guestApplicationSent',
   'guestStatusChanged',
@@ -87,11 +88,50 @@ export interface EmailCopy {
    */
   anonymous?: Partial<Pick<EmailCopy, 'subject' | 'preview' | 'heading' | 'body' | 'highlight'>>;
   /**
+   * Treść w trybie rekrutacyjnym (#1212, #1225; epik #1128). Pola bazowe opisują portal
+   * ogłoszeniowy (tryb domyślny, fail-closed); ten wariant nadpisuje je tylko przy
+   * `isRecruitmentEnabled()` — np. obietnica powiadomienia o zgłoszeniach przez portal.
+   */
+  recruitment?: Partial<Pick<EmailCopy, 'subject' | 'preview' | 'heading' | 'body' | 'highlight' | 'cta' | 'outro'>>;
+  /**
    * Nadpisanie noty w stopce („masz konto…”) — dla odbiorców, którzy mogą nie mieć konta
    * (np. potwierdzenie zgłoszenia treści wysłanego bez logowania, #41).
    */
   footerNote?: string;
+  /**
+   * Wariant dla dokładnie jednej pozycji (#1118): nadpisuje pola, gdy liczba z danych maila
+   * (`count`) wynosi 1 — np. digest `jobMatch` z jedną nową ofertą nie mówi „pojawiły się oferty”.
+   */
+  single?: Partial<Pick<EmailCopy, 'subject' | 'preview' | 'heading' | 'body'>>;
+  /**
+   * Wariant dla zgłaszającego (#1117): e-maile odwołań trafiają do autora treści (numer decyzji,
+   * dane firmy) albo do zgłaszającego (numer sprawy, strona sprawy). Nadpisuje CTA zgłaszającego.
+   */
+  reporter?: Partial<Pick<EmailCopy, 'cta'>>;
 }
+
+/**
+ * Opis numeru, którego dotyczy odwołanie (#1117): autor dostaje numer DECYZJI, zgłaszający —
+ * numer SPRAWY (zgłoszenia). Wstawiany w miejsce `{subjectRef}` w języku odbiorcy.
+ */
+export const appealSubjectLabels: Record<Locale, { decision: string; case: string }> = {
+  pl: { decision: 'numer decyzji: {ref}', case: 'numer sprawy: {ref}' },
+  nl: { decision: 'beslissingsnummer: {ref}', case: 'dossiernummer: {ref}' },
+  fr: { decision: 'décision n° {ref}', case: 'dossier n° {ref}' },
+  en: { decision: 'decision number: {ref}', case: 'case number: {ref}' },
+};
+
+/**
+ * Etykieta statusu `offer_sent` w e-mailu do GOŚCIA (#1118). Aplikacji bez konta nie da się
+ * wysłać propozycji w portalu, więc etykieta panelu („Propozycja wysłana”) byłaby myląca —
+ * zamiast niej zapowiadamy kontakt pracodawcy podanym adresem albo telefonem.
+ */
+export const guestOfferSentLabel: Record<Locale, string> = {
+  pl: 'Pracodawca chce złożyć Ci propozycję',
+  nl: 'De werkgever wil je een voorstel doen',
+  fr: 'L’employeur souhaite vous faire une proposition',
+  en: 'The employer would like to make you a proposal',
+};
 
 /** Powitanie (bez imienia) w każdym języku — imię dołączane jest w szablonie. */
 /**
@@ -103,6 +143,14 @@ export const jobMatchAlertOffLabel: Record<Locale, string> = {
   nl: 'Alleen deze melding uitzetten',
   fr: 'Désactiver uniquement cette alerte',
   en: 'Turn off only this alert',
+};
+
+/** Link „wyłącz alerty tej firmy” w e-mailu `followedCompanyJobs` (adres podaje worker, nie payload). */
+export const followedCompanyAlertOffLabel: Record<Locale, string> = {
+  pl: 'Wyłącz alerty tylko od tej firmy',
+  nl: 'Alleen meldingen van dit bedrijf uitzetten',
+  fr: 'Désactiver uniquement les alertes de cette entreprise',
+  en: 'Turn off alerts from this company only',
 };
 
 /**
@@ -539,7 +587,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: '{candidateName} zgłosił(a) się na Twoje ogłoszenie.',
       heading: 'Nowe zgłoszenie',
       body: '{candidateName} zgłosił(a) się na Twoje ogłoszenie „{jobTitle}”. Zobacz profil kandydata i zdecyduj o kolejnych krokach.',
-      cta: 'Zobacz zgłoszenie',
+      cta: 'Przejdź do zgłoszeń',
       highlight: '{jobTitle}',
       anonymous: {
         preview: 'Nowy kandydat zgłosił się na Twoje ogłoszenie.',
@@ -551,7 +599,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: '{candidateName} heeft gesolliciteerd op je vacature.',
       heading: 'Nieuwe sollicitatie',
       body: '{candidateName} heeft gesolliciteerd op je vacature ‘{jobTitle}’. Bekijk het profiel van de kandidaat en bepaal de volgende stap.',
-      cta: 'Sollicitatie bekijken',
+      cta: 'Naar sollicitaties',
       highlight: '{jobTitle}',
       anonymous: {
         preview: 'Een nieuwe kandidaat heeft gesolliciteerd op je vacature.',
@@ -563,7 +611,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: '{candidateName} a postulé à votre offre.',
       heading: 'Nouvelle candidature',
       body: '{candidateName} a postulé à votre offre « {jobTitle} ». Consultez le profil du candidat et décidez de la suite.',
-      cta: 'Voir la candidature',
+      cta: 'Voir les candidatures',
       highlight: '{jobTitle}',
       anonymous: {
         preview: 'Un nouveau candidat a postulé à votre offre.',
@@ -575,7 +623,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: '{candidateName} applied to your job.',
       heading: 'New application',
       body: '{candidateName} applied to your job “{jobTitle}”. Review the candidate’s profile and decide on the next steps.',
-      cta: 'View application',
+      cta: 'Go to applications',
       highlight: '{jobTitle}',
       anonymous: {
         preview: 'A new candidate applied to your job.',
@@ -587,9 +635,9 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
   applicationViewed: {
     pl: {
       subject: 'Pracodawca obejrzał Twoje zgłoszenie',
-      preview: '{companyName} sprawdził(a) Twoją aplikację.',
+      preview: 'Firma {companyName} obejrzała Twoje zgłoszenie.',
       heading: 'Twoje zgłoszenie zostało obejrzane',
-      body: 'Dobra wiadomość! {companyName} obejrzał(a) Twoje zgłoszenie na stanowisko „{jobTitle}”. Trzymamy kciuki za kolejne kroki.',
+      body: 'Dobra wiadomość! Firma {companyName} obejrzała Twoje zgłoszenie na stanowisko „{jobTitle}”. Trzymamy kciuki za kolejne kroki.',
       cta: 'Zobacz status zgłoszenia',
       highlight: '{jobTitle}',
     },
@@ -657,9 +705,9 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
   newMessage: {
     pl: {
       subject: 'Masz nową wiadomość od {senderName}',
-      preview: '{senderName} wysłał(a) Ci wiadomość.',
+      preview: 'Masz nową wiadomość od {senderName}.',
       heading: 'Nowa wiadomość',
-      body: '{senderName} wysłał(a) Ci wiadomość w serwisie Pracuj.be. Przeczytaj ją i odpowiedz bezpośrednio w panelu.',
+      body: 'W serwisie Pracuj.be czeka na Ciebie nowa wiadomość od {senderName}. Przeczytaj ją i odpowiedz bezpośrednio w panelu.',
       cta: 'Przeczytaj wiadomość',
       highlight: '{senderName}',
       anonymous: {
@@ -715,89 +763,89 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
 
   jobOffer: {
     pl: {
-      subject: 'Oferta pracy od {companyName}',
-      preview: '{companyName} przesłał(a) Ci ofertę pracy.',
-      heading: 'Masz ofertę pracy',
-      body: '{companyName} przesłał(a) Ci ofertę pracy na stanowisko „{jobTitle}”. Zapoznaj się ze szczegółami i zdecyduj, czy chcesz ją przyjąć.',
-      cta: 'Zobacz ofertę',
+      subject: 'Propozycja od firmy {companyName}',
+      preview: 'Firma {companyName} przesłała Ci propozycję.',
+      heading: 'Masz nową propozycję',
+      body: 'Firma {companyName} przesłała Ci propozycję na stanowisko „{jobTitle}”. Zapoznaj się ze szczegółami i zdecyduj, czy chcesz ją przyjąć.',
+      cta: 'Zobacz propozycję',
       highlight: '{jobTitle}',
     },
     nl: {
-      subject: 'Jobaanbod van {companyName}',
-      preview: '{companyName} heeft je een jobaanbod gestuurd.',
-      heading: 'Je hebt een jobaanbod',
-      body: '{companyName} heeft je een aanbod gestuurd voor de functie ‘{jobTitle}’. Bekijk de details en beslis of je het aanvaardt.',
-      cta: 'Aanbod bekijken',
+      subject: 'Voorstel van {companyName}',
+      preview: '{companyName} heeft je een voorstel gestuurd.',
+      heading: 'Je hebt een nieuw voorstel',
+      body: '{companyName} heeft je een voorstel gestuurd voor de functie ‘{jobTitle}’. Bekijk de details en beslis of je het aanvaardt.',
+      cta: 'Bekijk het voorstel',
       highlight: '{jobTitle}',
     },
     fr: {
-      subject: 'Offre d’emploi de {companyName}',
-      preview: '{companyName} vous a envoyé une offre d’emploi.',
-      heading: 'Vous avez une offre d’emploi',
-      body: '{companyName} vous a envoyé une offre pour le poste « {jobTitle} ». Consultez les détails et décidez si vous l’acceptez.',
-      cta: 'Voir l’offre',
+      subject: 'Proposition de {companyName}',
+      preview: '{companyName} vous a envoyé une proposition.',
+      heading: 'Vous avez une nouvelle proposition',
+      body: '{companyName} vous a envoyé une proposition pour le poste « {jobTitle} ». Consultez les détails et décidez si vous l’acceptez.',
+      cta: 'Voir la proposition',
       highlight: '{jobTitle}',
     },
     en: {
-      subject: 'Job offer from {companyName}',
-      preview: '{companyName} sent you a job offer.',
-      heading: 'You have a job offer',
-      body: '{companyName} sent you an offer for the “{jobTitle}” role. Review the details and decide whether to accept.',
-      cta: 'View offer',
+      subject: 'Job proposal from {companyName}',
+      preview: '{companyName} sent you a job proposal.',
+      heading: 'You have a new job proposal',
+      body: '{companyName} sent you a proposal for the “{jobTitle}” role. Review the details and decide whether to accept it.',
+      cta: 'View proposal',
       highlight: '{jobTitle}',
     },
   },
 
   offerAccepted: {
     pl: {
-      subject: '{candidateName} przyjął(-ęła) Twoją ofertę',
-      preview: 'Dobra wiadomość dotycząca oferty „{jobTitle}”.',
-      heading: 'Oferta przyjęta',
-      body: '{candidateName} przyjął(-ęła) Twoją ofertę pracy na stanowisko „{jobTitle}”. Skontaktuj się, aby ustalić szczegóły rozpoczęcia współpracy.',
-      cta: 'Zobacz szczegóły',
+      subject: '{candidateName} przyjął(-ęła) Twoją propozycję',
+      preview: 'Dobra wiadomość dotycząca propozycji „{jobTitle}”.',
+      heading: 'Propozycja przyjęta',
+      body: '{candidateName} przyjął(-ęła) Twoją propozycję na stanowisko „{jobTitle}”. Skontaktuj się, aby ustalić szczegóły rozpoczęcia współpracy.',
+      cta: 'Przejdź do zgłoszeń',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Twoja oferta została przyjęta',
-        body: 'Twoja oferta pracy na stanowisko „{jobTitle}” została przyjęta przez kandydata. Skontaktuj się, aby ustalić szczegóły rozpoczęcia współpracy.',
+        subject: 'Twoja propozycja została przyjęta',
+        body: 'Twoja propozycja na stanowisko „{jobTitle}” została przyjęta przez kandydata. Skontaktuj się, aby ustalić szczegóły rozpoczęcia współpracy.',
         highlight: '{jobTitle}',
       },
     },
     nl: {
-      subject: '{candidateName} heeft je aanbod aanvaard',
-      preview: 'Goed nieuws over het aanbod ‘{jobTitle}’.',
-      heading: 'Aanbod aanvaard',
-      body: '{candidateName} heeft je jobaanbod voor ‘{jobTitle}’ aanvaard. Neem contact op om de start te regelen.',
-      cta: 'Details bekijken',
+      subject: '{candidateName} heeft je voorstel aanvaard',
+      preview: 'Goed nieuws over het voorstel ‘{jobTitle}’.',
+      heading: 'Voorstel aanvaard',
+      body: '{candidateName} heeft je voorstel voor ‘{jobTitle}’ aanvaard. Neem contact op om de start te regelen.',
+      cta: 'Naar sollicitaties',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Je aanbod is aanvaard',
-        body: 'Je jobaanbod voor ‘{jobTitle}’ is aanvaard door de kandidaat. Neem contact op om de start te regelen.',
+        subject: 'Je voorstel is aanvaard',
+        body: 'Je voorstel voor ‘{jobTitle}’ is aanvaard door de kandidaat. Neem contact op om de start te regelen.',
         highlight: '{jobTitle}',
       },
     },
     fr: {
-      subject: '{candidateName} a accepté votre offre',
-      preview: 'Bonne nouvelle concernant l’offre « {jobTitle} ».',
-      heading: 'Offre acceptée',
-      body: '{candidateName} a accepté votre offre pour le poste « {jobTitle} ». Contactez-le/la pour organiser le démarrage.',
-      cta: 'Voir les détails',
+      subject: '{candidateName} a accepté votre proposition',
+      preview: 'Bonne nouvelle concernant la proposition « {jobTitle} ».',
+      heading: 'Proposition acceptée',
+      body: '{candidateName} a accepté votre proposition pour le poste « {jobTitle} ». Prenez contact pour organiser le démarrage.',
+      cta: 'Voir les candidatures',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Votre offre a été acceptée',
-        body: 'Votre offre pour le poste « {jobTitle} » a été acceptée par le candidat. Prenez contact pour organiser le démarrage.',
+        subject: 'Votre proposition a été acceptée',
+        body: 'Votre proposition pour le poste « {jobTitle} » a été acceptée par le candidat. Prenez contact pour organiser le démarrage.',
         highlight: '{jobTitle}',
       },
     },
     en: {
-      subject: '{candidateName} accepted your offer',
-      preview: 'Good news about the “{jobTitle}” offer.',
-      heading: 'Offer accepted',
-      body: '{candidateName} accepted your job offer for “{jobTitle}”. Get in touch to arrange the start.',
-      cta: 'View details',
+      subject: '{candidateName} accepted your proposal',
+      preview: 'Good news about the “{jobTitle}” proposal.',
+      heading: 'Proposal accepted',
+      body: '{candidateName} accepted your job proposal for “{jobTitle}”. Get in touch to arrange the start.',
+      cta: 'Go to applications',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Your offer was accepted',
-        body: 'Your job offer for “{jobTitle}” was accepted by the candidate. Get in touch to arrange the start.',
+        subject: 'Your proposal was accepted',
+        body: 'Your job proposal for “{jobTitle}” was accepted by the candidate. Get in touch to arrange the start.',
         highlight: '{jobTitle}',
       },
     },
@@ -805,54 +853,54 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
 
   offerDeclined: {
     pl: {
-      subject: '{candidateName} odrzucił(a) Twoją ofertę',
-      preview: 'Aktualizacja oferty „{jobTitle}”.',
-      heading: 'Oferta odrzucona',
-      body: '{candidateName} niestety odrzucił(a) Twoją ofertę na stanowisko „{jobTitle}”. Możesz przejrzeć innych kandydatów dopasowanych do tego ogłoszenia.',
-      cta: 'Zobacz kandydatów',
+      subject: '{candidateName} odrzucił(a) Twoją propozycję',
+      preview: 'Aktualizacja propozycji „{jobTitle}”.',
+      heading: 'Propozycja odrzucona',
+      body: '{candidateName} niestety odrzucił(a) Twoją propozycję na stanowisko „{jobTitle}”. Możesz przejrzeć innych kandydatów dopasowanych do tego ogłoszenia.',
+      cta: 'Przejdź do kandydatów',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Twoja oferta została odrzucona',
-        body: 'Twoja oferta na stanowisko „{jobTitle}” została niestety odrzucona przez kandydata. Możesz przejrzeć innych kandydatów dopasowanych do tego ogłoszenia.',
+        subject: 'Twoja propozycja została odrzucona',
+        body: 'Twoja propozycja na stanowisko „{jobTitle}” została niestety odrzucona przez kandydata. Możesz przejrzeć innych kandydatów dopasowanych do tego ogłoszenia.',
         highlight: '{jobTitle}',
       },
     },
     nl: {
-      subject: '{candidateName} heeft je aanbod afgewezen',
-      preview: 'Update over het aanbod ‘{jobTitle}’.',
-      heading: 'Aanbod afgewezen',
-      body: '{candidateName} heeft je aanbod voor ‘{jobTitle}’ helaas afgewezen. Bekijk andere kandidaten die bij deze vacature passen.',
-      cta: 'Kandidaten bekijken',
+      subject: '{candidateName} heeft je voorstel afgewezen',
+      preview: 'Update over het voorstel ‘{jobTitle}’.',
+      heading: 'Voorstel afgewezen',
+      body: '{candidateName} heeft je voorstel voor ‘{jobTitle}’ helaas afgewezen. Bekijk andere kandidaten die bij deze vacature passen.',
+      cta: 'Naar kandidaten',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Je aanbod is afgewezen',
-        body: 'Je aanbod voor ‘{jobTitle}’ is helaas afgewezen door de kandidaat. Bekijk andere kandidaten die bij deze vacature passen.',
+        subject: 'Je voorstel is afgewezen',
+        body: 'Je voorstel voor ‘{jobTitle}’ is helaas afgewezen door de kandidaat. Bekijk andere kandidaten die bij deze vacature passen.',
         highlight: '{jobTitle}',
       },
     },
     fr: {
-      subject: '{candidateName} a décliné votre offre',
-      preview: 'Mise à jour de l’offre « {jobTitle} ».',
-      heading: 'Offre déclinée',
-      body: '{candidateName} a malheureusement décliné votre offre pour « {jobTitle} ». Vous pouvez consulter d’autres candidats correspondant à cette annonce.',
+      subject: '{candidateName} a refusé votre proposition',
+      preview: 'Mise à jour de la proposition « {jobTitle} ».',
+      heading: 'Proposition refusée',
+      body: '{candidateName} a malheureusement refusé votre proposition pour « {jobTitle} ». Vous pouvez consulter d’autres candidats correspondant à cette annonce.',
       cta: 'Voir les candidats',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Votre offre a été déclinée',
-        body: 'Votre offre pour « {jobTitle} » a malheureusement été déclinée par le candidat. Vous pouvez consulter d’autres candidats correspondant à cette annonce.',
+        subject: 'Votre proposition a été refusée',
+        body: 'Votre proposition pour « {jobTitle} » a malheureusement été refusée par le candidat. Vous pouvez consulter d’autres candidats correspondant à cette annonce.',
         highlight: '{jobTitle}',
       },
     },
     en: {
-      subject: '{candidateName} declined your offer',
-      preview: 'Update on the “{jobTitle}” offer.',
-      heading: 'Offer declined',
-      body: '{candidateName} unfortunately declined your offer for “{jobTitle}”. You can review other candidates matching this listing.',
-      cta: 'View candidates',
+      subject: '{candidateName} declined your proposal',
+      preview: 'Update on the “{jobTitle}” proposal.',
+      heading: 'Proposal declined',
+      body: '{candidateName} unfortunately declined your job proposal for “{jobTitle}”. You can review other candidates matching this listing.',
+      cta: 'Go to candidates',
       highlight: '{candidateName}',
       anonymous: {
-        subject: 'Your offer was declined',
-        body: 'Your offer for “{jobTitle}” was unfortunately declined by the candidate. You can review other candidates matching this listing.',
+        subject: 'Your proposal was declined',
+        body: 'Your job proposal for “{jobTitle}” was unfortunately declined by the candidate. You can review other candidates matching this listing.',
         highlight: '{jobTitle}',
       },
     },
@@ -914,33 +962,45 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Twoje ogłoszenie jest już online: {jobTitle}',
       preview: '„{jobTitle}” zostało opublikowane.',
       heading: 'Ogłoszenie opublikowane',
-      body: 'Twoje ogłoszenie „{jobTitle}” jest już widoczne dla kandydatów w Pracuj.be. Powiadomimy Cię, gdy pojawią się pierwsze zgłoszenia.',
+      body: 'Twoje ogłoszenie „{jobTitle}” jest już widoczne dla kandydatów w Pracuj.be. Kandydaci skontaktują się z Tobą kanałem podanym w ogłoszeniu.',
       cta: 'Zobacz ogłoszenie',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Twoje ogłoszenie „{jobTitle}” jest już widoczne dla kandydatów w Pracuj.be. Powiadomimy Cię, gdy pojawią się pierwsze zgłoszenia.',
+      },
     },
     nl: {
       subject: 'Je vacature staat online: {jobTitle}',
       preview: '‘{jobTitle}’ is gepubliceerd.',
       heading: 'Vacature gepubliceerd',
-      body: 'Je vacature ‘{jobTitle}’ is nu zichtbaar voor kandidaten op Pracuj.be. We laten het je weten zodra de eerste sollicitaties binnenkomen.',
+      body: 'Je vacature ‘{jobTitle}’ is nu zichtbaar voor kandidaten op Pracuj.be. Kandidaten nemen contact met je op via het kanaal dat je in de vacature hebt opgegeven.',
       cta: 'Vacature bekijken',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Je vacature ‘{jobTitle}’ is nu zichtbaar voor kandidaten op Pracuj.be. We laten het je weten zodra de eerste sollicitaties binnenkomen.',
+      },
     },
     fr: {
       subject: 'Votre annonce est en ligne : {jobTitle}',
       preview: '« {jobTitle} » a été publiée.',
       heading: 'Annonce publiée',
-      body: 'Votre annonce « {jobTitle} » est désormais visible par les candidats sur Pracuj.be. Nous vous préviendrons dès les premières candidatures.',
+      body: 'Votre annonce « {jobTitle} » est désormais visible par les candidats sur Pracuj.be. Les candidats vous contacteront par le moyen indiqué dans l’annonce.',
       cta: 'Voir l’annonce',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Votre annonce « {jobTitle} » est désormais visible par les candidats sur Pracuj.be. Nous vous préviendrons dès les premières candidatures.',
+      },
     },
     en: {
       subject: 'Your job is now live: {jobTitle}',
       preview: '“{jobTitle}” has been published.',
       heading: 'Job published',
-      body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. We will let you know as soon as the first applications arrive.',
+      body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. Candidates will contact you through the channel given in the job.',
       cta: 'View job',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. We will let you know as soon as the first applications arrive.',
+      },
     },
   },
 
@@ -949,33 +1009,45 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Firma {companyName} jest zweryfikowana',
       preview: 'Możesz publikować oferty pracy w Pracuj.be.',
       heading: 'Firma zweryfikowana',
-      body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy i odpowiadać kandydatom.',
+      body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy w Pracuj.be.',
       cta: 'Przejdź do danych firmy',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy i odpowiadać kandydatom.',
+      },
     },
     nl: {
       subject: 'Bedrijf {companyName} is geverifieerd',
       preview: 'Je kunt vacatures publiceren op Pracuj.be.',
       heading: 'Bedrijf geverifieerd',
-      body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren en kandidaten antwoorden.',
+      body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren op Pracuj.be.',
       cta: 'Naar bedrijfsgegevens',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren en kandidaten antwoorden.',
+      },
     },
     fr: {
       subject: 'L’entreprise {companyName} est vérifiée',
       preview: 'Vous pouvez publier des offres d’emploi sur Pracuj.be.',
       heading: 'Entreprise vérifiée',
-      body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi et répondre aux candidats.',
+      body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi sur Pracuj.be.',
       cta: 'Voir les données de l’entreprise',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi et répondre aux candidats.',
+      },
     },
     en: {
       subject: '{companyName} is verified',
       preview: 'You can now publish jobs on Pracuj.be.',
       heading: 'Company verified',
-      body: 'We have checked the details of {companyName}. You can now publish jobs and reply to candidates.',
+      body: 'We have checked the details of {companyName}. You can now publish jobs on Pracuj.be.',
       cta: 'Go to company details',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'We have checked the details of {companyName}. You can now publish jobs and reply to candidates.',
+      },
     },
   },
 
@@ -1198,6 +1270,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Potwierdź i wyślij aplikację',
       highlight: '{jobTitle}',
       outro: 'Link jest ważny 48 godzin. Jeśli to nie Ty wysłałeś(-aś) aplikację, zignoruj tę wiadomość — aplikacja nie trafi do pracodawcy.',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano aplikację z tym adresem e-mail.',
     },
     nl: {
       subject: 'Bevestig je sollicitatie: {jobTitle}',
@@ -1207,6 +1280,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Bevestigen en sollicitatie versturen',
       highlight: '{jobTitle}',
       outro: 'De link is 48 uur geldig. Heb jij niet gesolliciteerd? Negeer dan dit bericht — de sollicitatie gaat niet naar de werkgever.',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een sollicitatie met dit e-mailadres is verstuurd.',
     },
     fr: {
       subject: 'Confirmez votre candidature : {jobTitle}',
@@ -1216,6 +1290,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Confirmer et envoyer la candidature',
       highlight: '{jobTitle}',
       outro: 'Le lien est valable 48 heures. Si vous n’avez pas postulé, ignorez ce message — la candidature ne sera pas transmise à l’employeur.',
+      footerNote: 'Vous recevez ce message car une candidature a été envoyée sur Pracuj.be avec cette adresse e-mail.',
     },
     en: {
       subject: 'Confirm your application: {jobTitle}',
@@ -1225,6 +1300,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Confirm and send application',
       highlight: '{jobTitle}',
       outro: 'The link is valid for 48 hours. If you did not apply, ignore this message — the application will not be sent to the employer.',
+      footerNote: 'You are receiving this email because an application was sent on Pracuj.be with this email address.',
     },
   },
 
@@ -1237,6 +1313,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Przypisz aplikację do konta',
       highlight: '{jobTitle}',
       outro: 'Link do przypisania aplikacji jest ważny 30 dni i działa dla jednego konta z tym adresem e-mail.',
+      footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano i potwierdzono aplikację z tym adresem e-mail.',
     },
     nl: {
       subject: 'Sollicitatie verstuurd: {jobTitle}',
@@ -1246,6 +1323,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Sollicitatie aan account koppelen',
       highlight: '{jobTitle}',
       outro: 'De koppellink is 30 dagen geldig en werkt voor één account met dit e-mailadres.',
+      footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een sollicitatie met dit e-mailadres is verstuurd en bevestigd.',
     },
     fr: {
       subject: 'Candidature envoyée : {jobTitle}',
@@ -1255,6 +1333,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Rattacher la candidature à mon compte',
       highlight: '{jobTitle}',
       outro: 'Le lien de rattachement est valable 30 jours et fonctionne pour un seul compte avec cette adresse e-mail.',
+      footerNote: 'Vous recevez ce message car une candidature a été envoyée et confirmée sur Pracuj.be avec cette adresse e-mail.',
     },
     en: {
       subject: 'Application sent: {jobTitle}',
@@ -1264,6 +1343,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Link application to my account',
       highlight: '{jobTitle}',
       outro: 'The link is valid for 30 days and works for one account with this email address.',
+      footerNote: 'You are receiving this email because an application was sent and confirmed on Pracuj.be with this email address.',
     },
   },
 
@@ -1309,33 +1389,45 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Twoje konto w Pracuj.be zostanie usunięte {deletionDate}',
       preview: 'Zaloguj się przed tą datą, jeśli chcesz zachować konto.',
       heading: 'Twoje konto zostanie usunięte',
-      body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z profilem, zgłoszeniami, propozycjami i wiadomościami.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
+      body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z zapisanymi w nim danymi.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
       cta: 'Zaloguj się',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z profilem, zgłoszeniami, propozycjami i wiadomościami.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
+      },
     },
     nl: {
       subject: 'Je account op Pracuj.be wordt verwijderd op {deletionDate}',
       preview: 'Log vóór die datum in als je je account wilt behouden.',
       heading: 'Je account wordt verwijderd',
-      body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met je profiel, sollicitaties, voorstellen en berichten.\n\nWil je het behouden, log dan vóór die datum in.',
+      body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met de gegevens die erin zijn opgeslagen.\n\nWil je het behouden, log dan vóór die datum in.',
       cta: 'Inloggen',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met je profiel, sollicitaties, voorstellen en berichten.\n\nWil je het behouden, log dan vóór die datum in.',
+      },
     },
     fr: {
       subject: 'Votre compte Pracuj.be sera supprimé le {deletionDate}',
       preview: 'Connectez-vous avant cette date si vous souhaitez conserver votre compte.',
       heading: 'Votre compte sera supprimé',
-      body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec votre profil, vos candidatures, vos propositions et vos messages.\n\nPour le conserver, connectez-vous avant cette date.',
+      body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec les données qui y sont enregistrées.\n\nPour le conserver, connectez-vous avant cette date.',
       cta: 'Se connecter',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec votre profil, vos candidatures, vos propositions et vos messages.\n\nPour le conserver, connectez-vous avant cette date.',
+      },
     },
     en: {
       subject: 'Your Pracuj.be account will be deleted on {deletionDate}',
       preview: 'Sign in before that date if you want to keep your account.',
       heading: 'Your account will be deleted',
-      body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with your profile, applications, job offers and messages.\n\nTo keep it, sign in before that date.',
+      body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with the data stored in it.\n\nTo keep it, sign in before that date.',
       cta: 'Sign in',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with your profile, applications, job offers and messages.\n\nTo keep it, sign in before that date.',
+      },
     },
   },
 
@@ -1401,6 +1493,12 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       heading: 'Nowe oferty dla Ciebie',
       body: 'Pojawiły się nowe oferty pasujące do Twojego zapisanego wyszukiwania „{searchName}”. Liczba nowych ofert: {count}. Poniżej znajdziesz najnowsze z nich.',
       cta: 'Zarządzaj wyszukiwaniami',
+      single: {
+        subject: 'Nowa oferta dla wyszukiwania: {searchName}',
+        preview: 'Nowa oferta pasująca do zapisanego wyszukiwania.',
+        heading: 'Nowa oferta dla Ciebie',
+        body: 'Pojawiła się nowa oferta pasująca do Twojego zapisanego wyszukiwania „{searchName}”. Znajdziesz ją poniżej.',
+      },
       outro: 'Wysyłamy ten alert najwyżej raz na okres wybrany przy wyszukiwaniu. Możesz go wyłączyć albo usunąć wyszukiwanie w panelu kandydata.',
     },
     nl: {
@@ -1409,6 +1507,12 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       heading: 'Nieuwe vacatures voor jou',
       body: 'Er zijn nieuwe vacatures die passen bij je opgeslagen zoekopdracht ‘{searchName}’. Aantal nieuwe vacatures: {count}. Hieronder vind je de nieuwste.',
       cta: 'Zoekopdrachten beheren',
+      single: {
+        subject: 'Nieuwe vacature voor je zoekopdracht: {searchName}',
+        preview: 'Nieuwe vacature voor je opgeslagen zoekopdracht.',
+        heading: 'Een nieuwe vacature voor jou',
+        body: 'Er is een nieuwe vacature die past bij je opgeslagen zoekopdracht ‘{searchName}’. Je vindt ze hieronder.',
+      },
       outro: 'We sturen deze melding hoogstens één keer per gekozen periode. Je kunt ze uitzetten of de zoekopdracht verwijderen in je kandidatenpaneel.',
     },
     fr: {
@@ -1417,6 +1521,12 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       heading: 'De nouvelles offres pour vous',
       body: 'De nouvelles offres correspondent à votre recherche enregistrée « {searchName} ». Nombre de nouvelles offres : {count}. Voici les plus récentes.',
       cta: 'Gérer les recherches',
+      single: {
+        subject: 'Nouvelle offre pour votre recherche : {searchName}',
+        preview: 'Nouvelle offre pour votre recherche enregistrée.',
+        heading: 'Une nouvelle offre pour vous',
+        body: 'Une nouvelle offre correspond à votre recherche enregistrée « {searchName} ». Vous la trouverez ci-dessous.',
+      },
       outro: 'Nous envoyons cette alerte au maximum une fois par période choisie. Vous pouvez la désactiver ou supprimer la recherche dans votre espace candidat.',
     },
     en: {
@@ -1425,7 +1535,48 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       heading: 'New jobs for you',
       body: 'New jobs match your saved search “{searchName}”. Number of new jobs: {count}. The latest ones are listed below.',
       cta: 'Manage searches',
+      single: {
+        subject: 'New job for your search: {searchName}',
+        preview: 'A new job matches your saved search.',
+        heading: 'A new job for you',
+        body: 'A new job matches your saved search “{searchName}”. You can find it below.',
+      },
       outro: 'We send this alert at most once per period you chose. You can turn it off or delete the search in your candidate panel.',
+    },
+  },
+
+  followedCompanyJobs: {
+    pl: {
+      subject: 'Nowe oferty firmy {companyName}',
+      preview: 'Firma {companyName} opublikowała nowe oferty: {count}.',
+      heading: 'Nowe oferty obserwowanej firmy',
+      body: 'Firma {companyName}, którą obserwujesz, opublikowała nowe oferty pracy. Liczba nowych ofert: {count}. Poniżej znajdziesz najnowsze z nich.',
+      cta: 'Zarządzaj alertami',
+      outro: 'Wysyłamy ten alert najwyżej raz na okres wybrany przy obserwowanej firmie. Możesz go wyłączyć albo przestać obserwować firmę w panelu kandydata.',
+    },
+    nl: {
+      subject: 'Nieuwe vacatures van {companyName}',
+      preview: '{companyName} heeft nieuwe vacatures geplaatst: {count}.',
+      heading: 'Nieuwe vacatures van een bedrijf dat je volgt',
+      body: '{companyName}, een bedrijf dat je volgt, heeft nieuwe vacatures geplaatst. Aantal nieuwe vacatures: {count}. Hieronder vind je de nieuwste.',
+      cta: 'Meldingen beheren',
+      outro: 'We sturen deze melding hoogstens één keer per gekozen periode. Je kunt ze uitzetten of het bedrijf niet meer volgen in je kandidatenpaneel.',
+    },
+    fr: {
+      subject: 'Nouvelles offres de {companyName}',
+      preview: '{companyName} a publié de nouvelles offres : {count}.',
+      heading: 'Nouvelles offres d’une entreprise que vous suivez',
+      body: '{companyName}, une entreprise que vous suivez, a publié de nouvelles offres d’emploi. Nombre de nouvelles offres : {count}. Voici les plus récentes.',
+      cta: 'Gérer les alertes',
+      outro: 'Nous envoyons cette alerte au maximum une fois par période choisie. Vous pouvez la désactiver ou ne plus suivre l’entreprise dans votre espace candidat.',
+    },
+    en: {
+      subject: 'New jobs at {companyName}',
+      preview: '{companyName} has posted new jobs: {count}.',
+      heading: 'New jobs from a company you follow',
+      body: '{companyName}, a company you follow, has posted new jobs. Number of new jobs: {count}. The latest ones are listed below.',
+      cta: 'Manage alerts',
+      outro: 'We send this alert at most once per period you chose. You can turn it off or stop following the company in your candidate panel.',
     },
   },
 
@@ -1539,7 +1690,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Otrzymaliśmy Twoją wiadomość {reference}',
       preview: 'Numer wiadomości: {reference}.',
       heading: 'Dziękujemy za wiadomość',
-      body: 'Otrzymaliśmy Twoją wiadomość wysłaną przez formularz kontaktu w serwisie Pracuj.be i nadaliśmy jej numer podany poniżej.\n\nOdpowiemy na adres e-mail podany w formularzu. W odpowiedzi na tę wiadomość podaj numer, jeśli chcesz coś dodać.',
+      body: 'Otrzymaliśmy Twoją wiadomość wysłaną przez formularz kontaktu w serwisie Pracuj.be i nadaliśmy jej numer podany poniżej.\n\nOdpowiemy na adres e-mail podany w formularzu. Podaj ten numer, jeśli zechcesz później coś dodać.',
       cta: 'Przejdź do strony Pomoc',
       highlight: '{reference}',
       footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be wysłano formularz kontaktu z tym adresem e-mail.',
@@ -1794,7 +1945,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Beslissing {decisionReference} — de motivering staat in dit bericht.',
       heading: 'Vacature ingetrokken',
       body: 'Na behandeling van een melding hebben we de vacature ‘{jobTitle}’ van {companyName} ingetrokken. De vacature is niet zichtbaar voor kandidaten en kan niet opnieuw worden gepubliceerd zolang de beslissing geldt.\n\nGrond: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nHet beslissingsnummer en de vastgestelde feiten vind je hieronder. De motivering staat ook in je dashboard, bij de bedrijfsgegevens.',
-      cta: 'Naar de bedrijfsgegevens',
+      cta: 'Naar bedrijfsgegevens',
       highlight: '{decisionReference}',
       outro: 'Ben je het niet eens met beslissing {decisionReference}? Je kunt bezwaar maken in je dashboard, bij de bedrijfsgegevens.',
     },
@@ -1833,7 +1984,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Beslissing {decisionReference} — de motivering staat in dit bericht.',
       heading: 'Bedrijf geschorst',
       body: 'Na behandeling van een melding hebben we het bedrijf {companyName} geschorst. De vacatures van het bedrijf zijn niet zichtbaar voor kandidaten zolang de beslissing geldt.\n\nGrond: {groundLabel} — {groundReference}.\n\n{automationLabel}\n\nHet beslissingsnummer en de vastgestelde feiten vind je hieronder. De motivering staat ook in je dashboard, bij de bedrijfsgegevens.',
-      cta: 'Naar de bedrijfsgegevens',
+      cta: 'Naar bedrijfsgegevens',
       highlight: '{decisionReference}',
       outro: 'Ben je het niet eens met beslissing {decisionReference}? Je kunt bezwaar maken in je dashboard, bij de bedrijfsgegevens.',
     },
@@ -1871,7 +2022,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'De beperking van de inhoud van {companyName} is opgeheven.',
       heading: 'Beperking opgeheven',
       body: 'We hebben beslissing {decisionReference} over het bedrijf {companyName} ingetrokken. De inhoud krijgt weer de status van vóór de beslissing, tenzij er een andere beslissing voor geldt.\n\nDe reden vind je hieronder.',
-      cta: 'Naar de bedrijfsgegevens',
+      cta: 'Naar bedrijfsgegevens',
       highlight: '{decisionReference}',
     },
     fr: {
@@ -1897,7 +2048,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Odwołanie od decyzji moderacyjnej ({subjectRef}) czeka na rozpatrzenie.',
       heading: 'Odwołanie przyjęte',
       body: 'Przyjęliśmy Twoje odwołanie od decyzji moderacyjnej ({subjectRef}). Rozpatrzy je człowiek — w miarę możliwości inna osoba niż ta, która podjęła decyzję.\n\nO wyniku poinformujemy Cię e-mailem, razem z uzasadnieniem.',
-      cta: 'Zobacz szczegóły',
+      cta: 'Przejdź do danych firmy',
+      reporter: { cta: 'Sprawdź status sprawy' },
       highlight: '{appealReference}',
       footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be złożono odwołanie z tym adresem e-mail.',
     },
@@ -1906,7 +2058,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Je bezwaar tegen een moderatiebeslissing ({subjectRef}) wacht op behandeling.',
       heading: 'Bezwaar ontvangen',
       body: 'We hebben je bezwaar tegen een moderatiebeslissing ({subjectRef}) ontvangen. Een mens behandelt het — waar mogelijk een andere persoon dan wie de beslissing nam.\n\nWe laten je de uitkomst per e-mail weten, samen met de motivering.',
-      cta: 'Details bekijken',
+      cta: 'Naar bedrijfsgegevens',
+      reporter: { cta: 'Status van je dossier bekijken' },
       highlight: '{appealReference}',
       footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een bezwaar met dit e-mailadres is ingediend.',
     },
@@ -1915,7 +2068,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Votre recours contre une décision de modération ({subjectRef}) est en attente d’examen.',
       heading: 'Recours reçu',
       body: 'Nous avons reçu votre recours contre une décision de modération ({subjectRef}). Il sera examiné par une personne — si possible une autre que celle qui a pris la décision.\n\nNous vous communiquerons le résultat par e-mail, avec sa motivation.',
-      cta: 'Voir les détails',
+      cta: 'Voir les données de l’entreprise',
+      reporter: { cta: 'Voir le statut du dossier' },
       highlight: '{appealReference}',
       footerNote: 'Vous recevez ce message car un recours a été introduit sur Pracuj.be avec cette adresse e-mail.',
     },
@@ -1924,7 +2078,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Your appeal against a moderation decision ({subjectRef}) is awaiting review.',
       heading: 'Appeal received',
       body: 'We have received your appeal against a moderation decision ({subjectRef}). A person will review it — where possible, someone other than the person who made the decision.\n\nWe will email you the outcome, together with the reasons.',
-      cta: 'View details',
+      cta: 'Go to company details',
+      reporter: { cta: 'Check case status' },
       highlight: '{appealReference}',
       footerNote: 'You are receiving this email because an appeal was submitted on Pracuj.be with this email address.',
     },
@@ -1936,7 +2091,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Po ponownym przeglądzie decyzja pozostaje bez zmian.',
       heading: 'Decyzja utrzymana',
       body: 'Rozpatrzyliśmy Twoje odwołanie od decyzji moderacyjnej ({subjectRef}). Po ponownym przeglądzie decyzja pozostaje bez zmian.\n\nUzasadnienie podajemy poniżej.',
-      cta: 'Zobacz szczegóły',
+      cta: 'Przejdź do danych firmy',
+      reporter: { cta: 'Sprawdź status sprawy' },
       highlight: '{appealReference}',
       footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be złożono odwołanie z tym adresem e-mail.',
     },
@@ -1945,7 +2101,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Na een nieuwe beoordeling blijft de beslissing ongewijzigd.',
       heading: 'Beslissing gehandhaafd',
       body: 'We hebben je bezwaar tegen een moderatiebeslissing ({subjectRef}) behandeld. Na een nieuwe beoordeling blijft de beslissing ongewijzigd.\n\nDe motivering vind je hieronder.',
-      cta: 'Details bekijken',
+      cta: 'Naar bedrijfsgegevens',
+      reporter: { cta: 'Status van je dossier bekijken' },
       highlight: '{appealReference}',
       footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een bezwaar met dit e-mailadres is ingediend.',
     },
@@ -1954,7 +2111,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Après un nouvel examen, la décision est maintenue.',
       heading: 'Décision maintenue',
       body: 'Nous avons examiné votre recours contre une décision de modération ({subjectRef}). Après un nouvel examen, la décision est maintenue.\n\nVous trouverez la motivation ci-dessous.',
-      cta: 'Voir les détails',
+      cta: 'Voir les données de l’entreprise',
+      reporter: { cta: 'Voir le statut du dossier' },
       highlight: '{appealReference}',
       footerNote: 'Vous recevez ce message car un recours a été introduit sur Pracuj.be avec cette adresse e-mail.',
     },
@@ -1963,7 +2121,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'After a new review, the decision stands.',
       heading: 'Decision upheld',
       body: 'We have reviewed your appeal against a moderation decision ({subjectRef}). After a new review, the decision stands.\n\nThe reasons are below.',
-      cta: 'View details',
+      cta: 'Go to company details',
+      reporter: { cta: 'Check case status' },
       highlight: '{appealReference}',
       footerNote: 'You are receiving this email because an appeal was submitted on Pracuj.be with this email address.',
     },
@@ -1975,7 +2134,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Po ponownym przeglądzie zmieniliśmy decyzję.',
       heading: 'Odwołanie uwzględnione',
       body: 'Rozpatrzyliśmy Twoje odwołanie od decyzji moderacyjnej ({subjectRef}) i je uwzględniliśmy — decyzja została zmieniona.\n\nUzasadnienie podajemy poniżej.',
-      cta: 'Zobacz szczegóły',
+      cta: 'Przejdź do danych firmy',
+      reporter: { cta: 'Sprawdź status sprawy' },
       highlight: '{appealReference}',
       footerNote: 'Otrzymujesz tę wiadomość, ponieważ w serwisie Pracuj.be złożono odwołanie z tym adresem e-mail.',
     },
@@ -1984,7 +2144,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Na een nieuwe beoordeling hebben we de beslissing gewijzigd.',
       heading: 'Bezwaar gegrond',
       body: 'We hebben je bezwaar tegen een moderatiebeslissing ({subjectRef}) behandeld en gegrond verklaard — de beslissing is gewijzigd.\n\nDe motivering vind je hieronder.',
-      cta: 'Details bekijken',
+      cta: 'Naar bedrijfsgegevens',
+      reporter: { cta: 'Status van je dossier bekijken' },
       highlight: '{appealReference}',
       footerNote: 'Je ontvangt dit bericht omdat op Pracuj.be een bezwaar met dit e-mailadres is ingediend.',
     },
@@ -1993,7 +2154,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'Après un nouvel examen, nous avons modifié la décision.',
       heading: 'Recours accueilli',
       body: 'Nous avons examiné votre recours contre une décision de modération ({subjectRef}) et y avons fait droit — la décision a été modifiée.\n\nVous trouverez la motivation ci-dessous.',
-      cta: 'Voir les détails',
+      cta: 'Voir les données de l’entreprise',
+      reporter: { cta: 'Voir le statut du dossier' },
       highlight: '{appealReference}',
       footerNote: 'Vous recevez ce message car un recours a été introduit sur Pracuj.be avec cette adresse e-mail.',
     },
@@ -2002,7 +2164,8 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       preview: 'After a new review, we changed the decision.',
       heading: 'Appeal upheld',
       body: 'We have reviewed your appeal against a moderation decision ({subjectRef}) and upheld it — the decision has been changed.\n\nThe reasons are below.',
-      cta: 'View details',
+      cta: 'Go to company details',
+      reporter: { cta: 'Check case status' },
       highlight: '{appealReference}',
       footerNote: 'You are receiving this email because an appeal was submitted on Pracuj.be with this email address.',
     },

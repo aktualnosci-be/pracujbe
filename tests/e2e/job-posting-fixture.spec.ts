@@ -37,6 +37,11 @@ test('oferta bez flagi demo: JobPosting z pełnym opisem, bez baneru demo i noin
   expect(data).not.toHaveProperty('validThrough');
   // Okres wynagrodzenia z danych oferty (miesięczny).
   expect((data!.baseSalary as { value?: { unitText?: string } }).value?.unitText).toBe('MONTH');
+  // #866: umiejętności (Text) i certyfikaty (EducationalOccupationalCredential) jak sekcja strony.
+  expect(data!.skills).toBe('Kompletowanie zamówień, Obsługa skanera ręcznego, Obsługa wózka widłowego');
+  expect(data!.qualifications).toEqual([
+    { '@type': 'EducationalOccupationalCredential', credentialCategory: 'certificate', name: 'VCA Basis' },
+  ]);
 
   await expect(page.getByTestId('demo-jobs-notice')).toHaveCount(0);
   await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);

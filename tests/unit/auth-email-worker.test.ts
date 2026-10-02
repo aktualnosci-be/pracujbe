@@ -96,7 +96,8 @@ describe('processAuthEmailBatch', () => {
     const result = await processAuthEmailBatch(pool as never, { send }, { baseURL, from: 'Pracuj.be <no-reply@pracuj.be>' });
     expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0, ok: true });
     const [message, options] = send.mock.calls[0]!;
-    expect(options).toEqual({ idempotencyKey: '11111111-1111-4111-8111-111111111111' });
+    // #731: wysyłka ma termin — transport dostaje sygnał przerwania obok klucza idempotencji.
+    expect(options).toEqual({ idempotencyKey: '11111111-1111-4111-8111-111111111111', signal: expect.any(AbortSignal) });
     expect(message.to).toBe('anna@example.com');
     expect(message.html).toContain('https://pracuj.be/nl/potwierdz-email#token=hdr.payload.sig');
     expect(message.html).not.toContain('/api/auth/');

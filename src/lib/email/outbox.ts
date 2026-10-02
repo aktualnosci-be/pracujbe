@@ -33,9 +33,8 @@ import {
   MAIL_CONFIG_ERROR_MESSAGE,
   mailTransportFromEnv,
   MailSendError,
-  type MailMessage,
-  type MailTransport,
 } from '@/lib/email/transport';
+import { createRunDeadline, SendDeadlineError, sendWithDeadline, type RunDeadline } from '@/lib/email/run-deadline';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
@@ -110,36 +109,8 @@ export const EMAIL_LEASE_SECONDS = 300;
  */
 export const SEND_DEADLINE_MS = 60_000;
 
-/** Wysyłka przerwana terminem — wynik u dostawcy nieznany (ponowienie z tym samym kluczem). */
-export class SendDeadlineError extends MailSendError {
-  constructor() {
-    super('provider_unavailable');
-    this.name = 'SendDeadlineError';
-  }
-}
-
-async function sendWithDeadline(
-  transport: MailTransport,
-  message: MailMessage,
-  idempotencyKey: string,
-): Promise<{ id: string }> {
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      reject(new SendDeadlineError());
-    }, SEND_DEADLINE_MS);
-  });
-  const sending = transport.send(message, { idempotencyKey, signal: controller.signal });
-  // Spóźniony wynik po terminie jest pomijany (bez nieobsłużonego odrzucenia).
-  sending.catch(() => undefined);
-  try {
-    return await Promise.race([sending, deadline]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+/** #731: klasa i wysyłka z terminem są wspólne z kolejką kont (`run-deadline.ts`). */
+export { SendDeadlineError };
 
 // renderEmail jest generyczne po EmailType; na granicy workera dane pochodzą z jsonb (payload),
 // więc rzutujemy raz w kontrolowany sposób (bez `any`).
@@ -169,6 +140,8 @@ export async function renderDelivery(
   env: Record<string, string | undefined> = process.env,
   /** #100: link „wyłącz tylko ten alert” (digest `jobMatch`), liczony przez workera. */
   alertOffUrl?: string,
+  /** #1118: rola odbiorcy (`profiles.role`) — link ustawień w newsletterze do właściwego panelu. */
+  recipientRole?: string | null,
 ): Promise<RenderedDelivery> {
   const isMarketing = emailPreferenceCategory(row.template) === 'marketing';
   if (isMarketing) {
@@ -184,6 +157,7 @@ export async function renderDelivery(
       locale,
       newsletterJobsFromPayload(row.payload, locale),
       { unsubscribeUrl, sender },
+      recipientRole,
     );
     if (!newsletter.transportReady) throw new Error('newsletter not transport ready');
     return { from: marketing.from, subject: newsletter.subject, html: newsletter.html, text: newsletter.text };
@@ -238,6 +212,69 @@ export function unsubscribeLinksFor(
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * #1093: szablony, których `jobTitle` worker podmienia na tłumaczenie w języku odbiorcy, wraz
+ * z rodzajem obiektu wiersza kolejki (`entity_type`), z którego ustalamy ofertę.
+ */
+export const RECIPIENT_JOB_TITLE_TEMPLATES: Readonly<Record<string, 'offer' | 'application'>> = {
+  jobOffer: 'offer',
+  statusChanged: 'application',
+  applicationViewed: 'application',
+  guestStatusChanged: 'application',
+};
+
+/**
+ * Tytuły ofert w języku odbiorcy dla paczki kolejki (#1093): klucz = `email_deliveries.id`.
+ * Jedno zapytanie na paczkę; wiersz bez tłumaczenia w żadnym języku dostaje `jobs.title`.
+ * Błąd odczytu → pusta mapa (e-mail z tytułem z payloadu), zgłoszony do kanału błędów.
+ */
+export async function readRecipientJobTitles(
+  queue: ReadonlyArray<{ id: string; template: string; locale: string; entity_type?: string | null; entity_id?: string | null }>,
+): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  const wanted = queue.filter((r) => {
+    const kind = RECIPIENT_JOB_TITLE_TEMPLATES[r.template];
+    return kind !== undefined && r.entity_type === kind && !!r.entity_id && UUID_RE.test(r.entity_id);
+  });
+  if (wanted.length === 0) return titles;
+  try {
+    const rows = await withServiceRole((tx) =>
+      queryRows<{ delivery_id: string; title: string | null }>(
+        tx,
+        'email.outbox.recipient-job-titles',
+        `SELECT d.delivery_id, coalesce(t.title, j.title) AS title
+           FROM unnest($1::uuid[], $2::text[], $3::text[], $4::uuid[])
+                AS d(delivery_id, kind, locale, entity_id)
+           JOIN public.jobs j
+             ON j.id = CASE d.kind
+                         WHEN 'offer' THEN (SELECT o.job_id FROM public.offers o WHERE o.id = d.entity_id)
+                         ELSE (SELECT a.job_id FROM public.applications a WHERE a.id = d.entity_id)
+                       END
+           LEFT JOIN LATERAL (
+             SELECT jt.title FROM public.job_translations jt
+              WHERE jt.job_id = j.id AND nullif(btrim(jt.title), '') IS NOT NULL
+              ORDER BY (jt.locale = d.locale) DESC, (jt.locale = j.default_locale) DESC,
+                       (jt.locale = 'en') DESC
+              LIMIT 1
+           ) t ON true`,
+        [
+          wanted.map((r) => r.id),
+          wanted.map((r) => RECIPIENT_JOB_TITLE_TEMPLATES[r.template] as string),
+          wanted.map((r) => r.locale),
+          wanted.map((r) => r.entity_id as string),
+        ],
+      ),
+    );
+    for (const r of rows) {
+      const title = r.title?.trim();
+      if (title) titles.set(r.delivery_id, title);
+    }
+  } catch (err) {
+    captureError(err, { area: 'email.outbox.recipientJobTitles' });
+  }
+  return titles;
+}
+
 type AlertOffRow = {
   profile_id: string | null;
   template: string;
@@ -246,9 +283,12 @@ type AlertOffRow = {
   created_at?: string | null;
 };
 
-/** Token wyłączenia JEDNEGO alertu (digest `jobMatch` zapisanego wyszukiwania) albo `null`. */
+/** Digesty alertów z linkiem „wyłącz tylko ten alert”: zapisane wyszukiwanie i obserwowana firma. */
+const ALERT_OFF_TEMPLATES: ReadonlySet<string> = new Set(['jobMatch', 'followedCompanyJobs']);
+
+/** Token wyłączenia JEDNEGO alertu (digest `jobMatch`/`followedCompanyJobs`) albo `null`. */
 function alertOffTokenFor(row: AlertOffRow, secret: string | null): string | null {
-  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
+  if (!ALERT_OFF_TEMPLATES.has(row.template) || row.entity_type !== 'saved_search') return null;
   if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
   return createAlertOffToken(
     { profileId: row.profile_id, savedSearchId: row.entity_id },
@@ -328,6 +368,12 @@ export interface ProcessResult {
    */
   configBlocked?: number;
   /**
+   * #731: wiersze zwolnione bez próby wysyłki, bo skończył się budżet czasu przebiegu
+   * (`EMAIL_RUN_BUDGET_MS`) albo caller przerwał żądanie. Wracają do kolejki bez zużycia próby;
+   * przebieg zwraca `ok: false` (503 — zaległość widoczna dla monitoringu).
+   */
+  deadlineDeferred?: number;
+  /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
    * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
    * cronu, gdy nic nie wychodzi. `true` = przetworzono (także pustą kolejkę) albo oczekiwane
@@ -336,7 +382,11 @@ export interface ProcessResult {
   ok: boolean;
 }
 
-export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
+export async function processEmailQueue(
+  limit = 20,
+  options: { deadline?: RunDeadline } = {},
+): Promise<ProcessResult> {
+  const deadline = options.deadline ?? createRunDeadline();
   const transport = mailTransportFromEnv();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
@@ -382,6 +432,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let suppressed = 0;
   let leaseLost = 0;
   let configBlocked = 0;
+  let deadlineDeferred = 0;
   // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
   const exhausted = new Map<string, string>();
   // #1214: po pierwszym błędzie konfiguracji reszta paczki czeka (bez prób wysyłki).
@@ -435,19 +486,22 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   // #294: imię ODBIORCY do powitania — jeden odczyt na paczkę. Best-effort: błąd odczytu nie
   // blokuje wysyłki (mail wychodzi z neutralnym powitaniem).
   const firstNames = new Map<string, string>();
+  // #1118: rola odbiorcy — newsletter linkuje ustawienia powiadomień właściwego panelu.
+  const roles = new Map<string, string>();
   const profileIds = [...new Set(queue.map((r) => r.profile_id).filter((v): v is string => !!v))];
   if (profileIds.length > 0) {
     try {
       const profiles = await withServiceRole((tx) =>
-        queryRows<{ id: string; first_name: string | null }>(
+        queryRows<{ id: string; first_name: string | null; role?: string | null }>(
           tx,
           'email.outbox.recipient-names',
-          'SELECT id, first_name FROM public.profiles WHERE id = ANY($1::uuid[])',
+          'SELECT id, first_name, role::text AS role FROM public.profiles WHERE id = ANY($1::uuid[])',
           [profileIds],
         ),
       );
       for (const p of profiles) {
         if (p.first_name) firstNames.set(p.id, p.first_name);
+        if (p.role) roles.set(p.id, p.role);
       }
     } catch (profilesErr) {
       captureError(profilesErr, { area: 'email.outbox.recipientNames' });
@@ -484,7 +538,21 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
+  // #1093: tytuł oferty w języku ODBIORCY (Invariant #1). Payload kolejki niesie tytuł
+  // oryginału (`jobs.title`); worker czyta tłumaczenie w locale wiersza — ta sama kolejność co
+  // alert zapisanego wyszukiwania (0138): język odbiorcy → język oferty → en → oryginał.
+  // Best-effort: błąd odczytu = tytuł z payloadu.
+  const jobTitles = await readRecipientJobTitles(queue);
+
   for (const row of queue) {
+    // #731: za mało czasu na kontrolowaną wysyłkę (albo caller się rozłączył) — wiersz wraca
+    // do kolejki od razu, bez próby i bez zużycia `attempts`; nie jest liczony jako porażka.
+    if (deadline.exhausted()) {
+      const before = deferred;
+      await defer(row.id, row.lock_token, new Date().toISOString());
+      if (deferred > before) deadlineDeferred += 1;
+      continue;
+    }
     if (configRetryAt) {
       await deferForConfig(row.id, row.lock_token, configRetryAt);
       continue;
@@ -501,8 +569,20 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // #98: e-mail do gościa dostaje link z tokenem liczonym tutaj (w bazie tylko hash);
       // brak tokenu = błąd tego wiersza (ponowienie), nie przerwanie paczki.
       const excerpt = row.template === 'jobOffer' && row.entity_id ? offerExcerpts.get(row.entity_id) : undefined;
+      const jobTitle = jobTitles.get(row.id);
+      const enriched =
+        excerpt || jobTitle
+          ? {
+              ...row,
+              payload: {
+                ...row.payload,
+                ...(excerpt ? { messageExcerpt: excerpt } : {}),
+                ...(jobTitle ? { jobTitle } : {}),
+              },
+            }
+          : row;
       const { locale, data } = buildDeliveryData(
-        excerpt ? { ...row, payload: { ...row.payload, messageExcerpt: excerpt } } : row,
+        enriched,
         site,
         row.profile_id ? firstNames.get(row.profile_id) : undefined,
         guestDeliveryToken(row.template, row.payload),
@@ -524,6 +604,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         unsubscribe?.pageUrl,
         process.env,
         alertOffLinkFor(row, locale, site, unsubscribeSecret) ?? undefined,
+        row.profile_id ? roles.get(row.profile_id) : undefined,
       );
 
       // #100 / #466 pkt 8: ponowna kontrola zgody tuż przed wysyłką (kategoria, blokada
@@ -563,6 +644,15 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // wiersz wróci do puli, ponowienie nie tworzy drugiego listu (Resend: Idempotency-Key,
       // EmailLabs: stały messageId + sprawdzenie przed wysyłką). Transport potwierdza wysyłkę
       // tylko z identyfikatorem wiadomości od dostawcy.
+      // #731: budżet przebiegu skończył się po kontroli zgody i budżecie — bez próby wysyłki.
+      // (Pobrany budżet okna przepada jak przy innych odłożeniach; to rzadki przypadek graniczny.)
+      if (deadline.remainingMs() <= 0) {
+        const before = deferred;
+        await defer(row.id, row.lock_token, new Date().toISOString());
+        if (deferred > before) deadlineDeferred += 1;
+        continue;
+      }
+      // #731: termin wysyłki nie wykracza poza budżet przebiegu (ani poza rozłączenie callera).
       const result = await sendWithDeadline(
         transport,
         {
@@ -575,6 +665,8 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           ...(replyTo ? { replyTo } : {}),
         },
         row.id,
+        Math.min(SEND_DEADLINE_MS, deadline.remainingMs()),
+        deadline.signal,
       );
 
       const providerMessageId = result.id;
@@ -675,6 +767,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     suppressed,
     leaseLost,
     ...(configBlocked > 0 ? { configBlocked } : {}),
-    ok: configBlocked === 0,
+    ...(deadlineDeferred > 0 ? { deadlineDeferred } : {}),
+    ok: configBlocked === 0 && deadlineDeferred === 0,
   };
 }
