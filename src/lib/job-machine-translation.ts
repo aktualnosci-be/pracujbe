@@ -123,5 +123,6 @@ export function applyJobListMachineTranslation<T extends JobListItem>(
   if (typeof title !== 'string' || title.trim() === '') return job;
   const highlights = readList(record, 'highlights');
   if (!highlights || highlights.length !== job.highlights.length) return job;
-  return { ...job, title, highlights, machineTranslation: { sourceLocale, origin } };
+  // #1223: przekład jest w języku strony — karta nie oznacza go innym `lang`.
+  return { ...job, title, highlights, contentLocale: requestedLocale, machineTranslation: { sourceLocale, origin } };
 }

@@ -47,12 +47,17 @@ const PUBLISHED: JobWizardInitialValues = {
   applyEmail: "praca@example.be",
 };
 
-function renderEdit(values: JobWizardInitialValues = PUBLISHED, status: "active" | "paused" = "active") {
+function renderEdit(
+  values: JobWizardInitialValues = PUBLISHED,
+  status: "active" | "paused" = "active",
+  recruitmentEnabled = false,
+) {
   return render(
     <JobWizard
       initialJobId={JOB}
       initialValues={values}
       published={{ status, slug: "operator-wozka-abc", updatedAt: VERSION }}
+      recruitmentEnabled={recruitmentEnabled}
     />,
   );
 }
@@ -80,7 +85,8 @@ describe("JobWizard — edycja opublikowanej oferty (#325)", () => {
   it("pokazuje tryb edycji z linkiem do publicznej oferty i bez „Zapisz i wyjdź”", () => {
     renderEdit();
     expect(screen.getByRole("heading", { level: 1, name: "editTitle" })).toBeInTheDocument();
-    expect(screen.getByText("editSubtitleActive")).toBeInTheDocument();
+    // #1225: tryb ogłoszeniowy (domyślny) — podtytuł bez wzmianki o zgłoszeniach.
+    expect(screen.getByText("editSubtitleActiveListing")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "viewOffer" })).toHaveAttribute(
       "href",
       "/oferty-pracy/operator-wozka-abc",
@@ -91,8 +97,16 @@ describe("JobWizard — edycja opublikowanej oferty (#325)", () => {
 
   it("wstrzymana oferta: własny opis i brak linku do (niepublicznej) oferty", () => {
     renderEdit(PUBLISHED, "paused");
-    expect(screen.getByText("editSubtitlePaused")).toBeInTheDocument();
+    expect(screen.getByText("editSubtitlePausedListing")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "viewOffer" })).not.toBeInTheDocument();
+  });
+
+  it("kontrola ujemna (#1225): tryb RECRUITMENT = dotychczasowe podtytuły", () => {
+    renderEdit(PUBLISHED, "active", true);
+    expect(screen.getByText("editSubtitleActive")).toBeInTheDocument();
+    cleanup();
+    renderEdit(PUBLISHED, "paused", true);
+    expect(screen.getByText("editSubtitlePaused")).toBeInTheDocument();
   });
 
   it("„Dalej” tylko waliduje krok — nic nie zapisuje w bazie", async () => {

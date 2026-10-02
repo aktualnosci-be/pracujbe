@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runtimePoolConfig } from '@/lib/db/pool';
+import { DEFAULT_DOMAIN_POOL_MAX, domainPoolMax, runtimePoolConfig } from '@/lib/db/pool';
 
 describe('Konfiguracja ograniczonej puli', () => {
   it('ustawia rolę i schemat dla każdego nowego połączenia auth', () => {
@@ -12,6 +12,19 @@ describe('Konfiguracja ograniczonej puli', () => {
     expect(runtimePoolConfig('postgres://web:secret@localhost/app', 'domain').options)
       .toContain('-c role=pracujbe_app -c search_path=public');
   });
+  it('pula domenowa (#1096): domyślnie 10 połączeń, nadpisanie DATABASE_APP_POOL_MAX 1–50', () => {
+    const url = 'postgres://web:secret@localhost/app';
+    expect(DEFAULT_DOMAIN_POOL_MAX).toBe(10);
+    expect(runtimePoolConfig(url, 'domain', {}).max).toBe(10);
+    expect(runtimePoolConfig(url, 'domain', { DATABASE_APP_POOL_MAX: '20' }).max).toBe(20);
+    // Nadpisanie dotyczy tylko puli domenowej.
+    expect(runtimePoolConfig(url, 'auth', { DATABASE_APP_POOL_MAX: '20' }).max).toBe(5);
+    expect(runtimePoolConfig(url, 'service', { DATABASE_APP_POOL_MAX: '20' }).max).toBe(3);
+  });
+  it.each(['0', '51', '-3', '2.5', 'abc', ' ', '1e1'])(
+    'kontrola ujemna: zła wartość DATABASE_APP_POOL_MAX (%j) = domyślna', (value) => {
+      expect(domainPoolMax({ DATABASE_APP_POOL_MAX: value })).toBe(DEFAULT_DOMAIN_POOL_MAX);
+    });
   it('pula monitoringu (#47): rola pracujbe_ops i jedna sesja', () => {
     const config = runtimePoolConfig('postgres://ops:secret@localhost/app', 'ops');
     expect(config.options).toContain('-c role=pracujbe_ops -c search_path=public');

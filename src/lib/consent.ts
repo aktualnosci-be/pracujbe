@@ -88,10 +88,21 @@ export function saveConsent(
     // Rozliczalność (RODO art. 7 ust. 1): serwerowy log zgody, PER KATEGORIA.
     // `record.v` = wersja polityki FAKTYCZNIE pokazana użytkownikowi (ta w jego cookie) —
     // serwer ją przyjmie tylko, jeśli istnieje w `consent_versions` (patrz `record_consent`).
-    void persistConsentToServer(record.categories, source, record.v);
+    lastPersistence = persistConsentToServer(record.categories, source, record.v);
   }
 
   return record;
+}
+
+let lastPersistence: Promise<void> = Promise.resolve();
+
+/**
+ * Obietnica ostatniego zapisu zgody w serwerowym logu (nigdy nie odrzuca). Wycofanie zgody
+ * na analitykę przeładowuje stronę (#642) — przeładowanie czeka na ten zapis, żeby nie
+ * przerwać żądania Server Action w locie.
+ */
+export function pendingConsentPersistence(): Promise<void> {
+  return lastPersistence;
 }
 
 /**
