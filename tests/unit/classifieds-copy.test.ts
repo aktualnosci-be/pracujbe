@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { routing, type Locale } from '@/i18n/routing';
-import { emailCopy, layoutCopy } from '@/emails/copy';
+import { emailCopy, layoutCopy, type EmailCopy, type EmailType } from '@/emails/copy';
+import { renderEmail } from '@/emails/templates';
+import { RECRUITMENT_EMAIL_TEMPLATES } from '@/lib/email/recruitment-templates';
+import { PORTAL_LEGAL_MODE_ENV } from '@/lib/portal-mode';
 import { getAllGuideSlugs, getGuideBySlug } from '@/lib/guides/guides';
 import en from '@/messages/en.json';
 import fr from '@/messages/fr.json';
@@ -237,5 +240,145 @@ describe('odznaka weryfikacji = zweryfikowana tożsamość firmy (#1151)', () =>
   it('kontrola ujemna: dawne „Zweryfikowana firma” nie mówi o tożsamości', () => {
     expect('Zweryfikowana firma').not.toMatch(IDENTITY.pl);
     expect('Verified company').not.toMatch(IDENTITY.en);
+  });
+});
+
+/**
+ * E-maile i ekrany kont w trybie ogłoszeniowym (#1212, #1213, #1225). Szablony spoza
+ * `RECRUITMENT_EMAIL_TEMPLATES` wychodzą w trybie ogłoszeniowym, więc ich treść bazowa (także
+ * wariant `anonymous`) nie obiecuje zgłoszeń przez portal, odpowiadania kandydatom, propozycji
+ * ani wiadomości. Dawne brzmienia zostają tylko w wariancie `recruitment` (tryb RECRUITMENT).
+ * Ekrany kandydata/pracodawcy: w trybie ogłoszeniowym komponenty biorą klucze `*Listing`
+ * (plus klucze bez wariantu wymienione niżej) — te teksty sprawdzamy tymi samymi wzorcami.
+ */
+const PROCESS_FORBIDDEN: Record<Locale, RegExp[]> = {
+  pl: [/pierwsze zgłoszenia/i, /zgłoszeni(a|ami|ach)\b(?! treści)/i, /odpowiada\S* kandydatom/i, /propozycj/i, /dopasowa/i, /wiadomościami/i, /aplikować/i, /profil\w* (nie jest )?widoczn/i, /widzi\w* Twój profil/i],
+  nl: [/sollicitaties/i, /solliciteren/i, /kandidaten (te )?antwoord/i, /voorstel/i, /\bmatch/i, /profiel (dat )?zichtbaar/i, /je profiel (niet )?(ziet|zien)/i, /berichten/i],
+  fr: [/candidatures/i, /postuler/i, /répondre aux candidats/i, /proposition/i, /compatibilit/i, /profil (n’est pas )?visible/i, /voie votre profil|voit pas votre profil/i, /vos messages|et messages|aux messages/i],
+  en: [/applications/i, /\bapply\b/i, /reply to candidates/i, /job offers?\b/i, /\bmatch results/i, /profile visible/i, /see your profile/i, /\bmessages\b/i],
+};
+
+function processViolations(locale: Locale, texts: Array<[string, string]>): string[] {
+  const patterns = [...FORBIDDEN[locale], ...PROCESS_FORBIDDEN[locale]];
+  return texts.flatMap(([where, text]) =>
+    patterns.filter((re) => re.test(text)).map((re) => `${locale} ${where}: ${re} ← „${text}”`),
+  );
+}
+
+type AnyCopy = EmailCopy & Record<string, unknown>;
+const LISTING_EMAIL_TYPES = (Object.keys(emailCopy) as EmailType[]).filter(
+  (type) => !(RECRUITMENT_EMAIL_TEMPLATES as readonly string[]).includes(type),
+);
+/** Pola e-maila widoczne dla odbiorcy (bez noty stopki: „zignoruj tę wiadomość” itp. = ten e-mail). */
+const EMAIL_FIELDS = ['subject', 'preview', 'heading', 'body', 'cta', 'highlight', 'outro'] as const;
+/** Szablony, których bazowa treść mówi o zgłoszeniach DSA/kontakcie (słowo „zgłoszenie” = sprawa). */
+const EMAIL_EXEMPT = new Set<string>(['reportReceived', 'reportDecisionActioned', 'reportDecisionNoAction', 'reportRestored',
+  'moderationJobRemoved', 'moderationCompanySuspended', 'appealReceived', 'appealUpheld', 'appealReversed',
+  'supportContact', 'contactMessageAdmin', 'passwordReset', 'accountConfirmation', 'magicLink', 'emailChange', 'invite',
+  'teamInvitation', 'teamInvitationSignup', 'inactiveCvWarning', 'breachNotice', 'jobMatch']);
+
+function emailTexts(locale: Locale, copyOf: (type: EmailType) => AnyCopy): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const type of LISTING_EMAIL_TYPES) {
+    if (EMAIL_EXEMPT.has(type)) continue;
+    const copy = copyOf(type);
+    const variants: Array<[string, Record<string, unknown>]> = [['', copy]];
+    if (copy.anonymous) variants.push(['anonymous.', copy.anonymous]);
+    for (const [prefix, source] of variants) {
+      for (const field of EMAIL_FIELDS) {
+        const text = source[field];
+        if (typeof text === 'string') out.push([`email:${type}.${prefix}${field}`, text]);
+      }
+    }
+  }
+  return out;
+}
+
+describe('e-maile spoza procesu rekrutacyjnego = portal ogłoszeń (#1212, #1225)', () => {
+  it.each(routing.locales)('%s: treść bazowa bez zgłoszeń, odpowiadania kandydatom i propozycji', (locale) => {
+    expect(processViolations(locale, emailTexts(locale, (type) => emailCopy[type][locale] as AnyCopy))).toEqual([]);
+  });
+
+  it('strażnik obejmuje jobPublished, companyVerified i inactiveAccountWarning', () => {
+    const where = emailTexts('pl', (type) => emailCopy[type].pl as AnyCopy).map(([w]) => w);
+    for (const key of ['email:jobPublished.body', 'email:companyVerified.body', 'email:inactiveAccountWarning.body']) {
+      expect(where).toContain(key);
+    }
+  });
+
+  it.each(routing.locales)('%s: kontrola ujemna — wariant `recruitment` (dawne brzmienie) w treści bazowej = czerwony', (locale) => {
+    const withRecruitment = (type: EmailType): AnyCopy => {
+      const base = emailCopy[type][locale] as AnyCopy;
+      return (base.recruitment ? { ...base, ...base.recruitment } : base) as AnyCopy;
+    };
+    const found = processViolations(locale, emailTexts(locale, withRecruitment));
+    for (const type of ['jobPublished', 'companyVerified', 'inactiveAccountWarning']) {
+      expect(found.some((v) => v.includes(`email:${type}.body`)), `${locale} ${type}`).toBe(true);
+    }
+  });
+
+  it('wybór wariantu w renderze: tryb ogłoszeniowy = treść bazowa, RECRUITMENT = wariant `recruitment`', async () => {
+    const data = { jobTitle: 'Magazynier', jobUrl: 'https://pracuj.be/pl/oferty-pracy/magazynier' };
+    vi.stubEnv(PORTAL_LEGAL_MODE_ENV, '');
+    const listing = await renderEmail('jobPublished', 'pl', data);
+    vi.stubEnv(PORTAL_LEGAL_MODE_ENV, 'RECRUITMENT');
+    const recruitment = await renderEmail('jobPublished', 'pl', data);
+    vi.unstubAllEnvs();
+    expect(listing.text).toContain('kanałem podanym w ogłoszeniu');
+    expect(listing.text).not.toMatch(/zgłoszenia/);
+    expect(recruitment.text).toMatch(/pierwsze zgłoszenia/);
+  });
+});
+
+/** Klucze wyświetlane w trybie ogłoszeniowym na ekranach konta (#1213, #1225). */
+const LISTING_PANEL_KEYS = [
+  'ageAttestation.sectionDescriptionListing',
+  'ageAttestation.stateMinorListing',
+  'ageAttestation.stateMissingListing',
+  'ageAttestation.stateAdult',
+  'companyBlocks.sectionDescriptionListing',
+  'companyBlocks.emptyListing',
+  'companyBlocks.jobTitleListing',
+  'companyBlocks.jobDescriptionListing',
+  'companyBlocks.jobBlockedDescriptionListing',
+  'accountData.sectionDescription',
+  'accountData.exportDescriptionListing',
+  'accountData.deleteDescriptionListing',
+  'accountData.exportDescriptionEmployerListing',
+  'accountData.deleteDescriptionEmployerListing',
+  'team.roleOwnerDescListing',
+  'team.roleAdminDescListing',
+  'team.roleRecruiterDescListing',
+  'team.roleMemberDescListing',
+  'team.deactivateDescListing',
+  'team.recruitOnlyDescListing',
+  'jobWizard.editSubtitleActiveListing',
+  'jobWizard.editSubtitlePausedListing',
+] as const;
+
+/** Nazwa roli „rekruter” (etykieta roli w zespole, nie obietnica funkcji) nie jest naruszeniem. */
+const ROLE_NAME = /rekruter\w*|recruiters?|recruteurs?/gi;
+
+function panelViolations(locale: Locale, messages: Messages = MESSAGES[locale]): string[] {
+  const texts = LISTING_PANEL_KEYS.map((key): [string, string] => [key, lookup(messages, key).replace(ROLE_NAME, 'ROLE')]);
+  return processViolations(locale, texts);
+}
+
+describe('ekrany konta w trybie ogłoszeniowym (#1213, #1225)', () => {
+  it.each(routing.locales)('%s: teksty *Listing bez obietnic funkcji rekrutacyjnych', (locale) => {
+    expect(panelViolations(locale)).toEqual([]);
+  });
+
+  it.each(routing.locales)('%s: kontrola ujemna — dawne brzmienia (klucze bez *Listing) = czerwony', (locale) => {
+    const mutated = clone(MESSAGES[locale]);
+    for (const key of LISTING_PANEL_KEYS) {
+      if (!key.endsWith('Listing')) continue;
+      const [ns, k] = key.split('.') as [string, string];
+      (mutated[ns] as Messages)[k] = lookup(MESSAGES[locale], `${ns}.${k.replace(/Listing$/, '')}`);
+    }
+    const found = panelViolations(locale, mutated);
+    for (const key of ['ageAttestation.stateMinorListing', 'companyBlocks.sectionDescriptionListing', 'accountData.deleteDescriptionListing', 'team.roleRecruiterDescListing']) {
+      expect(found.some((v) => v.includes(`${locale} ${key}:`)), `${locale} ${key}`).toBe(true);
+    }
   });
 });

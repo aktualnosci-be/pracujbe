@@ -22,5 +22,11 @@ jobs:
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          retain_days: 6
-          keep_minimum_runs: 4
+          # Historia przebiegów (także `main`) jest potrzebna przy analizie regresji (#1105):
+          # 90 dni = domyślna retencja logów i artefaktów GitHub Actions, a co najmniej 50
+          # ostatnich przebiegów każdego workflowu zostaje niezależnie od wieku. Akcja nie
+          # umie wyłączyć jednej gałęzi (`check_branch_existence` w v2.0.6 porównuje
+          # `indexOf(...) === 1`), więc chronimy historię długością okna, nie filtrem gałęzi.
+          # Minimum pilnuje `scripts/check-ci-workflows.mjs`.
+          retain_days: 90
+          keep_minimum_runs: 50

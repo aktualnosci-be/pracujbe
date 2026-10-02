@@ -1,7 +1,8 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { BadgeCheck, SearchX } from 'lucide-react';
+import { BadgeCheck, ExternalLink, SearchX } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -18,7 +19,8 @@ import {
   buildOrganizationJsonLd,
   serializeJsonLd,
 } from '@/lib/seo/structured-data';
-import { companyProfilePath, getCompanyProfile } from '@/lib/companies';
+import { companyProfilePath, getCompanyProfile, type CompanyProfile } from '@/lib/companies';
+import { isPublicHttpsUrl, sameOriginHost } from '@/lib/company-links';
 
 /**
  * Wspólny widok i metadane profilu publicznego firmy (#591) dla strony 1
@@ -55,6 +57,52 @@ function initials(name: string): string {
   return letters || '•';
 }
 
+/** Host własnej witryny — jedyny, z którego CSP (`img-src 'self'`) pozwala wyświetlić logo. */
+function ownSiteHost(): string {
+  try {
+    return new URL(env.siteUrl).host;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Logo firmy do wyświetlenia (#686) albo `null` (inicjały). Adres jest już zweryfikowany
+ * w bazie (`public_https_url`, zatwierdzony przez admina — 0156), ale sprawdzamy go drugi raz,
+ * a obraz pokazujemy wyłącznie z hosta własnej witryny: CSP (`img-src`) i `images.remotePatterns`
+ * nie dopuszczają obcych hostów, a pobieranie obrazka z serwera firmy zdradzałoby jej serwerowi
+ * adres odwiedzającego przed jakąkolwiek zgodą (Invariant #7). Logo spoza witryny = inicjały.
+ */
+export function profileLogoSrc(logoUrl: string | undefined, ownHost: string = ownSiteHost()): string | null {
+  if (!logoUrl || !isPublicHttpsUrl(logoUrl)) return null;
+  return sameOriginHost(logoUrl, ownHost) ? logoUrl : null;
+}
+
+/** Strona WWW firmy (#686): tylko bezwzględny https (drugie sprawdzenie po `public_https_url`). */
+export function profileWebsite(website: string | undefined): { href: string; label: string } | null {
+  if (!website || !isPublicHttpsUrl(website)) return null;
+  try {
+    const url = new URL(website);
+    const path = url.pathname === '/' ? '' : url.pathname;
+    return { href: url.href, label: `${url.host.replace(/^www\./, '')}${path}` };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stan języka opisu wobec języka strony (#708): `match` = opis w języku strony, `other` = firma
+ * wskazała inny język, `unknown` = nie wskazała (albo zmieniła opis po wskazaniu), `none` = brak opisu.
+ */
+export function descriptionLanguageState(
+  company: Pick<CompanyProfile, 'description' | 'descriptionLocale'>,
+  locale: string,
+): 'match' | 'other' | 'unknown' | 'none' {
+  if (!company.description.trim()) return 'none';
+  if (!company.descriptionLocale) return 'unknown';
+  return company.descriptionLocale === locale ? 'match' : 'other';
+}
+
 export async function companyProfileMetadata(locale: string, slug: string, page: number): Promise<Metadata> {
   const result = await loadCompanyProfile(slug, locale, page);
   if (!result) {
@@ -72,8 +120,12 @@ export async function companyProfileMetadata(locale: string, slug: string, page:
   // #647: opis firmy różnicuje profile w wynikach wyszukiwania i podglądach linków — bez niego
   // wszystkie profile miały identyczny opis z podmienioną tylko nazwą. Fallback zostaje dla
   // firmy bez opisu (Invariant #8: nic technicznego, sam tłumaczony tekst ogólny).
+  // #708: opis zadeklarowany w INNYM języku niż strona nie trafia do metadanych tej wersji
+  // językowej (wynik wyszukiwania i podgląd linku byłyby w innym języku niż strona) — wtedy
+  // ogólny tekst w języku strony. Opis bez wskazanego języka zostaje (#647: nie wiemy, że jest obcy).
   const rawDescription = result.company.description.trim();
-  const description = rawDescription
+  const descriptionState = descriptionLanguageState(result.company, locale);
+  const description = rawDescription && descriptionState !== 'other'
     ? truncate(rawDescription, 160)
     : t('metaDescription', { name: result.company.name });
   const shareImage = brandShareImageUrl(base);
@@ -135,12 +187,16 @@ export async function CompanyProfileView({
     profileUrl,
   );
 
-  const [t, tJob, tJobs, tCommon] = await Promise.all([
+  const [t, tJob, tJobs, tCommon, tLang] = await Promise.all([
     getTranslations('companyProfile'),
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('common'),
+    getTranslations('languageNames'),
   ]);
+  const logoSrc = profileLogoSrc(company.logoUrl);
+  const website = profileWebsite(company.website);
+  const descriptionState = descriptionLanguageState(company, locale);
   const pageStatus = t('pageStatus', { page: result.page, lastPage });
 
   // Widoczna ścieżka i BreadcrumbList z jednej listy — dane strukturalne = nawigacja (#930).
@@ -175,12 +231,25 @@ export async function CompanyProfileView({
         />
 
         <header className="mt-4 flex items-start gap-4">
-          <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-soft text-lg font-semibold text-muted-foreground ring-1 ring-inset ring-border"
-            aria-hidden="true"
-          >
-            {initials(company.name)}
-          </div>
+          {logoSrc ? (
+            // #686: logo zatwierdzone przez admina (0156), tylko z hosta witryny (CSP).
+            <Image
+              src={logoSrc}
+              alt={t('logoAlt', { name: company.name })}
+              width={64}
+              height={64}
+              unoptimized
+              className="h-16 w-16 shrink-0 rounded-md bg-background object-contain ring-1 ring-inset ring-border"
+              data-testid="company-logo"
+            />
+          ) : (
+            <div
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-soft text-lg font-semibold text-muted-foreground ring-1 ring-inset ring-border"
+              aria-hidden="true"
+            >
+              {initials(company.name)}
+            </div>
+          )}
           <div className="min-w-0">
             <h1 className="pp-page-title flex flex-wrap items-center gap-2">
               {company.name}
@@ -194,12 +263,50 @@ export async function CompanyProfileView({
                   .join(' · ')}
               </p>
             ) : null}
+            {website ? (
+              // #686: strona WWW zatwierdzona przez admina (0156). Link zewnętrzny: nowa karta
+              // (zapowiedziana czytnikowi), bez przekazania adresu strony i bez wartości SEO.
+              <p className="mt-1 text-sm">
+                <span className="text-muted-foreground">{t('websiteLabel')}: </span>
+                <a
+                  href={website.href}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="inline-flex min-h-11 items-center gap-1 break-all font-medium text-accent underline underline-offset-4"
+                  data-testid="company-website"
+                >
+                  {website.label}
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="sr-only"> {t('opensInNewTab')}</span>
+                </a>
+              </p>
+            ) : null}
           </div>
         </header>
 
-        <p className="mt-4 max-w-2xl whitespace-pre-line text-muted-foreground">
-          {company.description || t('noDescription')}
-        </p>
+        {descriptionState === 'none' ? (
+          <p className="mt-4 max-w-2xl text-muted-foreground">{t('noDescription')}</p>
+        ) : (
+          <div className="mt-4 max-w-2xl">
+            {/* #708: opis w języku wskazanym przez firmę — `lang` dla czytnika i wyszukiwarki. */}
+            <p
+              className="whitespace-pre-line text-muted-foreground"
+              {...(company.descriptionLocale ? { lang: company.descriptionLocale } : {})}
+              data-testid="company-description"
+            >
+              {company.description}
+            </p>
+            {descriptionState === 'other' && company.descriptionLocale ? (
+              <p className="mt-2 text-sm text-muted-foreground" data-testid="company-description-language">
+                {t('descriptionLanguageOther', { language: tLang(company.descriptionLocale) })}
+              </p>
+            ) : descriptionState === 'unknown' ? (
+              <p className="mt-2 text-sm text-muted-foreground" data-testid="company-description-language">
+                {t('descriptionLanguageUnknown')}
+              </p>
+            ) : null}
+          </div>
+        )}
 
         <section className="mt-8" aria-labelledby="company-jobs-heading">
           <h2 id="company-jobs-heading" className="text-lg font-semibold text-foreground">

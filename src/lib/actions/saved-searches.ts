@@ -11,6 +11,7 @@ import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { codePointLength, hasNoNul, NO_CONTROL_CHARS_REGEX } from '@/lib/validation/text';
 import type { LanguageCode } from '@/lib/languages';
+import { SAVED_SEARCH_QUERY_MAX } from '@/lib/job-list-query';
 import {
   LANGUAGE_FILTER_CODES,
   LANGUAGE_FILTER_LEVELS,
@@ -79,7 +80,11 @@ const saveSchema = z.object({
     .refine(hasNoNul),
   locale: z.enum(routing.locales),
   filters: filtersSchema,
-  query: z.string().max(2000).regex(/^(\?.*)?$/),
+  // Limit adresu jak `char_length(query) <= 2000` w bazie (punkty kodowe, nie jednostki UTF-16).
+  query: z
+    .string()
+    .regex(/^(\?.*)?$/)
+    .refine((v) => codePointLength(v) <= SAVED_SEARCH_QUERY_MAX),
 });
 
 const idSchema = z.string().uuid();
