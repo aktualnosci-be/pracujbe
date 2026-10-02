@@ -309,6 +309,7 @@ export default async function EmployerCompanyPage({
                     }
                     published={company.description}
                     review={company.descriptionReview}
+                    publishedLocale={company.descriptionLanguage.locale}
                   />
                 </div>
               </section>

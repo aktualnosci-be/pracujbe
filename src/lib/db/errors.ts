@@ -37,3 +37,12 @@ export function reportUnmappedDbError<T extends string>(error: unknown, area: st
   }
   return mapped;
 }
+
+/**
+ * Wyjątek akcji do kanału błędów (#1068): błąd bazy z SQLSTATE w kontekście (bez komunikatu
+ * bazy), każdy inny wyjątek (sieć, konfiguracja) z samym obszarem. Dla ścieżek, które po
+ * dopasowaniu znanych kodów biznesowych kończą się INTERNAL.
+ */
+export function captureActionError(error: unknown, area: string): void {
+  captureError(error, isDatabaseError(error) ? { area, sqlstate: error.code } : { area });
+}

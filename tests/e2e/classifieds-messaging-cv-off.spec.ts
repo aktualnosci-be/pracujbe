@@ -37,7 +37,7 @@ test('/api/files/message/<id> z tokenem = 404', async ({ request }) => {
 
 for (const locale of LOCALES) {
   test(`trasy wiadomości i importu CV = 404 (${locale})`, async ({ page }) => {
-    for (const path of ['candidate/wiadomosci', 'candidate/wiadomosci?c=demo-conv-0', 'employer/wiadomosci', 'candidate/profil/import-cv']) {
+    for (const path of ['candidate/wiadomosci', 'candidate/wiadomosci?c=demo-conv-0', 'employer/wiadomosci', 'employer/szablony', 'candidate/profil/import-cv']) {
       const res = await page.goto(`/${locale}/${path}`);
       expect(res?.status(), path).toBe(404);
     }
@@ -68,6 +68,8 @@ for (const locale of LOCALES) {
     await expect(page.locator('main h1')).toBeVisible();
     await expect(page.getByRole('link', { name: t.dashboard.navMessages, exact: true })).toHaveCount(0);
     await expect(page.locator('a[href*="/wiadomosci"]')).toHaveCount(0);
+    // #1211: szablony odpowiedzi = narzędzie wiadomości — bez pozycji w nawigacji.
+    await expect(page.locator('a[href*="/employer/szablony"]')).toHaveCount(0);
   });
 
   test(`szczegół oferty bez kontaktu przez platformę (${locale})`, async ({ page }) => {
