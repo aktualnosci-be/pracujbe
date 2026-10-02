@@ -170,6 +170,9 @@ banera (`src/lib/consent-cookie.ts`), więc nie ciągnie dodatkowych modułów.
 ² 175 → 176 KB (#855, 2026-10-02): main doszedł do 174,5 KB, a wyspa obserwowania firmy na profilu
 firmy zmieniła podział wspólnych chunków webpacka (kod zgody/lejka trafia do chunku strony listy
 zamiast do chunku współdzielonego) — +0,6 KB na liście bez nowego kodu na tej stronie.
+Lista ofert dostała też (#711, 2026-10-02) zwiniętą sekcję wyszukiwania opisem (AI, za flagą) —
+na trasie zostaje tylko `<details>` z `React.lazy` (ok. 0,4 KB, bez `next/dynamic`) i kody błędów;
+formularz to osobny chunk pobierany dopiero po rozwinięciu sekcji. Budżet bez zmian (176 KB).
 
 Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa biblioteka kliencka
 w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).

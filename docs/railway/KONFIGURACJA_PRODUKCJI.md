@@ -87,7 +87,9 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `AI_JOB_IMPORT_ENABLED`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony; `OPENAI_API_KEY` |
 | `WEB_PUSH_ENABLED`, `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT` | Web Push alertów zapisanych wyszukiwań (#724, migracja 0219), domyślnie wyłączony; klucze VAPID P-256 w base64url z `node scripts/push/generate-vapid-keys.mjs` (prywatny = sekret), subject `mailto:`/`https:`. Bez kompletu — funkcja wyłączona (bez sekcji w ustawieniach i bez wysyłek). Zmiana kluczy unieważnia subskrypcje urządzeń |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
+| `AI_JOB_SEARCH_ENABLED`, `AI_JOB_SEARCH_MODEL` | wyszukiwanie opisem (#711): opis potrzeby → propozycja filtrów listy ofert do zatwierdzenia, domyślnie wyłączone; ten sam `OPENAI_API_KEY`, budżet AI i migracja 0222 (identyfikator funkcji w budżecie) |
 | `AI_JOB_FRAUD_CHECK_ENABLED`, `AI_JOB_FRAUD_CHECK_MODEL` | analiza treści oferty przez AI (0167, drugi sygnał obok reguł; tylko kieruje do przeglądu admina), domyślnie wyłączona; ten sam `OPENAI_API_KEY` |
+| `AI_JOB_EXPLAIN_ENABLED`, `AI_JOB_EXPLAIN_MODEL` | „Wyjaśnij ofertę” prostym językiem na szczególe oferty (#773; tylko treść oferty, wynik niczego nie zapisuje), domyślnie wyłączone; ten sam `OPENAI_API_KEY` i budżet AI |
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
 | `AI_TRANSLATION_ENABLED`, `AI_TRANSLATION_MODEL` | tłumaczenia AI — rdzeń kolejki (#31, #32, `docs/AI_TRANSLATION.md`), domyślnie wyłączone; ten sam `OPENAI_API_KEY` |
 | `PRACUJBE_RELEASE_VERSION` | tylko przy wydaniu 1.0.0 (#103) |
@@ -101,7 +103,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry usunięte w #571 (kanał błędów = `ERROR_WEBHOOK_URL`) — jeśli zostały w usłudze, usuń |
 | `SEND_EMAIL_HOOK_SECRET` | hook GoTrue usunięty w #27 (kolejka auth PostgreSQL) |
 | `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | płatności usunięte (#51, migracja 0177: brak kodu i tabel billingu) — jeśli zostały w usłudze, usuń |
-| `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_JOB_FRAUD_CHECK_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
+| `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_JOB_FRAUD_CHECK_PROVIDER`, `AI_JOB_EXPLAIN_PROVIDER`, `AI_JOB_SEARCH_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
 | `CRON_SECRET` | przestarzały wspólny sekret cronów; używaj `EMAIL_QUEUE_SECRET`/`MAINTENANCE_SECRET` |
 | `CRON_TARGET_URL`, `CRON_AUTH_SECRET` | tylko w usługach cron (sekcja 4), nie w web |
 

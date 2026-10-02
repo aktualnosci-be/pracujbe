@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForHydrated } from './fixtures/hydration';
 
 /**
  * Strony uwierzytelniania mają przełącznik języka, który zachowuje ścieżkę i parametry zapytania.
@@ -12,9 +13,19 @@ import { expect, test, type Page } from '@playwright/test';
 const headerSwitcher = (page: Page, name: string) =>
   page.locator('header.pp-nav').getByRole('combobox', { name });
 
+/**
+ * Przycisk przełącznika jest w HTML z serwera, ale lista otwiera się dopiero po hydratacji
+ * (handler `onClick` z Reacta) — kliknięcie wcześniej ginie i opcja języka się nie pojawia.
+ */
+async function openHeaderSwitcher(page: Page, name: string): Promise<void> {
+  const switcher = headerSwitcher(page, name);
+  await waitForHydrated(switcher);
+  await switcher.click();
+}
+
 test('zmiana języka na rejestracji pracodawcy zachowuje stronę', async ({ page }) => {
   await page.goto('/nl/rejestracja-pracodawca');
-  await headerSwitcher(page, 'Taal').click();
+  await openHeaderSwitcher(page, 'Taal');
   await page.getByRole('option', { name: 'Français' }).click();
   await expect(page).toHaveURL(/\/fr\/rejestracja-pracodawca$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
@@ -23,7 +34,7 @@ test('zmiana języka na rejestracji pracodawcy zachowuje stronę', async ({ page
 
 test('zmiana języka na logowaniu zachowuje parametry zapytania', async ({ page }) => {
   await page.goto('/pl/logowanie?error=AUTH_INVALID_CREDENTIALS');
-  await headerSwitcher(page, 'Język').click();
+  await openHeaderSwitcher(page, 'Język');
   await page.getByRole('option', { name: 'English' }).click();
   await expect(page).toHaveURL(/\/en\/logowanie\?error=AUTH_INVALID_CREDENTIALS$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -31,7 +42,7 @@ test('zmiana języka na logowaniu zachowuje parametry zapytania', async ({ page 
 
 test('zmiana języka na logowaniu przenosi cel powrotu (?next=) na nowy język', async ({ page }) => {
   await page.goto('/pl/logowanie?next=%2Fpl%2Foferty-pracy');
-  await headerSwitcher(page, 'Język').click();
+  await openHeaderSwitcher(page, 'Język');
   await page.getByRole('option', { name: 'Nederlands' }).click();
   await expect(page).toHaveURL(/\/nl\/logowanie\?next=%2Fnl%2Foferty-pracy$/);
 });

@@ -26578,6 +26578,9 @@ reset role; reset app.current_uid;
 --   odczyt publiczny tylko dla oferty publicznej, wyszukiwanie miasta po dodatkowym miejscu,
 --   kopia szkicu, dowiązanie nowego aliasu. Kontrole ujemne: definicja search_city_candidates
 --   z 0183 (rollback) nie znajduje oferty; polityka USING (true) odsłania listę obcej firmie.
+-- =====================================================================rollback;
+reset role; reset app.current_uid;
+
 -- ============================================================================
 \echo '--- JWL850 dodatkowe miejsca pracy oferty ---'
 reset role; reset app.current_uid;
@@ -26709,6 +26712,144 @@ select pg_temp.assert(
   not exists (select 1 from public.get_public_jobs('pl', p_city => 'jwtestowo', p_limit => 100) where id = :'JWA'),
   'JWL850-N2 kontrola ujemna: bez 0982 wyszukiwanie po dodatkowym miejscu nie znajduje oferty');
 reset role;
+=======
+-- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0221)
+-- ============================================================================
+\echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'
+begin;
+reset role; reset app.current_uid;
+insert into public.notification_preferences (profile_id, in_app_enabled) values (:'EMPA', false)
+  on conflict (profile_id) do update set in_app_enabled = false;
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-links', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-desc', 'company', :'COMPA', '{"kind":"company_description","status":"approved"}'),
+  (:'EMPA', 'system', 'nt1120-content', 'company', :'COMPA', '{"kind":"job_content_review","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-status', 'company', :'COMPA', '{"kind":"company_status","status":"verified"}'),
+  (:'EMPA', 'system', 'nt1120-nokind', 'company', :'COMPA', null);
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-links', 'nt1120-desc', 'nt1120-content')) = 3,
+  'NT1120-1 decyzje bez e-maila (linki, opis, treść oferty) trafiają do panelu mimo opt-outu');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-status', 'nt1120-nokind')) = 0,
+  'NT1120-2 pozostałe powiadomienia nadal respektują in_app_enabled=false');
+-- Kind spoza listy w innym typie nie omija preferencji.
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'job_match', 'nt1120-type', 'company', :'COMPA', '{"kind":"company_links"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-type') = 0,
+  'NT1120-3 wyjątek tylko dla typu system');
+select pg_temp.assert(not public.notification_inapp_required('system', null)
+  and not public.notification_inapp_required('system', '{"kind":"company_status"}')
+  and public.notification_inapp_required('system', '{"kind":"company_links"}'),
+  'NT1120-4 lista wiadomości serwisowych');
+-- Preferencja włączona: wszystko jak dotąd.
+update public.notification_preferences set in_app_enabled = true where profile_id = :'EMPA';
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-on', 'company', :'COMPA', '{"kind":"company_status"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-on') = 1,
+  'NT1120-5 in_app_enabled=true → powiadomienie utworzone');
+-- Kontrola ujemna: filtr z 0035 ukrywa decyzję bez e-maila.
+update public.notification_preferences set in_app_enabled = false where profile_id = :'EMPA';
+\ir ../rollback/0221_notification_inapp_service_messages.down.sql
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-neg', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-neg') = 0,
+  'NT1120-N kontrola ujemna: bez 0221 decyzja o linkach firmy znika przy opt-oucie');
+rollback;
+reset role; reset app.current_uid;
+
+-- AIX773. „Wyjaśnij ofertę” (#773, 0220): funkcja `job_offer_explain` w budżecie AI —
+--         rezerwacja i rozliczenie działają, limit wspólny z innymi funkcjami, klient bez
+--         dostępu, CHECK rejestru zna funkcję. Kontrole ujemne: nazwa spoza listy odrzucona
+--         (RPC i CHECK); rollback 0220 = odmowa (supabase/tests/ai-job-explain-rollback.sql).
+--         Transakcja cofana — rejestr bez wierszy tej funkcji (rollback 0176/0220 przywraca CHECK).
+-- ============================================================================
+reset role; reset app.current_uid;
+begin;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIX773-1 rezerwacja tylko dla service_role');
+-- Limit wspólny: wydatki innych funkcji z wcześniejszych sekcji się liczą — limity = wydatek + 1000.
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(public.ai_budget_day(), public.ai_budget_day()) + 1000
+ where period = 'day';
+update public.ai_budget_limits
+   set limit_micro_usd = public.ai_budget_spent(date_trunc('month', public.ai_budget_day())::date, public.ai_budget_day()) + 1000
+ where period = 'month';
+set local role service_role;
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 999) as aix_r1 \gset
+select pg_temp.assert((select feature = 'job_offer_explain' and model = 'gpt-6-luna' and status = 'reserved'
+                         from public.ai_usage_ledger where id = :'aix_r1'),
+  'AIX773-2 rezerwacja funkcji job_offer_explain zapisana w rejestrze');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''gpt-6-luna'', 2)',
+  'AI_BUDGET_EXCEEDED', 'AIX773-3 otwarta rezerwacja wyjaśnienia liczy się do wspólnego limitu');
+select pg_temp.assert(public.ai_budget_settle(:'aix_r1', 'ok', 900, 300, 10),
+  'AIX773-4 rozliczenie wyjaśnienia rzeczywistym kosztem');
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'gpt-6-luna', 2) is not null,
+  'AIX773-4b po rozliczeniu limit znów dostępny');
+-- Kontrola ujemna: allow-lista nie przepuszcza dowolnej nazwy (literówka funkcji).
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_offer_explainer'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIX773-5 funkcja spoza listy odrzucona');
+reset role;
+select pg_temp.expect_error(
+  $$insert into public.ai_usage_ledger (feature, model, reserved_micro_usd, usage_day)
+    values ('job_offer_explainer', 'gpt-6-luna', 1, current_date)$$,
+  'ai_usage_ledger_feature', 'AIX773-6 CHECK rejestru odrzuca nazwę spoza listy');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- AIS711. Wyszukiwanie opisem (#711, 0222): funkcja AI `job_search_filters` w globalnym budżecie.
+--   Rezerwacja dla nowej funkcji działa (service_role), klient nadal bez dostępu, rejestr
+--   przyjmuje identyfikator. Kontrola ujemna: lista funkcji z 0176 (rollback 0222) odrzuca
+--   rezerwację — budżet nie dałby się wywołać, więc wyszukiwanie opisem nie wołałoby modelu.
+-- ============================================================================
+\echo '--- AIS711 budżet AI: wyszukiwanie opisem ---'
+reset role; reset app.current_uid;
+begin;
+set local role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_search_filters', 'gpt-6-luna', 1500) as ais_r1 \gset
+select pg_temp.assert(
+  (select feature = 'job_search_filters' and reserved_micro_usd = 1500 from public.ai_usage_ledger where id = :'ais_r1'),
+  'AIS711-1 rezerwacja dla job_search_filters zapisana w rejestrze');
+select pg_temp.assert(public.ai_budget_settle(:'ais_r1', 'ok', 900, 120, 150),
+  'AIS711-2 rozliczenie rezerwacji wyszukiwania opisem');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_unknown'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-3 nieznana funkcja nadal odrzucona');
+reset role;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIS711-4 klient nie rezerwuje budżetu (EXECUTE tylko service_role)');
+set local role service_role;
+-- AIS711-5: wcześniejsza funkcja tej listy (`job_offer_explain`, #773) zostaje w budżecie po 0222.
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_r5 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_r5'),
+  'AIS711-5 0222 nie usuwa job_offer_explain z listy funkcji budżetu');
+reset role;
+-- Kontrola ujemna: definicje sprzed 0222 (0176 + job_offer_explain).
+\ir ../rollback/0222_ai_budget_job_search_filters.down.sql
+set local role service_role;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_filters'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-N kontrola ujemna: lista sprzed 0222 odrzuca wyszukiwanie opisem');
+select public.ai_budget_reserve('job_offer_explain', 'gpt-6-luna', 10) as ais_n2 \gset
+select pg_temp.assert(
+  (select feature = 'job_offer_explain' from public.ai_usage_ledger where id = :'ais_n2'),
+  'AIS711-N2 rollback 0222 zostawia job_offer_explain (#773) w liście funkcji');
 rollback;
 reset role; reset app.current_uid;
 

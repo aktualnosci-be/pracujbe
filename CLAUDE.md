@@ -990,6 +990,28 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
   aliasie, bo przeglądarka odfiltrowuje z natywnego `datalist` opcję, której wartość nie zawiera
   wpisanego tekstu. Test: `job-location` (kontrole pozytywna/ujemna).
+- [~] Wyszukiwanie opisem (AI, #711, migracja `0222` — numer tymczasowy; za flagą
+  `AI_JOB_SEARCH_ENABLED`, domyślnie wyłączone; atrapa `AI_JOB_SEARCH_PROVIDER=fixture` tylko poza
+  produkcją): zwinięta sekcja `JobSearchAssistDisclosure` na `/oferty-pracy` (w nagłówku listy)
+  i `/candidate/wyszukiwania`; kod formularza `JobSearchAssist` = osobny chunk ładowany dopiero po
+  rozwinięciu (budżet JS #395, bez CLS). Opis potrzeby (3–500 znaków, jawny język opisu) → akcja
+  `suggestJobSearchFilters` (bez sesji i profilu; polecenia dla AI → odmowa przed limitem i modelem;
+  limit per adres 10/h i 30/dobę fail-closed; e-maile/telefony/identyfikatory zredagowane) →
+  `withAiBudget` (#36, funkcja `job_search_filters` w CHECK-u rejestru i `ai_budget_reserve` — 0222)
+  → `gpt-6-luna` przez `src/lib/ai/openai.ts` (strict JSON Schema ze słownikami jako `enum`,
+  wersja `job-search-filters-v1`) → bramki `src/lib/ai-search/guard.ts`: tylko kategorie/miasta/
+  umowy ze słowników, słowo kluczowe i fragmenty wyłącznie z tekstu użytkownika, kwota z tekstu
+  i w zakresie suwaka, wynik przez `parseSidebarFilters`→`sidebarFiltersToParams` (kanoniczne
+  parametry listy). Propozycja = edytowalne chipy (etykiety `describeJobListFilters` w języku
+  interfejsu), nierozpoznana miejscowość do wyboru (domyślnie żadna), niepewne fragmenty;
+  lista zmienia się dopiero po „Zastosuj filtry” (zapis wyszukiwania i alertu — istniejący
+  przycisk listy, #100). Inwentarz AI: wejście `job_search_query` dopuszczone w trybie
+  ogłoszeniowym (bez profilu/CV). Dowód: `rls.sql` sekcja AIS711 (kontrola ujemna: lista funkcji
+  z 0176), rollback `0222_…down.sql` (`ai-search-filters-rollback.sql`), unit `ai-search-guard`,
+  `ai-search-run`, `job-search-assist-action`, `job-search-assist-ui`, `ai-inventory`, E2E
+  `jobs-list-search-assist` (4 języki, axe 320/1280). **Otwarte:** metryki akceptacji/korekt
+  sugestii (brak zbioru bez decyzji o danych), słownik spoza 10 miast (promień `near`),
+  akceptacja brzmień i wejścia `job_search_query` w trybie ogłoszeniowym (właściciel).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
@@ -1007,6 +1029,28 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `job-qualifications`, `jobs-postgres`; integracja `public-job-qualifications` (PG16, kontrola
   ujemna: szkic i firma niezweryfikowana = pusto); E2E `job-qualifications` (4 języki, axe 320/1280,
   kontrola ujemna oferty bez kwalifikacji), `job-posting-fixture` (pola JSON-LD).
+- [x] „Wyjaśnij ofertę” prostym językiem (#773, migracja `0220` — numer tymczasowy; za flagą
+  `AI_JOB_EXPLAIN_ENABLED`, domyślnie wyłączone, atrapa `AI_JOB_EXPLAIN_PROVIDER=fixture` poza produkcją):
+  sekcja `JobExplainPanel` (osobny chunk `JobExplainPanelLazy`) pod treścią szczegółu oferty — na
+  żądanie, w wybranym języku PL/NL/FR/EN; treść oferty bez zmian. Akcja `explainJobOffer`: tylko oferta
+  publiczna (`getJobBySlug`, oryginał zamiast przekładu maszynowego), źródła = ponumerowane fragmenty
+  (`src/lib/ai-explain/sources.ts`: tytuł, pola strukturalne po angielsku dla modelu i w języku strony
+  dla czytelnika, zdania opisu, listy; bez kanału aplikowania, opisu firmy, e-maili/telefonów/
+  identyfikatorów), pamięć podręczna procesu (oferta × język × SHA-256 treści), Turnstile `job_explain`
+  (fail-closed, decyzja właściciela; przed odczytem oferty i pamięcią), limit per adres
+  10/h i 30/dobę (fail-closed), `withAiBudget` (#36), OpenAI `gpt-6-luna` (`src/lib/ai/openai.ts`,
+  strict schema, treść jako dane w `<offer_text>`). Bramki (`guard.ts`, ekstrakcja faktów tłumaczeń):
+  objaśnienie bez istniejącego źródła, z kontaktem, z innymi liczbami/walutą/datą/godziną/
+  brutto-netto/okresem stawki niż wskazane fragmenty, nową jednostką/kwalifikacją albo niezgodną
+  negacją jest pomijane (liczone); luki „brak/sprzeczne/niejasne” zamiast zgadywania; polecenia dla
+  AI w treści = brak wywołania. UI: źródło przy każdym objaśnieniu (`<q lang>`), zastrzeżenie (nie
+  porada prawna, wiąże treść oferty), stan ładowania, błąd z ponowieniem, fokus na wyniku. Inwentarz
+  AI `job_offer_explain` (`allowedInClassifieds: true`, wejście = treść oferty); baza: funkcja
+  w CHECK `ai_usage_ledger_feature` i allow-liście `ai_budget_reserve`. Dowód: `rls.sql` sekcja
+  AIX773, rollback `0220_…down.sql` (`ai-job-explain-rollback.sql`, też w `portal-legal-mode-rollback.sql`
+  przed 0176), unit `job-explain`, `job-explain-action`, `job-explain-panel` (kontrole ujemne), E2E
+  `job-explain` (4 języki, klawiatura, axe 1280/320 px). **Otwarte:** ewaluacja na reprezentatywnych
+  ofertach z prawdziwym modelem przed włączeniem (właściciel), data w objaśnieniu tylko w zapisie ze źródła (ISO).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
   Katalog miast i próg podaży (#920, bez migracji): hub, strona miasta (metadane, „Inne miasta”)
   i sitemap biorą miasta z jednego modułu `src/lib/locations/city-landings.ts` (rdzeń 10 miast +
@@ -2893,6 +2937,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   tej samej strony. Widok „wszystkie” nie usuwa wierszy (dane zostają, tylko przeczytane).
   Dowód: unit `notifications-list` (rerender z nowym `initialPage`; kontrola ujemna: identyczny
   obiekt props po raz drugi nic nie zmienia).
+  Wiadomości serwisowe a opt-out in-app (#1120, migracja `0221` — numer tymczasowy): filtr
+  preferencji (0035) ukrywał też decyzje administratora bez żadnego e-maila (strona WWW/logo,
+  opis firmy, treść oferty — `system` + `data.kind` `company_links`/`company_description`/
+  `job_content_review`), więc wyłączenie „Powiadomień w aplikacji” gubiło je w każdym kanale.
+  `notification_inapp_required` (lustro `src/lib/notifications/service-messages.ts`) przepuszcza
+  je mimo `in_app_enabled = false`; reszta bez zmian. Pracodawca widzi w ustawieniach opis
+  `settings.employerInAppEnabledDescription` (czego wyłączenie nie ukrywa). Strażnik
+  `notification-inapp-service` (najnowsze definicje SQL: każde powiadomienie `system` z `kind`
+  w funkcji bez `enqueue_email` = wiadomość serwisowa albo uzasadniony wyjątek rekrutacyjny;
+  kontrola ujemna na definicjach sprzed 0221). Dowód: `rls.sql` sekcja NT1120 (kontrola ujemna
+  po rollbacku), rollback `0221_…down.sql` (`notification-inapp-service-rollback.sql`).
 
 - [x] Web Push alertów zapisanych wyszukiwań (#724, migracja `0219` — numer tymczasowy; za flagą
   `WEB_PUSH_ENABLED` + klucze VAPID `WEB_PUSH_VAPID_*` ze zmiennych środowiska, domyślnie wyłączone;

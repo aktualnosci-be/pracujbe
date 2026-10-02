@@ -9,6 +9,7 @@ import { isAiFeatureAllowedInPortalMode, isAiFeatureEnabled } from '@/lib/ai/fea
 import { AI_FEATURES, type AiFeatureId } from '@/lib/ai/inventory';
 import { jobAssistProvider } from '@/lib/ai-assist/config';
 import { jobImportProvider } from '@/lib/ai-import/config';
+import { jobSearchAssistProvider } from '@/lib/ai-search/config';
 import { jobFraudCheckProvider } from '@/lib/job-trust/ai-check';
 import { PORTAL_LEGAL_MODE_ENV } from '@/lib/portal-mode';
 import { translationProvider } from '@/lib/translation/config';
@@ -81,6 +82,7 @@ describe('funkcje na treści ogłoszenia — bez zmian zachowania w trybie ogło
     ['AI_JOB_ASSIST_ENABLED', 'AI_JOB_ASSIST_PROVIDER', () => jobAssistProvider()],
     ['AI_JOB_FRAUD_CHECK_ENABLED', 'AI_JOB_FRAUD_CHECK_PROVIDER', () => jobFraudCheckProvider()],
     ['AI_TRANSLATION_ENABLED', 'AI_TRANSLATION_PROVIDER', () => translationProvider()],
+    ['AI_JOB_SEARCH_ENABLED', 'AI_JOB_SEARCH_PROVIDER', () => jobSearchAssistProvider()],
   ] as const)('%s: tryb ogłoszeniowy = ten sam dostawca co RECRUITMENT; bez flagi = null', (flag, providerEnv, read) => {
     vi.stubEnv(providerEnv, 'fixture');
     vi.stubEnv(PORTAL_LEGAL_MODE_ENV, '');
@@ -99,6 +101,7 @@ describe('funkcje na treści ogłoszenia — bez zmian zachowania w trybie ogło
       'src/lib/ai-assist/config.ts': 'job_offer_assist',
       'src/lib/job-trust/ai-check.ts': 'job_fraud_check',
       'src/lib/translation/config.ts': 'content_translation',
+      'src/lib/ai-search/config.ts': 'job_search_filters',
     };
     for (const [path, id] of Object.entries(CONFIGS)) {
       const source = readFileSync(join(ROOT, path), 'utf8');
