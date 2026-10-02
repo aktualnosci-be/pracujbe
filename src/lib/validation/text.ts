@@ -19,6 +19,25 @@ export function hasNoNul(value: string): boolean {
   return !value.includes('\u0000');
 }
 
+/**
+ * Znaki sterujące C0 (U+0000–U+001F), DEL i C1 (U+007F–U+009F) — CR/LF, tabulator, NEL…
+ * (#1244). Lustro reguły bazy z 0206 (`saved_searches_name_no_control`,
+ * `companies_name_no_control`, `save_saved_search`/`rename_saved_search`).
+ */
+// eslint-disable-next-line no-control-regex
+export const NO_CONTROL_CHARS_REGEX = /^[^\u0000-\u001f\u007f-\u009f]*$/;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_RUNS = /[\u0000-\u001f\u007f-\u009f]+/g;
+
+/**
+ * Wartość jednowierszowa do nagłówka wiadomości (temat e-maila, #1244): każda sekwencja znaków
+ * sterujących (także CR/LF) → jedna spacja, przycięcie. Chroni temat niezależnie od tego, skąd
+ * pochodzi wstawiana wartość (nazwa wyszukiwania, nazwa firmy, starsze dane).
+ */
+export function toSingleLineHeader(value: string): string {
+  return value.replace(CONTROL_CHAR_RUNS, ' ').trim();
+}
+
 /** Liczba znaków (punktów kodowych) — tak liczy `char_length`/`left` w PostgreSQL. */
 export function codePointLength(value: string): number {
   let n = 0;

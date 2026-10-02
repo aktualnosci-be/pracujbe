@@ -46,6 +46,7 @@ import {
 import { applicationStatusLabel } from '@/emails/status-labels';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
+import { toSingleLineHeader } from '@/lib/validation/text';
 
 /**
  * Dane wejściowe każdego typu maila. Nazwy pól odpowiadają tokenom `{...}` w `copy.ts`.
@@ -1133,6 +1134,8 @@ export async function renderEmail<T extends EmailType>(
   // #45: wersja text/plain z tego samego drzewa (multipart/alternative u dostawcy).
   const text = await render(element, { plainText: true });
   const vars = prepareVars(type, locale, data as Record<string, unknown>);
-  const subject = interpolate(resolveCopy(type, locale, vars).subject, vars);
+  // #1244: temat to nagłówek jednowierszowy — wartości z bazy (nazwa wyszukiwania, firmy) nie
+  // mogą wstawić CR/LF ani innych znaków sterujących.
+  const subject = toSingleLineHeader(interpolate(resolveCopy(type, locale, vars).subject, vars));
   return { subject, html, text };
 }

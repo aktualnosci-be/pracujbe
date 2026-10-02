@@ -487,6 +487,10 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     pada, gdy którykolwiek shard/pomiar/część fixture/przepływ real nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
     `failOnFlakyTests` obowiązuje w każdym shardzie.
+- `.github/workflows/backup-image.yml` („Backup image (build + scan)”, #751) — OSOBNY workflow
+  (decyzja właściciela 2026-10-02: skan obrazu kopii nie blokuje wdrożenia web): build
+  `docker/backup/Dockerfile` od zera, smoke, SBOM i skan z bramką; przy zmianie obrazu/skryptów
+  (`paths`), ręcznie i co tydzień (opis `docs/railway/BACKUP_RESTORE.md`).
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
 - `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint` (test z kontrolami
   ujemnymi: `tests/unit/ci-workflows-guard.test.ts`). Pilnuje też (#1241/#1246/#1247/#1250):
@@ -3109,7 +3113,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   tych zaproszeń usunięte z kolejki; wiersz = ślad zdarzenia. Dowód: `rls.sql` OD981 (kontrola ujemna).
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
-  `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
+  `account-data`. Odwołania i zgłoszenia w eksporcie (#1232, migracja `0207` — numer
+  tymczasowy): `export_my_employer_data` = 0161 + `moderationAppeals` (kształt jak u kandydata)
+  i `contentReports` (zgłoszenia treści złożone przez osobę: numer, rodzaj, kategoria, opis,
+  podane dane kontaktowe, stan — bez `target_id`/`target_snapshot` i kodu dostępu); dowód
+  `rls.sql` sekcja EX1232 (kontrola ujemna: definicja z 0161), rollback
+  `0207_…down.sql` (`employer-export-0207-rollback.sql`); `contact_messages` poza eksportem
+  (decyzja otwarta). **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
   samoobsługowe zamknięcie firmy, retencja nieaktywnych kont pracodawców.
   Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
   `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
@@ -3222,6 +3232,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `npm audit --package-lock-only` = 0. `next lint` zastąpione `eslint` CLI (ESLint 8), lint
   obejmuje pliki konfiguracyjne. **Otwarte:** ESLint 9 (flat config, nowe `node_modules` —
   osobny krok z pełną instalacją).
+- [x] Utwardzenia logowania (#1090, bez migracji; limity na konto i sesja przy potwierdzeniu
+  w #1176, linki resetu w 0185): automatyczne logowanie z linku potwierdzającego tylko
+  w przeglądarce, która założyła konto albo podała poprawne hasło niepotwierdzonego konta —
+  cookie HttpOnly `pb_signup_browser` = HMAC adresu (`src/lib/auth/signup-browser.ts`, sekret
+  Better Auth), inaczej adres potwierdzony, sesja cofnięta, logowanie ręczne; tryb
+  `TRUSTED_PROXY_HEADER=cf-connecting-ip` przyjmuje `CF-Connecting-IP` tylko, gdy peer
+  z `X-Real-IP` należy do zakresów Cloudflare (ominięcie Cloudflare = adres peera, połączenie
+  z Cloudflare bez nagłówka = `null`); zakresy pobierane automatycznie (decyzja właściciela
+  30.09.2026, `src/lib/http/cloudflare-ranges.ts`: ips-v4/ips-v6, timeout 3 s, każda linia =
+  CIDR właściwej rodziny, lista pusta/krótka odrzucona, cache w procesie TTL 24 h,
+  single-flight, odświeżanie w tle — żądanie nie czeka; błąd = ostatnia dobra lista, bez niej
+  `CLOUDFLARE_IP_RANGES` w kodzie; po błędzie przerwa 5 min; test `cloudflare-ranges`); guardy paneli bez sesji kierują na `/logowanie?next=<strona panelu>`
+  (middleware podaje ścieżkę w nagłówku żądania `x-pracujbe-return-path`, wartość od klienta
+  usuwana; `safeNextPath` przy odczycie). Dowód: unit `auth-confirm-email`, `auth-email-kick`,
+  `trusted-ip`, `cloudflare-ranges`, `middleware-panel-return-path`, `panel-guards-production` (kontrole ujemne).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,
@@ -3259,6 +3284,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
   kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
   ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
+- [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0206` — numer
+  tymczasowy, rollback `supabase/rollback/0206_…down.sql`): indeksy pod usuwanie konta i kaskady FK
+  (`notifications`/`email_deliveries` po `entity_id`, `saved_search_alerts.profile_id`, kolumny aktora
+  `jobs.created_by`, `offers.sender_id`, historie statusów, `conversations.created_by`,
+  `contact_messages.sender_id`, `auth.email_outbox.user_id`). Nazwa zapisanego wyszukiwania i firmy bez
+  znaków sterujących (C0, DEL, C1): `save_saved_search` = reguła `rename_saved_search`, CHECK
+  `saved_searches_name_no_control`/`companies_name_no_control` (istniejące wiersze oczyszczone), Zod
+  `NO_CONTROL_CHARS_REGEX` (`src/lib/validation/text.ts`, komunikat `company.error.nameInvalid`), temat
+  e-maila jednowierszowy (`toSingleLineHeader` w `renderEmail` i w obu transportach). Szczegół oferty
+  i profil firmy czytają bazę raz na żądanie (`cache()` wspólne dla `generateMetadata` i strony); pula
+  domenowa domyślnie 10 połączeń, `DATABASE_APP_POOL_MAX` (1–50). Dowód: `rls.sql` sekcja DBP1245/CC1244
+  (plany z indeksem; kontrole ujemne: bez indeksu, definicja z 0092 i bez CHECK), test
+  `db-perf-control-chars-rollback.sql`, unit `control-chars-names`, `runtime-pool-config`. **Otwarte:**
+  #1215 (plan generyczny publicznych RPC listy — po #1259, który redefiniuje te funkcje), polityka RLS
+  `matches` (#1096 pkt 3; matching wyłączony w trybie ogłoszeniowym), pozostałe kolumny aktora.
 - [x] Middleware i SEO-meta (audyt 2026-09-28, bez migracji): matcher `src/middleware.ts` (#1035) nie pomija już
   ścieżek z kropką w segmencie (`/pl/oferty-pracy/a.b` szło do tras dynamicznych z pominięciem bramki hasła
   i 503 „niegotowe”) — wyłączone są tylko `api|auth|_next|_vercel|images|.well-known` (granica segmentu),
@@ -3362,7 +3402,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`misconfigured`) — to alarm `backup_*`. Obraz usługi cron `docker/backup/Dockerfile` (node 22,
   pg 18, `age`). Dowód: `backup-r2.test` (atrapa S3 `tests/helpers/fake-s3-server.mjs`, klucz
   odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
-  `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
+  `npm run test:backup`.
+  Obraz kopii w CI (#751, bez migracji): osobny workflow `backup-image.yml` (poza `ci.yml`, nie
+  blokuje wdrożenia web; przy zmianie `docker/backup/**`/skryptów, ręcznie, co tydzień) buduje
+  `docker/backup/Dockerfile` od zera (`--pull --no-cache`), smoke `scripts/db/backup-image-smoke.sh`
+  (uid ≠ 0, node 22, pg_* 18, `age`, SDK S3 = `package.json`, bez npm/npx/yarn — usunięte z obrazu,
+  start bez konfiguracji = kod 2 bez wypisania wartości), SBOM CycloneDX + skan Trivy (obraz
+  przypięty do wersji i digestu) jako artefakt; bramka `scripts/security/backup-image-scan.mjs`
+  (`scripts/lib/backup-image-scan-outcome.mjs`): HIGH/CRITICAL z dostępną poprawką = kod 1, chyba
+  że terminowy (≤ 90 dni) wyjątek w `docker/backup/vulnerability-exceptions.json`; raport bez
+  pakietów Debiana/Node, niepełny SBOM albo awaria skanera = kod 2. Obraz bazowy
+  `node:22-bookworm-slim@sha256:…`, digest aktualizuje Dependabot (`.github/dependabot.yml`).
+  Strażnik `check-ci-workflows.mjs` (job, kroki, digest skanera i `FROM`). Dowód: unit
+  `backup-image-scan`, `backup-image-smoke` (atrapa docker), `backup-r2-image`, `ci-workflows-guard`
+  (kontrole ujemne). Runbook: `docs/railway/BACKUP_RESTORE.md` (pochodzenie przed wdrożeniem). **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
   dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
   Rozpoznanie bezpośredniego uruchomienia CLI (#925): `backup-s3.mjs` porównuje
   `import.meta.url` z `pathToFileURL(process.argv[1]).href` (nie z ręcznie zbudowanym
