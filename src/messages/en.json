@@ -3461,7 +3461,7 @@
     },
     "localeLabel": "Invitation language",
     "invitedSent": "Invitation saved. This person will get an email: with an employer account, in that account’s language; without an account, in the chosen language, with a sign-up link.",
-    "inviteLinkHint": "Someone without an account gets an email in the chosen language with a link to create an employer account (works once, valid for 14 days). After confirming the address, the invitation waits in their dashboard. Someone with an account gets the email in their account’s language.",
+    "inviteLinkHint": "Someone without an account gets an email in the chosen language with a link to create an employer account (works once, valid for 14 days). After confirming the address, the invitation waits in their dashboard. Someone with an account gets the email in their account’s language. We send at most 3 of these emails per day to one address without an account — after that, the link from the last email sent keeps working.",
     "signup": {
       "checking": "Checking the invitation link…",
       "intro": "Invitation to join the {company} team. Role: {role}.",

@@ -3461,7 +3461,7 @@
     },
     "localeLabel": "Langue de l’invitation",
     "invitedSent": "Invitation enregistrée. Cette personne recevra un e-mail : avec un compte employeur, dans la langue de ce compte ; sans compte, dans la langue choisie, avec un lien d’inscription.",
-    "inviteLinkHint": "Une personne sans compte reçoit un e-mail dans la langue choisie avec un lien pour créer un compte employeur (utilisable une fois, valable 14 jours). Après confirmation de l’adresse, l’invitation l’attendra dans son espace. Une personne avec un compte reçoit l’e-mail dans la langue de son compte.",
+    "inviteLinkHint": "Une personne sans compte reçoit un e-mail dans la langue choisie avec un lien pour créer un compte employeur (utilisable une fois, valable 14 jours). Après confirmation de l’adresse, l’invitation l’attendra dans son espace. Une personne avec un compte reçoit l’e-mail dans la langue de son compte. Nous envoyons au plus 3 de ces e-mails par jour à une même adresse sans compte — au-delà, le lien du dernier e-mail envoyé reste valable.",
     "signup": {
       "checking": "Vérification du lien d’invitation…",
       "intro": "Invitation à rejoindre l’équipe de {company}. Rôle : {role}.",
