@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0969 (pauza alertów i obserwowanie firm) — przywraca worker z 0138 i usuwa RPC,
+-- Rollback 0969 (pauza alertów i obserwowanie firm) — przywraca worker z 0211 (0138 + termin bez dryfu) i usuwa RPC,
 -- tabelę pauz oraz kolumnę `saved_searches.company_id` (obserwacje firm są usuwane; zwykłe
 -- zapisane wyszukiwania zostają bez zmian).
 -- Przywraca też definicje kolejki e-mail sprzed 0969: `email_preference_category`/`email_send_pool`
@@ -96,8 +96,8 @@ begin
 
     update public.saved_searches
       set last_checked_at = v_run_at,
-          next_run_at = v_run_at + case v_search.frequency
-                                     when 'weekly' then interval '7 days' else interval '1 day' end,
+          -- 0211 (#1112): stała pora w Europe/Brussels od poprzedniego terminu.
+          next_run_at = public.saved_search_next_run_at(v_search.next_run_at, v_search.frequency, v_run_at),
           last_alert_at = case when v_count > 0 then v_run_at else last_alert_at end
       where id = v_search.id;
   end loop;

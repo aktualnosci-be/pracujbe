@@ -179,7 +179,7 @@ $$;
 revoke all on function public.get_my_followed_companies() from public, anon;
 grant execute on function public.get_my_followed_companies() to authenticated;
 
--- --- 3. Worker (definicja bazuje na 0138) ---------------------------------------------------
+-- --- 3. Worker (definicja bazuje na 0211 = 0138 + termin bez dryfu) ---------------------------
 -- Zmiany względem 0138: pomijanie kont w pauzie + dolna granica `paused_until`; obserwacje
 -- firm (`company_id`) biorą nowe oferty tej firmy zamiast filtrów listy.
 create or replace function public.process_saved_search_alerts(p_limit integer default 200)
@@ -305,8 +305,9 @@ begin
 
     update public.saved_searches
       set last_checked_at = v_run_at,
-          next_run_at = v_run_at + case v_search.frequency
-                                     when 'weekly' then interval '7 days' else interval '1 day' end,
+          -- 0211 (#1112): stała pora w Europe/Brussels od poprzedniego terminu, nie od chwili
+          -- przebiegu — spóźniony/nieregularny cron nie przesuwa kolejnych digestów.
+          next_run_at = public.saved_search_next_run_at(v_search.next_run_at, v_search.frequency, v_run_at),
           last_alert_at = case when v_count > 0 then v_run_at else last_alert_at end
       where id = v_search.id;
   end loop;

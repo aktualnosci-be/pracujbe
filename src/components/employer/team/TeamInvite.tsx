@@ -94,6 +94,11 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
   const [pendingId, setPendingId] = React.useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = React.useState<TeamInvitationView | null>(null);
   const statusRef = React.useRef<HTMLParagraphElement>(null);
+  // #1113: klucz operacji — ponowienie po błędzie sieci (te same dane) wysyła ten sam klucz,
+  // więc serwer liczy ten sam link i nie wysyła drugiego e-maila. Nowy klucz po sukcesie albo
+  // po zmianie adresu, roli lub języka.
+  const inviteKeyRef = React.useRef<{ fingerprint: string; key: string } | null>(null);
+  const renewKeysRef = React.useRef(new Map<string, string>());
 
   const roles = assignableRoles(actorRole).filter((r) => r !== 'owner');
   const resolver = React.useMemo(() => zodResolver(teamInviteSchema) as Resolver<TeamInviteInput>, []);
@@ -117,12 +122,17 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     setNotice(null);
+    const fingerprint = [values.email.trim().toLowerCase(), values.role, values.locale].join('|');
+    if (inviteKeyRef.current?.fingerprint !== fingerprint) {
+      inviteKeyRef.current = { fingerprint, key: crypto.randomUUID() };
+    }
     try {
-      const result = await inviteTeamMember(values, companyId);
+      const result = await inviteTeamMember(values, companyId, inviteKeyRef.current.key);
       if (!result.ok) {
         setServerError(result.error);
         return;
       }
+      inviteKeyRef.current = null;
       setNotice(result.demo ? t('demoNotice') : t('invitedSent'));
       reset({ email: '', role: values.role, locale: values.locale });
       router.refresh();
@@ -130,6 +140,16 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
       setServerError('INTERNAL');
     }
   });
+
+  /** #1113: ten sam klucz dla ponowień odnowienia danego zaproszenia, aż do sukcesu. */
+  function renewKey(id: string): string {
+    let key = renewKeysRef.current.get(id);
+    if (!key) {
+      key = crypto.randomUUID();
+      renewKeysRef.current.set(id, key);
+    }
+    return key;
+  }
 
   async function runInvitation(
     id: string,
@@ -283,8 +303,11 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
                       aria-busy={pendingId === inv.id && confirmRevoke === null ? true : undefined}
                       aria-label={t('renewLabel', { email: inv.email })}
                       onClick={() =>
-                        void runInvitation(inv.id, (id) => renewTeamInvitation(id, companyId), t('renewed')).then((ok) => {
-                          if (ok) statusRef.current?.focus();
+                        void runInvitation(inv.id, (id) => renewTeamInvitation(id, companyId, renewKey(id)), t('renewed')).then((ok) => {
+                          if (ok) {
+                            renewKeysRef.current.delete(inv.id);
+                            statusRef.current?.focus();
+                          }
                         })
                       }
                     >

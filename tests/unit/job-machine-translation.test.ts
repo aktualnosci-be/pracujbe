@@ -77,13 +77,33 @@ describe('applyJobMachineTranslation', () => {
       requirementsMandatory: ['VCA certificate'],
       // Pole spoza źródła oferty (profil firmy) bez klucza w przekładzie = oryginał.
       companyDescription: 'Logistiek bedrijf',
-      machineTranslation: { sourceLocale: 'nl', origin: 'ai' },
+      machineTranslation: { sourceLocale: 'nl', origin: 'ai', untranslated: ['companyDescription'] },
     });
   });
 
   it('korekta ręczna ma własne oznaczenie', () => {
     const job = applyJobMachineTranslation(baseJob(), { source_locale: 'nl', origin: 'manual', fields: EN_FIELDS }, 'en');
-    expect(job.machineTranslation).toEqual({ sourceLocale: 'nl', origin: 'manual' });
+    expect(job.machineTranslation).toEqual({ sourceLocale: 'nl', origin: 'manual', untranslated: ['companyDescription'] });
+  });
+
+  it('#896: pola bez klucza w przekładzie są wskazane jako oryginał (puste pomijane)', () => {
+    const { description: _omit, ...withoutDescription } = EN_FIELDS;
+    const job = applyJobMachineTranslation(
+      baseJob({ shifts: 'Dagploeg', workingHours: '' }),
+      { source_locale: 'nl', origin: 'ai', fields: { ...withoutDescription, working_hours: undefined } },
+      'en',
+    );
+    expect(job.description).toBe('Werk vanaf 8:00.');
+    expect(job.machineTranslation?.untranslated).toEqual(['description', 'shifts', 'companyDescription']);
+  });
+
+  it('#896 kontrola ujemna: komplet pól w przekładzie = nic w oryginale', () => {
+    const job = applyJobMachineTranslation(
+      baseJob(),
+      { source_locale: 'nl', origin: 'ai', fields: { ...EN_FIELDS, company_description: 'Logistics company' } },
+      'en',
+    );
+    expect(job.machineTranslation?.untranslated).toEqual([]);
   });
 
   it.each([
