@@ -10694,15 +10694,15 @@ rollback;
 
 -- AGE10: zmiana progu tylko przez admina, z audytem.
 set role authenticated; set app.current_uid = :'AGE'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''test'')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, ''test'', null)',
   'PERMISSION_DENIED', 'AGE10 pracodawca nie zmienia progu');
 reset role;
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(15, false, ''test'')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(15, ''test'', null)',
   'VALIDATION_FAILED', 'AGE10b próg poniżej 16 odrzucony (młodsi bez konta, #576)');
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(17, false, ''test'')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(17, ''test'', null)',
   'VALIDATION_FAILED', 'AGE10b2 próg spoza 16/18 odrzucony');
-select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, false, ''  '')',
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, ''  '', null)',
   'VALIDATION_FAILED', 'AGE10c zmiana bez uzasadnienia odrzucona');
 reset role; reset app.current_uid;
 
@@ -10740,8 +10740,9 @@ update public.candidate_profiles set profile_completed = true where profile_id =
 set role authenticated; set app.current_uid = :'AGC'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.set_candidate_searchable(true) is true, 'AGE12a konto 18+ włącza wyszukiwalność');
 reset role;
+select updated_at::text as agv from public.age_policy \gset
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select pg_temp.assert(public.admin_set_candidate_min_age(18, false, 'Wariant tylko dorośli do testu') = 0,
+select pg_temp.assert(public.admin_set_candidate_min_age(18, 'Wariant tylko dorośli do testu', :'agv') = 0,
   'AGE12 podniesienie progu konta nie ukrywa profili 18+');
 reset role; reset app.current_uid;
 select pg_temp.assert(public.candidate_min_age() = 18
@@ -10772,9 +10773,86 @@ select pg_temp.assert(public.set_candidate_searchable(true) is true,
   'AGE13g kontrola dodatnia: po potwierdzeniu 18+ profil może być wyszukiwalny');
 reset role; reset app.current_uid;
 -- Powrót do decyzji #576 (konto od 16) dla dalszych kroków.
+-- Powrót do decyzji #576 (konto od 16) dla dalszych kroków: zmiana administratora (wartość
+-- robocza, 0209) i zatwierdzenie właściciela drogą operatorską (service_role).
+select updated_at::text as agv from public.age_policy \gset
 set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
-select public.admin_set_candidate_min_age(16, true, 'Decyzja właściciela #576');
+select public.admin_set_candidate_min_age(16, 'Decyzja właściciela #576', :'agv');
 reset role; reset app.current_uid;
+
+-- APC1102. Próg wieku: atomowy CAS (#1102, ADM-04) i zatwierdzenie tylko przez właściciela (#639).
+\echo '--- APC1102 CAS progu wieku i zatwierdzenie właściciela ---'
+select pg_temp.assert(
+  (select candidate_min_age = 16 and not confirmed and updated_by = :'AGA' from public.age_policy)
+  and exists (select 1 from public.audit_logs where action = 'age_policy.updated' and actor_id = :'AGA'
+                and (after_data->>'candidate_min_age')::int = 16 and (after_data->>'confirmed')::boolean is false),
+  'APC1 zmiana administratora zapisuje wartość roboczą (confirmed=false), także w dzienniku');
+select updated_at::text as apc_v1 from public.age_policy \gset
+select count(*) as apc_audit0 from public.audit_logs where entity_type = 'age_policy' \gset
+
+-- APC2: administrator nie ma drogi do statusu właściciela — ani parametr, ani funkcja.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, true, ''x'')',
+  'does not exist', 'APC2 stara sygnatura z p_confirmed nie istnieje');
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''x'')', :'apc_v1'),
+  'permission denied', 'APC2b administrator (authenticated) nie zatwierdza progu za właściciela');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''x'')', :'apc_v1'),
+  'permission denied', 'APC2c anon nie zatwierdza progu');
+reset role;
+
+-- APC3: CAS — formularz otwarty przed zmianą drugiego administratora nie nadpisuje jej.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(18, ''Stary formularz'', ''2020-01-01T00:00:00Z'')',
+  'STALE_STATE', 'APC3 nieaktualny znacznik → STALE_STATE');
+select pg_temp.expect_error('select public.admin_set_candidate_min_age(18, ''Formularz bez znacznika'', null)',
+  'STALE_STATE', 'APC3b brak znacznika przy istniejącym progu → STALE_STATE');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select candidate_min_age = 16 and updated_at::text = :'apc_v1' from public.age_policy)
+  and (select count(*) from public.audit_logs where entity_type = 'age_policy') = :'apc_audit0'::int,
+  'APC3c odrzucona zmiana nie rusza progu ani dziennika');
+
+-- APC4: właściciel zatwierdza bieżący próg (service_role) z CAS po znaczniku i progu.
+set role service_role;
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(18, %L, ''Akceptacja'')', :'apc_v1'),
+  'STALE_STATE', 'APC4 zatwierdzenie innego progu niż bieżący → STALE_STATE');
+select pg_temp.expect_error('select public.owner_confirm_candidate_min_age(16, ''2020-01-01T00:00:00Z'', ''Akceptacja'')',
+  'STALE_STATE', 'APC4b zatwierdzenie nieaktualnego stanu → STALE_STATE');
+select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''  '')', :'apc_v1'),
+  'VALIDATION_FAILED', 'APC4c zatwierdzenie bez notatki odrzucone');
+select public.owner_confirm_candidate_min_age(16, :'apc_v1', 'Decyzja właściciela 25.09.2026 (#576)')::text as apc_v2 \gset
+select public.owner_confirm_candidate_min_age(16, :'apc_v2', 'Ponowienie') is not null as apc_repeat \gset
+reset role;
+select pg_temp.assert(
+  (select candidate_min_age = 16 and confirmed and updated_at::text = :'apc_v2' and updated_by = :'AGA'
+     from public.age_policy)
+  and (select count(*) from public.audit_logs where action = 'age_policy.owner_confirmed'
+         and actor_id is null and (after_data->>'confirmed')::boolean
+         and before_data->>'changed_by' = :'AGA') = 1,
+  'APC4d zatwierdzenie właściciela: confirmed=true, osobny wpis dziennika (bez aktora-administratora), ponowienie bez drugiego wpisu');
+
+-- APC5: formularz otwarty przed zatwierdzeniem właściciela jest nieaktualny.
+set role authenticated; set app.current_uid = :'AGA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_set_candidate_min_age(16, ''Stary formularz'', %L)', :'apc_v1'),
+  'STALE_STATE', 'APC5 znacznik sprzed zatwierdzenia → STALE_STATE (zatwierdzenie nie znika po cichu)');
+reset role; reset app.current_uid;
+select pg_temp.assert((select confirmed from public.age_policy), 'APC5b próg nadal zatwierdzony');
+
+-- APC6 (kontrola ujemna): definicja z 0126 — administrator sam ustawia „zatwierdzone przez
+-- właściciela” i nadpisuje próg nieaktualnym formularzem.
+begin;
+\ir ../rollback/0209_age_policy_cas_owner_confirmation.down.sql
+update public.age_policy set confirmed = false where id;
+set local app.current_uid = :'AGA'; set local role authenticated; select pg_temp.assert_client_role();
+select public.admin_set_candidate_min_age(16, true, 'Stary formularz bez kontroli');
+reset role;
+select pg_temp.assert((select confirmed from public.age_policy),
+  'APC6 kontrola ujemna: bez 0209 administrator oznacza zmianę jako zatwierdzoną przez właściciela');
+rollback;
+select pg_temp.assert((select confirmed and updated_at::text = :'apc_v2' from public.age_policy),
+  'APC6b po kontroli ujemnej stan wraca do zatwierdzonego progu');
 
 -- AGE14: aplikacja gościa wymaga deklaracji; funkcja core niedostępna i bez deklaracji odrzuca.
 set role service_role;
@@ -11555,8 +11633,8 @@ select pg_temp.assert(
   'TI611-2 mimo równoległości: najwyżej 3 e-maile na adres (limit egzekwowany atomowo)');
 select pg_temp.assert(
   (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b1') = :'TIL_H3'
-  and (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b2') = :'TIL_H4',
-  'TI611-3 oba tokeny odświeżone niezależnie od tego, czy e-mail się zmieścił w limicie');
+  and (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b2') = :'TIL_H2',
+  'TI611-3 token wymieniony tylko z wysłanym e-mailem (#793): A ma nowy, B zachowuje token z ostatniego wysłanego linku');
 
 -- ============================================================================
 -- MA (0119): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją
@@ -25024,6 +25102,445 @@ select pg_temp.assert(not (:'cx_old'::jsonb ? 'contentReports') and not (:'cx_ol
 rollback to savepoint cx1091n2;
 rollback;
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- PC1119. Miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119, #1076/M-4,
+--         migracja 0212): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
+--         rozpoznanego miasta; facet lokalizacji w języku widoku (location_names), tylko gdy
+--         nazwa wskazuje tę samą miejscowość.
+-- ============================================================================
+\echo '--- PC1119 kod pocztowy przy mieście, nazwy miejscowości w języku widoku ---'
+\set PCCO  'f9500000-0000-0000-0000-000000099000'
+reset role; reset app.current_uid;
+
+-- PC1119-1: location_lookup_key = cityLookupKey z TS (te same przypadki w
+--           tests/unit/location-postal-names.test.ts).
+select pg_temp.assert(
+  public.location_lookup_key('Bruxelles 1000') = 'bruxelles'
+  and public.location_lookup_key('1000 Bruxelles') = 'bruxelles'
+  and public.location_lookup_key('B-1000 Bruxelles') = 'bruxelles'
+  and public.location_lookup_key('BE-1000 Bruxelles') = 'bruxelles'
+  and public.location_lookup_key('Leuven (3000)') = 'leuven'
+  and public.location_lookup_key('Gent, België') = 'gent'
+  and public.location_lookup_key('9000 Gent, Belgium') = 'gent'
+  and public.location_lookup_key('Sint-Niklaas') = 'sint niklaas'
+  and public.location_lookup_key('1000') = ''
+  and public.location_lookup_key('Bruxelles 10000') = 'bruxelles 10000'
+  and public.location_lookup_key('Bruxelles 0999') = 'bruxelles 0999'
+  and public.location_lookup_key('Bebe 1000') = 'bebe',
+  'PC1119-1 location_lookup_key: kod pocztowy (B/BE), nawiasy, przecinek, kraj');
+
+insert into public.companies(id, name, status) values (:'PCCO', 'PC1119 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (gen_random_uuid(),:'PCCO','pc1119-a','Magazynier PC1119','warehouse','permanent','Bruxelles 1000','Bruxelles','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-b','Magazynier PC1119','warehouse','permanent','B-1050 Bruxelles','Bruxelles','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-c','Magazynier PC1119','warehouse','permanent','Leuven (3000)','Flandria','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-d','Magazynier PC1119','warehouse','permanent','Aalst, België','Flandria','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-e','Magazynier PC1119','warehouse','permanent','1000','Bruxelles','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-f','Magazynier PC1119','warehouse','permanent','Nieznanowo 1000','Flandria','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-g','Magazynier PC1119','warehouse','permanent','Bruxelles','Bruxelles','active','pl', now());
+
+-- PC1119-2: trigger rozpoznaje miasto z dopiskiem; wpisany tekst bez zmian; sam kod pocztowy
+--           i nieznana nazwa = null.
+select pg_temp.assert(
+  (select array_agg(coalesce(l.slug, '-') || '|' || j.city order by j.slug)
+     from public.jobs j left join public.locations l on l.id = j.location_id
+    where j.company_id = :'PCCO')
+  = array['brussels|Bruxelles 1000', 'brussels|B-1050 Bruxelles', 'leuven|Leuven (3000)', 'aalst|Aalst, België',
+          '-|1000', '-|Nieznanowo 1000', 'brussels|Bruxelles'],
+  'PC1119-2 location_id z miasta z kodem pocztowym / nazwą kraju');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- PC1119-3: filtr rozpoznanego miasta (lista, licznik, facety) obejmuje oferty z dopiskiem;
+--           wartość filtra z dopiskiem też wskazuje miejscowość.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs('pl', 'pc1119', p_locations => array['Bruksela']))
+    = array['pc1119-a', 'pc1119-b', 'pc1119-g']
+  and public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Bruksela']) = 3
+  and public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Leuven 3000']) = 1
+  and (select total from public.get_public_job_filter_facets('pl', 'pc1119', p_locations => array['Brussel'])
+        where dimension = 'total') = 3,
+  'PC1119-3 lista, licznik i facety: Bruksela = Bruxelles 1000 / B-1050 Bruxelles / Bruxelles');
+-- PC1119-4: wyszukiwanie tekstowe miasta z kodem pocztowym wskazuje miejscowość.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'pc1119', 'Gent 9000') = 0
+  and public.get_public_jobs_count('pl', 'pc1119', 'Aalst 9300') = 1
+  and public.get_public_jobs_count('pl', 'pc1119', '1000 Brussel') = 3,
+  'PC1119-4 search_city_candidates: miasto z kodem pocztowym');
+-- PC1119-5: facet w języku widoku przez location_display_name (zapytanie aplikacji wokół RPC):
+--           Aalst → Alost (fr), bez zmian po polsku; 10 miast z plików tłumaczeń bez podmiany.
+select pg_temp.assert(
+  (select array_agg(public.location_display_name(key, 'fr') || ':' || total
+                    order by public.location_display_name(key, 'fr') collate "C")
+     from public.get_public_job_filter_facets('fr', 'pc1119') where dimension = 'location')
+    = array['1000:1', 'Alost:1', 'Brussels:3', 'Leuven:1', 'Nieznanowo 1000:1']
+  and public.location_display_name('Aalst', 'pl') = 'Aalst'
+  and public.location_display_name('Namur', 'nl') = 'Namen'
+  and public.location_display_name('Antwerp', 'fr') = 'Antwerp'
+  and public.location_display_name('Nieznanowo', 'fr') = 'Nieznanowo'
+  and public.location_display_name('Aalst', 'xx') = 'Aalst',
+  'PC1119-5 location_display_name: nazwa w języku widoku, inaczej wartość bez zmian');
+-- PC1119-6: nazwa w języku widoku jest wartością filtra i wskazuje tę samą miejscowość.
+select pg_temp.assert(
+  public.get_public_jobs_count('fr', 'pc1119', p_locations => array[public.location_display_name('Aalst', 'fr')]) = 1,
+  'PC1119-6 wybranie pozycji „Alost” zwraca ofertę z Aalst');
+-- PC1119-7: słownik nazw czytelny publicznie, zapis tylko service_role.
+select pg_temp.assert((select count(*) from public.location_names) > 100, 'PC1119-7 anon czyta location_names');
+select pg_temp.expect_error($$insert into public.location_names(location_id, locale, name)
+  select id, 'pl', 'X' from public.locations where slug = 'aalst'$$, 'permission denied',
+  'PC1119-7b anon nie zapisuje location_names');
+reset role;
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$update public.location_names set name = 'X'$$, 'permission denied',
+  'PC1119-7c authenticated nie zmienia location_names');
+reset role;
+select pg_temp.assert(
+  (select relrowsecurity from pg_class where oid = 'public.location_names'::regclass),
+  'PC1119-7d RLS włączone na location_names');
+
+-- PC1119-8: nowy alias dowiązuje ofertę z dopiskiem (trigger słownika).
+begin;
+insert into public.location_aliases (location_id, alias, alias_key)
+  select id, 'Nieznanowo', 'nieznanowo' from public.locations where slug = 'aalst';
+select pg_temp.assert(
+  (select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.slug = 'pc1119-f') = 'aalst',
+  'PC1119-8 alias dodany do słownika dowiązuje ofertę „Nieznanowo 1000”');
+rollback;
+
+-- PC1119-9: nazwa, która wskazuje INNĄ miejscowość (egzonim zajęty przez inną gminę), nie jest
+--           pokazywana — facet nie może dać wartości filtra prowadzącej gdzie indziej.
+begin;
+insert into public.location_names (location_id, locale, name)
+  select id, 'fr', 'Saint-Nicolas' from public.locations where slug = 'sint-niklaas'
+  on conflict (location_id, locale) do update set name = excluded.name;
+select pg_temp.assert(
+  (select n.name from public.location_names n join public.locations l on l.id = n.location_id
+    where l.slug = 'sint-niklaas' and n.locale = 'fr') = 'Saint-Nicolas'
+  and public.location_display_name('Sint-Niklaas', 'fr') = 'Sint-Niklaas',
+  'PC1119-9 nazwa wskazująca inną gminę (Saint-Nicolas) → nazwa kanoniczna');
+rollback;
+
+-- KONTROLA UJEMNA (PC1119-N1): resolve_location_id z 0153 (sam pełny klucz) nie rozpoznaje
+-- miasta z kodem pocztowym — oferta wypada z filtra miasta.
+begin;
+create or replace function public.resolve_location_id(p_city text)
+returns uuid language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select a.location_id from public.location_aliases a
+  join public.locations l on l.id = a.location_id and l.is_active
+  where a.alias_key = public.city_key(left(p_city, 200)) limit 1;
+$$;
+update public.jobs set city = city || ' ' where company_id = :'PCCO';
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Bruksela']) = 1
+  and public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Leuven 3000']) = 0,
+  'PC1119-N1 kontrola ujemna: bez klucza bez dopisku Bruksela = 1 oferta (bez „Bruxelles 1000”)');
+reset role;
+rollback;
+-- KONTROLA UJEMNA (PC1119-N2): bez sprawdzenia miejscowości nazwy funkcja pokazałaby egzonim
+-- innej gminy (dowód, że PC1119-9 nie przechodzi przypadkiem).
+begin;
+insert into public.location_names (location_id, locale, name)
+  select id, 'fr', 'Saint-Nicolas' from public.locations where slug = 'sint-niklaas'
+  on conflict (location_id, locale) do update set name = excluded.name;
+create or replace function public.location_display_name(p_value text, p_locale text)
+returns text language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select coalesce((select n.name from public.location_names n
+    where n.location_id = public.resolve_location_id(p_value) and n.locale = p_locale), p_value);
+$$;
+select pg_temp.assert(public.location_display_name('Sint-Niklaas', 'fr') = 'Saint-Nicolas',
+  'PC1119-N2 kontrola ujemna: bez strażnika nazwa prowadzi do innej gminy');
+rollback;
+reset role; reset app.current_uid;
+-- SD1112. Termin digestu zapisanych wyszukiwań bez dryfu (#1112, TIME21-04, migracja 0211).
+--   * `saved_search_next_run_at`: poprzedni termin + pełne okresy w czasie ściennym
+--     Europe/Brussels, pierwszy termin po chwili przebiegu (zaległe okresy pominięte), pora
+--     stała także przy zmianie czasu (jesień i wiosna);
+--   * worker: spóźniony przebieg nie przesuwa pory kolejnego digestu;
+--   * kontrola ujemna: definicja z 0138 (rollback) liczy termin od chwili przebiegu (dryf).
+-- ============================================================================
+\echo '--- SD1112 termin digestu zapisanych wyszukiwań ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-01 06:00Z', 'daily', '2026-10-01 06:20Z') = '2026-10-02 06:00Z'::timestamptz,
+  'SD1112-1 dzienny: kolejny termin = ta sama pora następnego dnia, nie chwila przebiegu + 1 dzień');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-01 06:00Z', 'daily', '2026-10-04 07:00Z') = '2026-10-05 06:00Z'::timestamptz,
+  'SD1112-2 zaległe dni pominięte: pierwszy termin po przebiegu, ta sama pora');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-24 06:00Z', 'daily', '2026-10-24 06:10Z') = '2026-10-25 07:00Z'::timestamptz,
+  'SD1112-3 jesienna zmiana czasu: 08:00 CEST → 08:00 CET (bez przesunięcia o godzinę)');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-03-28 07:00Z', 'daily', '2026-03-28 07:30Z') = '2026-03-29 06:00Z'::timestamptz,
+  'SD1112-4 wiosenna zmiana czasu: 08:00 CET → 08:00 CEST');
+select pg_temp.assert(
+  public.saved_search_next_run_at('2026-10-01 06:00Z', 'weekly', '2026-10-01 06:30Z') = '2026-10-08 06:00Z'::timestamptz
+  and public.saved_search_next_run_at('2026-10-01 06:00Z', 'weekly', '2026-10-20 06:30Z') = '2026-10-22 06:00Z'::timestamptz,
+  'SD1112-5 tygodniowy: stały dzień i pora, zaległe tygodnie pominięte');
+select pg_temp.assert(
+  public.saved_search_next_run_at(null, 'daily', '2026-10-01 06:20Z') = '2026-10-02 06:20Z'::timestamptz
+  and public.saved_search_next_run_at('2026-10-01 06:00Z', 'daily', '2026-10-01 06:00Z') = '2026-10-02 06:00Z'::timestamptz,
+  'SD1112-6 brak poprzedniego terminu = okres od przebiegu; termin równy przebiegowi → następny okres');
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.saved_search_next_run_at(timestamptz, text, timestamptz)', 'execute')
+  and not has_function_privilege('authenticated', 'public.saved_search_next_run_at(timestamptz, text, timestamptz)', 'execute'),
+  'SD1112-7 funkcja pomocnicza tylko dla service_role');
+
+-- SD1112-8: worker — przebieg 20 min po terminie ustawia kolejny termin na tę samą porę.
+begin;
+update public.saved_searches set alerts_enabled = true, frequency = 'daily',
+  next_run_at = now() - interval '20 minutes' where id = :'sx2';
+select next_run_at as sd_prev from public.saved_searches where id = :'sx2' \gset
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select next_run_at from public.saved_searches where id = :'sx2')
+    = public.saved_search_next_run_at(:'sd_prev'::timestamptz, 'daily', now())
+  and (select next_run_at from public.saved_searches where id = :'sx2') < now() + interval '1 day'
+  and (select next_run_at from public.saved_searches where id = :'sx2') > now(),
+  'SD1112-8 worker: kolejny termin od poprzedniego terminu, nie od chwili przebiegu');
+rollback;
+
+-- SD1112-N (kontrola ujemna): definicja z 0138 dryfuje — termin = chwila przebiegu + 1 dzień.
+begin;
+\ir ../rollback/0211_saved_search_digest_schedule.down.sql
+update public.saved_searches set alerts_enabled = true, frequency = 'daily',
+  next_run_at = now() - interval '20 minutes' where id = :'sx2';
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select next_run_at from public.saved_searches where id = :'sx2') = now() + interval '1 day',
+  'SD1112-N kontrola ujemna: bez 0211 termin przesuwa się o spóźnienie przebiegu');
+rollback;
+
+-- ============================================================================
+-- P2C994 (0210, numer tymczasowy): współbieżność paczek kampanii (#906), synchronizacji
+--        tłumaczeń oferty przy zawieszeniu firmy (#802) i tokenu zaproszenia przy limicie
+--        e-maili (#793). Sesje równoległe przez dblink; fixture'y zatwierdzane osobną sesją.
+--        Kontrole ujemne: te same przeploty na definicjach sprzed 0210 (rollback zatwierdzony
+--        na czas kontroli, potem migracja nakładana ponownie).
+-- ============================================================================
+reset role; reset app.current_uid;
+\set P2CC1 'e0210000-0000-0000-0000-0000000000c1'
+\set P2CC2 'e0210000-0000-0000-0000-0000000000c2'
+\set P2CJ1 'e0210000-0000-0000-0000-0000000000a1'
+\set P2CJ2 'e0210000-0000-0000-0000-0000000000a2'
+\set P2CO  'e0210000-0000-0000-0000-0000000000e1'
+\set P2CCO 'e0210000-0000-0000-0000-0000000000e2'
+\set P2CH1 '1994000000000000000000000000000000000000000000000000000000000000'
+\set P2CH2 '2994000000000000000000000000000000000000000000000000000000000000'
+\set P2CH3 '3994000000000000000000000000000000000000000000000000000000000000'
+\set P2CH4 '4994000000000000000000000000000000000000000000000000000000000000'
+\set P2CH6 '6994000000000000000000000000000000000000000000000000000000000000'
+\set P2CH7 '7994000000000000000000000000000000000000000000000000000000000000'
+
+select pg_temp.un45_sql($q$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e0210000-0000-0000-0000-0000000000f1','p2c1@test.be','P2c Jeden','{"role":"candidate","first_name":"P2c","last_name":"Jeden","locale":"pl"}'),
+    ('e0210000-0000-0000-0000-0000000000f2','p2c2@test.be','P2c Dwa','{"role":"candidate","first_name":"P2c","last_name":"Dwa","locale":"nl"}');
+  select test_fixture.attest_candidates();
+  update auth.users set email_verified = true
+   where id in ('e0210000-0000-0000-0000-0000000000f1','e0210000-0000-0000-0000-0000000000f2');
+  update public.notification_preferences set email_marketing = true
+   where profile_id in ('e0210000-0000-0000-0000-0000000000f1','e0210000-0000-0000-0000-0000000000f2');
+  -- #802: dwie firmy zweryfikowane, po jednej ofercie (nl) opublikowanej i wstrzymanej —
+  -- źródło tłumaczeń istnieje i jest nieaktywne, zadania superseded.
+  insert into public.companies(id, name, status) values
+    ('e0210000-0000-0000-0000-0000000000c1', 'Firma P2C Een', 'verified'),
+    ('e0210000-0000-0000-0000-0000000000c2', 'Firma P2C Twee', 'verified');
+  insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+    values ('e0210000-0000-0000-0000-0000000000a1', 'e0210000-0000-0000-0000-0000000000c1', 'p2c994-een',
+            'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl'),
+           ('e0210000-0000-0000-0000-0000000000a2', 'e0210000-0000-0000-0000-0000000000c2', 'p2c994-twee',
+            'Chauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl');
+  select 'ok'$q$);
+select pg_temp.un45_sql($q$
+  update public.jobs set status = 'active', published_at = now()
+   where id in ('e0210000-0000-0000-0000-0000000000a1', 'e0210000-0000-0000-0000-0000000000a2');
+  select 'ok'$q$);
+select pg_temp.un45_sql($q$
+  update public.jobs set status = 'paused'
+   where id in ('e0210000-0000-0000-0000-0000000000a1', 'e0210000-0000-0000-0000-0000000000a2');
+  select 'ok'$q$);
+select pg_temp.assert(
+  (select count(*) from public.translation_sources
+    where entity_type = 'job' and entity_id in (:'P2CJ1', :'P2CJ2') and not is_active) = 2
+  and not exists (select 1 from public.translation_jobs
+                   where entity_id in (:'P2CJ1', :'P2CJ2') and status in ('queued', 'retry', 'leased'))
+  and (select count(*) from public.translation_jobs
+        where entity_id in (:'P2CJ1', :'P2CJ2') and status = 'superseded') = 6,
+  'P2C994-0 oferty wstrzymane: źródła nieaktywne, zadania superseded');
+
+-- Kampania do przeplotu (#906).
+create function pg_temp.p2c_campaign(p_slug text) returns uuid
+language plpgsql as $$
+declare v_id uuid;
+begin
+  v_id := pg_temp.un45_sql(format($q$select public.create_email_campaign_revision(%L, $j${"pl":{"jobs":[{"slug":"magazynier-gent","title":"Magazynier","city":"Gent","locale":"pl","isDemo":false}]},"nl":{"jobs":[{"slug":"magazijnier-gent","title":"Magazijnier","city":"Gent","locale":"nl","isDemo":false}]},"fr":{"jobs":[{"slug":"magasinier-gand","title":"Magasinier","city":"Gand","locale":"fr","isDemo":false}]},"en":{"jobs":[{"slug":"warehouse-gent","title":"Warehouse worker","city":"Ghent","locale":"en","isDemo":false}]}}$j$::jsonb)::text$q$, p_slug))::uuid;
+  perform pg_temp.un45_sql(format('select public.activate_email_campaign(%L)', v_id));
+  return v_id;
+end $$;
+
+-- Przeplot #906: A rezerwuje paczkę (limit 1) i trzyma transakcję, B startuje drugą paczkę;
+-- zwraca 'wynik B|status kampanii|liczba odbiorców kampanii'.
+create function pg_temp.p2c_campaign_race(p_campaign uuid) returns text
+language plpgsql as $$
+declare v_a text; v_b text; v_pid int;
+begin
+  perform pg_temp.remote_connect('p2c_a');
+  perform pg_temp.remote_connect('p2c_b');
+  perform dbl.dblink_exec('p2c_a', 'begin');
+  select t.v into v_a from dbl.dblink('p2c_a', format(
+    'select reserved::text from public.enqueue_campaign_batch(%L, 1)', p_campaign)) as t(v text);
+  if v_a <> '1' then raise exception 'ASSERT FAILED: P2C994 paczka A zarezerwowała %', v_a; end if;
+  select t.pid into v_pid from dbl.dblink('p2c_b', 'select pg_backend_pid()') as t(pid int);
+  perform dbl.dblink_send_query('p2c_b', format(
+    'select reserved::text from public.enqueue_campaign_batch(%L, 1)', p_campaign));
+  perform pg_temp.wait_blocked(v_pid, 'P2C994 paczka B');
+  perform dbl.dblink_exec('p2c_a', 'commit');
+  v_b := pg_temp.remote_result('p2c_b');
+  perform dbl.dblink_disconnect('p2c_a');
+  perform dbl.dblink_disconnect('p2c_b');
+  return v_b || '|' || (select status::text from public.email_campaigns where id = p_campaign)
+    || '|' || (select count(*)::text from public.email_campaign_recipients where campaign_id = p_campaign);
+end $$;
+
+-- Przeplot #802: T3 trzyma wiersz źródła tłumaczeń oferty; zawieszenie firmy (T2) zatwierdza
+-- się pierwsze (jego synchronizacja czeka na T3), potem wznowienie oferty (T1). Zwraca
+-- 'status firmy|źródło aktywne|zadania w kolejce'.
+create function pg_temp.p2c_translation_race(p_company uuid, p_job uuid) returns text
+language plpgsql as $$
+declare v_pid_co int; v_pid_job int;
+begin
+  perform pg_temp.remote_connect('p2c_lock');
+  perform pg_temp.remote_connect('p2c_co');
+  perform pg_temp.remote_connect('p2c_job');
+  perform dbl.dblink_exec('p2c_lock', 'begin');
+  perform * from dbl.dblink('p2c_lock', format(
+    'select 1 from public.translation_sources where entity_type = ''job'' and entity_id = %L for update',
+    p_job)) as t(v int);
+  select t.pid into v_pid_co from dbl.dblink('p2c_co', 'select pg_backend_pid()') as t(pid int);
+  select t.pid into v_pid_job from dbl.dblink('p2c_job', 'select pg_backend_pid()') as t(pid int);
+  perform dbl.dblink_exec('p2c_co', 'begin');
+  perform dbl.dblink_exec('p2c_co', format(
+    'update public.companies set status = ''suspended'' where id = %L', p_company));
+  perform dbl.dblink_send_query('p2c_co', 'commit');
+  perform pg_temp.wait_blocked(v_pid_co, 'P2C994 zawieszenie firmy');
+  perform dbl.dblink_exec('p2c_job', 'begin');
+  perform dbl.dblink_exec('p2c_job', format(
+    'update public.jobs set status = ''active'' where id = %L', p_job));
+  perform dbl.dblink_send_query('p2c_job', 'commit');
+  perform pg_temp.wait_blocked(v_pid_job, 'P2C994 wznowienie oferty');
+  perform dbl.dblink_exec('p2c_lock', 'commit');
+  perform pg_temp.remote_result('p2c_co');
+  perform pg_temp.remote_result('p2c_job');
+  perform dbl.dblink_disconnect('p2c_lock');
+  perform dbl.dblink_disconnect('p2c_co');
+  perform dbl.dblink_disconnect('p2c_job');
+  return (select status::text from public.companies where id = p_company)
+    || '|' || (select is_active::text from public.translation_sources
+                where entity_type = 'job' and entity_id = p_job)
+    || '|' || (select count(*)::text from public.translation_jobs
+                where entity_id = p_job and status in ('queued', 'retry', 'leased'));
+end $$;
+
+-- P2C994-1 (#906): druga paczka czeka na pierwszą i rezerwuje następnego odbiorcę; kampania
+-- zostaje aktywna, dwóch odbiorców ma wpis.
+select pg_temp.p2c_campaign('p2c994-par') as p2c_camp1 \gset
+select pg_temp.p2c_campaign_race(:'p2c_camp1') as p2c_race1 \gset
+select pg_temp.assert(:'p2c_race1' = '1|active|2',
+  'P2C994-1 równoległe paczki (limit 1): B rezerwuje kolejnego odbiorcę, kampania aktywna (' || :'p2c_race1' || ')');
+-- P2C994-1b: kampania kończy się dopiero, gdy nikt nie czeka na rezerwację.
+select set_config('p2c.camp1', :'p2c_camp1', false);
+do $$ begin
+  for i in 1..20 loop
+    perform public.enqueue_campaign_batch(current_setting('p2c.camp1')::uuid, 500);
+  end loop;
+end $$;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'p2c_camp1') = 'completed'
+  and exists (select 1 from public.email_campaign_recipients
+               where campaign_id = :'p2c_camp1' and profile_id = 'e0210000-0000-0000-0000-0000000000f1')
+  and exists (select 1 from public.email_campaign_recipients
+               where campaign_id = :'p2c_camp1' and profile_id = 'e0210000-0000-0000-0000-0000000000f2'),
+  'P2C994-1b kampania zakończona po obsłużeniu wszystkich (oba nowe adresy mają wpis)');
+
+-- P2C994-2 (#802): wznowienie oferty przeplecione z zawieszeniem firmy — źródło zostaje
+-- nieaktywne, zadania nie wracają do kolejki.
+select pg_temp.p2c_translation_race(:'P2CC1', :'P2CJ1') as p2c_tr1 \gset
+select pg_temp.assert(:'p2c_tr1' = 'suspended|false|0',
+  'P2C994-2 zawieszona firma: źródło nieaktywne, brak zadań w kolejce (' || :'p2c_tr1' || ')');
+
+-- P2C994-3 (#793): czwarte odświeżenie ponad limit e-maili nie zmienia tokenu — link
+-- z ostatniego wysłanego e-maila nadal działa; nowy e-mail wymienia token.
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'P2CO','p2co@ti.test','Piotr O','{"role":"employer","first_name":"Piotr","last_name":"Owner","locale":"pl"}');
+update auth.users set email_verified = true where id = :'P2CO';
+insert into public.companies(id,name,status) values (:'P2CCO','Firma P2C','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'P2CCO',:'P2CO','owner',true);
+set role authenticated; set app.current_uid = :'P2CO'; select pg_temp.assert_client_role();
+select invitation_id as p2cinv from public.invite_company_member(:'P2CCO', 'limit793@ti.test', 'member', 'pl', :'P2CH1', 'nonce-p2c-0000000001') \gset
+select * from public.invite_company_member(:'P2CCO', 'limit793@ti.test', 'member', 'pl', :'P2CH2', 'nonce-p2c-0000000002') \gset p2c2_
+select * from public.invite_company_member(:'P2CCO', 'limit793@ti.test', 'recruiter', 'nl', :'P2CH3', 'nonce-p2c-0000000003') \gset p2c3_
+select * from public.invite_company_member(:'P2CCO', 'limit793@ti.test', 'admin', 'fr', :'P2CH4', 'nonce-p2c-0000000004') \gset p2c4_
+reset role; reset app.current_uid;
+select pg_temp.assert(:'p2c4_invitation_id' = :'p2cinv' and not :'p2c4_created'::boolean
+  and (select count(*) from public.email_deliveries
+        where template = 'teamInvitationSignup' and to_email = 'limit793@ti.test') = 3,
+  'P2C994-3 odpowiedź RPC bez zmian, czwarty e-mail nie wychodzi');
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = :'p2cinv') = :'P2CH3'
+  and (select role::text from public.company_invitations where id = :'p2cinv') = 'admin',
+  'P2C994-3b token z ostatniego wysłanego e-maila zostaje, rola odświeżona');
+set role service_role;
+select pg_temp.assert((select outcome from public.team_invitation_signup_preview(:'P2CH3')) = 'valid'
+  and (select outcome from public.team_invitation_signup_preview(:'P2CH4')) = 'invalid',
+  'P2C994-3c podgląd: wysłany link ważny, niewysłany nieważny');
+select pg_temp.assert(public.consume_team_invitation_signup(:'P2CH3', 'limit793@ti.test') = 'consumed',
+  'P2C994-3d wysłany link działa (consume)');
+reset role;
+-- P2C994-3e: adres z kontem — odświeżenie wymienia token jak dotąd (bez e-maila rejestracyjnego).
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  ('e0210000-0000-0000-0000-0000000000e3','konto793@ti.test','Konto K','{"role":"employer","first_name":"Konto","last_name":"K","locale":"pl"}');
+set role authenticated; set app.current_uid = :'P2CO'; select pg_temp.assert_client_role();
+select invitation_id as p2cacc from public.invite_company_member(:'P2CCO', 'konto793@ti.test', 'member', 'pl', :'P2CH6', 'nonce-p2c-0000000005') \gset
+select * from public.invite_company_member(:'P2CCO', 'konto793@ti.test', 'member', 'pl', :'P2CH7', 'nonce-p2c-0000000006') \gset p2cacc2_
+reset role; reset app.current_uid;
+select pg_temp.assert((select signup_token_hash from public.company_invitations where id = :'p2cacc') = :'P2CH7',
+  'P2C994-3e adres z kontem: token wymieniany przy odświeżeniu (jak w 0121)');
+
+-- --- Kontrole ujemne: definicje sprzed 0210 (zatwierdzone, żeby widziały je sesje dblink) ---
+\ir ../rollback/0210_p2_concurrency_fixes.down.sql
+select pg_temp.p2c_campaign('p2c994-old') as p2c_camp2 \gset
+select pg_temp.p2c_campaign_race(:'p2c_camp2') as p2c_race2 \gset
+select pg_temp.assert(:'p2c_race2' = '0|completed|1',
+  'P2C994-N1 kontrola ujemna: stara paczka po konflikcie kończy kampanię, drugi odbiorca pominięty (' || :'p2c_race2' || ')');
+select pg_temp.p2c_translation_race(:'P2CC2', :'P2CJ2') as p2c_tr2 \gset
+select pg_temp.assert(:'p2c_tr2' = 'suspended|true|3',
+  'P2C994-N2 kontrola ujemna: stara synchronizacja reaktywuje źródło zawieszonej firmy (' || :'p2c_tr2' || ')');
+set role authenticated; set app.current_uid = :'P2CO'; select pg_temp.assert_client_role();
+select * from public.invite_company_member(:'P2CCO', 'limit793@ti.test', 'member', 'pl', :'P2CH4', 'nonce-p2c-0000000007') \gset p2cn_
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = :'p2cinv') = :'P2CH4'
+  and (select count(*) from public.email_deliveries
+        where template = 'teamInvitationSignup' and to_email = 'limit793@ti.test') = 3,
+  'P2C994-N3 kontrola ujemna: stare odświeżenie ponad limit wymienia token bez e-maila');
+
+-- Migracja nałożona ponownie: jej jednorazowa synchronizacja naprawia źródło z N2.
+\ir ../migrations/0210_p2_concurrency_fixes.sql
+select pg_temp.assert(
+  position('for share of c' in pg_get_functiondef('public.sync_job_translation_source(uuid)'::regprocedure)) > 0
+  and position('v_seen' in pg_get_functiondef('public.enqueue_campaign_batch(uuid, integer)'::regprocedure)) > 0
+  and position('v_sent' in pg_get_functiondef('public.invite_company_member(uuid, text, text, text, text, text)'::regprocedure)) > 0,
+  'P2C994-4 definicje z 0210 przywrócone');
+select pg_temp.assert(
+  not (select is_active from public.translation_sources where entity_type = 'job' and entity_id = :'P2CJ2')
+  and not exists (select 1 from public.translation_jobs
+                   where entity_id = :'P2CJ2' and status in ('queued', 'retry', 'leased')),
+  'P2C994-4b ponowna synchronizacja ukrywa źródło zawieszonej firmy reaktywowane wyścigiem');
 
 -- ============================================================================
 -- EX1232. Eksport pracodawcy: odwołania i zgłoszenia treści (#1232, migracja 0207)
