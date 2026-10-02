@@ -23002,6 +23002,176 @@ reset role; reset app.current_uid;
 select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid)'::regprocedure) like '%candidate_blocked_company%',
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
+-- ============================================================================
+-- SM1042. Kursorowe RPC sitemapy ofert (0208, #1042): bez licznika i OFFSET, stronicowanie
+-- (published_at desc, id desc). 130 aktywnych ofert z JEDNYM published_at (remis przez każdą
+-- granicę strony i partii) + 2 nowsze + 1 starsza + oferty ukryte (szkic, wygasła po terminie,
+-- usunięta, firma niezweryfikowana, firma usunięta). Sekcja w transakcji cofanej.
+-- Oczekiwania liczone względem publicznej listy (get_public_jobs): te same oferty, ta sama
+-- kolejność — rozjazd warunków „oferta publiczna” = czerwony test.
+-- ============================================================================
+\echo '--- SM1042 sitemap ofert: kursor zamiast licznika i offsetu (0208) ---'
+begin;
+\set SMC 'e9c40000-0000-0000-0000-0000000000c1'
+\set SMU 'e9c40000-0000-0000-0000-0000000000c2'
+\set SMD 'e9c40000-0000-0000-0000-0000000000c3'
+
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status) values
+  (:'SMC','Firma SM1042','verified'), (:'SMU','Firma SM1042 niezweryf.','unverified');
+insert into public.companies(id,name,status,deleted_at) values
+  (:'SMD','Firma SM1042 usunieta','verified', now());
+
+-- 130 ofert z tym samym published_at (remis), 2 nowsze, 1 starsza.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+select gen_random_uuid(), :'SMC', 'sm1042-' || n, 'Magazynier SM1042 ' || n, 'warehouse', 'permanent',
+       'Gent', 'Vlaanderen', 'active', 'pl', date_trunc('second', now()) - interval '1 hour'
+from generate_series(1, 130) n;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+values (gen_random_uuid(), :'SMC', 'sm1042-new-a', 'Magazynier SM1042 nowa A', 'warehouse', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '10 minutes'),
+       (gen_random_uuid(), :'SMC', 'sm1042-new-b', 'Magazynier SM1042 nowa B', 'warehouse', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '20 minutes'),
+       (gen_random_uuid(), :'SMC', 'sm1042-old', 'Magazynier SM1042 stara', 'warehouse', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '3 days');
+-- Ukryte: szkic, wygasła po terminie, usunięta, firma niezweryfikowana, firma usunięta,
+-- aktywna bez daty publikacji (klucz kursora).
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at,expires_at,deleted_at)
+values (gen_random_uuid(), :'SMC', 'sm1042-hid-draft', 'SM1042 szkic', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl', now(), null, null),
+       (gen_random_uuid(), :'SMC', 'sm1042-hid-expired', 'SM1042 wygasla', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'active', 'pl', now(), now() - interval '1 day', null),
+       (gen_random_uuid(), :'SMC', 'sm1042-hid-deleted', 'SM1042 usunieta', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'active', 'pl', now(), null, now()),
+       (gen_random_uuid(), :'SMU', 'sm1042-hid-unverified', 'SM1042 firma niezweryf.', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'active', 'pl', now(), null, null),
+       (gen_random_uuid(), :'SMD', 'sm1042-hid-delcompany', 'SM1042 firma usunieta', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'active', 'pl', now(), null, null),
+       (gen_random_uuid(), :'SMC', 'sm1042-hid-nodate', 'SM1042 bez daty', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'active', 'pl', null, null, null);
+-- Języki: nowa A = pl+nl (w porządku alfabetycznym {nl,pl}), reszta bez tłumaczeń.
+insert into public.job_translations(job_id, locale, title)
+select id, l, 'Magazynier SM1042 nowa A ' || l from public.jobs, unnest(array['pl','nl']) l
+where slug = 'sm1042-new-a';
+
+-- Walker: przechodzi wszystkie partie tak jak sitemap — granice partii, potem strony kursorem
+-- po p_limit; partia kończy się na kursorze następnej (p_until). Zwraca ids w kolejności odczytu.
+create function pg_temp.sm_walk(p_size integer, p_limit integer) returns uuid[]
+language plpgsql as $$
+declare
+  res uuid[] := '{}'; sh record; c_pub timestamptz; c_id uuid; r record; got integer;
+begin
+  for sh in
+    select a.shard_index, a.after_published_at as ap, a.after_id as ai,
+           lead(a.after_published_at) over (order by a.shard_index) as up,
+           lead(a.after_id) over (order by a.shard_index) as ui
+    from public.get_public_jobs_sitemap_shard_starts(p_size) a order by a.shard_index
+  loop
+    c_pub := sh.ap; c_id := sh.ai;
+    loop
+      got := 0;
+      for r in select * from public.get_public_jobs_sitemap_page(c_pub, c_id, sh.up, sh.ui, p_limit) loop
+        got := got + 1; res := res || r.id; c_pub := r.published_at; c_id := r.id;
+      end loop;
+      exit when got < p_limit;
+    end loop;
+  end loop;
+  return res;
+end $$;
+
+-- Oczekiwana lista = publiczna lista ofert z datą publikacji (get_public_jobs, strony po 100)
+-- w porządku klucza kursora.
+create function pg_temp.sm_expected() returns uuid[]
+language sql as $$
+  select coalesce(array_agg(j.id order by j.published_at desc, j.id desc), '{}')
+  from generate_series(0, 900, 100) o
+  cross join lateral public.get_public_jobs(p_limit => 100, p_offset => o) j
+  -- Oferta aktywna bez daty publikacji jest na liście, ale poza sitemapą (klucz kursora, jak 0158).
+  where j.published_at is not null
+$$;
+
+select coalesce(slug, '') as sm_cslug from public.companies where id = :'SMC' \gset
+select published_at as sm_tie from public.jobs where slug = 'sm1042-1' \gset
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.sm_expected() as sm_exp \gset
+select cardinality(:'sm_exp'::uuid[]) as sm_total \gset
+select pg_temp.assert(:sm_total >= 133 and :sm_total < 1000,
+  'SM1042-0 lista publiczna mieści fixture (133+ ofert) i mieści się w oknie testu (< 1000)');
+
+-- SM1042-1: stronicowanie kursorem = publiczna lista (te same oferty, ta sama kolejność), bez dziur
+-- i dubli, przy różnych rozmiarach partii i stron — granice przypadają w środku remisu 130 ofert.
+select pg_temp.assert(pg_temp.sm_walk(50, 20) = :'sm_exp'::uuid[], 'SM1042-1a partie 50, strony 20 = lista publiczna');
+select pg_temp.assert(pg_temp.sm_walk(50, 1000) = :'sm_exp'::uuid[], 'SM1042-1b partie 50, strona 1000 = lista publiczna');
+select pg_temp.assert(pg_temp.sm_walk(100, 7) = :'sm_exp'::uuid[], 'SM1042-1c partie 100, strony 7 = lista publiczna');
+select pg_temp.assert(
+  (select count(distinct i) = cardinality(:'sm_exp'::uuid[]) from unnest(pg_temp.sm_walk(50, 13)) i),
+  'SM1042-1d brak duplikatów na granicach stron i partii');
+
+-- SM1042-2: granice partii — liczba = ceil(T/50), partia 1 bez kursora, kursor partii k =
+-- klucz ostatniej oferty partii k-1 (oferta nr (k-1)*50 listy), bez licznika i offsetu.
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_sitemap_shard_starts(50)) = ceil(:sm_total / 50.0)
+  and (select after_id is null and after_published_at is null from public.get_public_jobs_sitemap_shard_starts(50) where shard_index = 1)
+  and (select bool_and(after_id = (:'sm_exp'::uuid[])[(shard_index - 1) * 50]) from public.get_public_jobs_sitemap_shard_starts(50) where shard_index > 1)
+  and (select array_agg(shard_index order by shard_index) = (select array_agg(g) from generate_series(1, ceil(:sm_total / 50.0)::int) g)
+       from public.get_public_jobs_sitemap_shard_starts(50)),
+  'SM1042-2 granice partii: liczba, brak kursora w pierwszej, kursor = ostatnia oferta poprzedniej');
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs_sitemap_shard_starts(1)) = ceil(:sm_total / 50.0)
+  and (select count(*) from public.get_public_jobs_sitemap_shard_starts(null)) = 1,
+  'SM1042-2b rozmiar partii poniżej 50 podniesiony do 50; brak rozmiaru = 5000');
+
+-- SM1042-3: oferty ukryte (szkic, wygasła, usunięta, firma niezweryfikowana/usunięta, bez daty
+-- publikacji) nie trafiają do sitemapy; strona zwraca slug firmy, daty i języki tłumaczeń.
+select pg_temp.assert(
+  not exists (select 1 from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug like 'sm1042-hid-%')
+  and (select count(*) from public.get_public_jobs_sitemap_page(null, null, null, null, 1000)) = least(1000, :sm_total),
+  'SM1042-3 oferty niepubliczne poza sitemapą');
+select pg_temp.assert(
+  (select locales from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug = 'sm1042-new-a') = array['nl','pl']
+  and (select locales from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug = 'sm1042-old') = '{}'::text[]
+  and (select coalesce(company_slug, '') = :'sm_cslug' from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug = 'sm1042-old')
+  and (select updated_at is not null and published_at is not null from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug = 'sm1042-old'),
+  'SM1042-3b języki tłumaczeń (posortowane), slug firmy i daty w jednym zapytaniu');
+
+-- SM1042-4: niepełny kursor = brak wyników (fail-closed, nie cicho pierwsza strona); limit >= 1.
+select pg_temp.assert(
+  not exists (select 1 from public.get_public_jobs_sitemap_page(now(), null, null, null, 10))
+  and not exists (select 1 from public.get_public_jobs_sitemap_page(null, gen_random_uuid(), null, null, 10))
+  and not exists (select 1 from public.get_public_jobs_sitemap_page(null, null, now(), null, 10))
+  and (select count(*) from public.get_public_jobs_sitemap_page(null, null, null, null, 0)) = 1,
+  'SM1042-4 niepełny kursor bez wyników, limit 0 = 1 wiersz');
+
+-- SM1042-5 (KONTROLE UJEMNE): błędne kursory dają dziury albo duble na granicy strony przy remisie.
+-- Kursor tylko po published_at, ścisły („<”): strona 2 zaczyna się PO całym remisie — gubi oferty
+-- (odpowiada po = (published_at, najmniejsze id)); kursor „włącznie” („<=”, po = (published_at,
+-- największe id)): strona 2 powtarza oferty strony 1.
+select pg_temp.assert(
+  (with ties as (select * from public.get_public_jobs_sitemap_page(null, null, null, null, 1000)
+                 where published_at = :'sm_tie'::timestamptz),
+        p1 as (select * from ties order by id desc limit 20),   -- strona kończy się W ŚRODKU remisu
+        correct as (select count(*) c from public.get_public_jobs_sitemap_page(
+                      :'sm_tie'::timestamptz, (select id from p1 order by id asc limit 1), null, null, 1000) where published_at = :'sm_tie'::timestamptz),
+        skip as (select count(*) c from public.get_public_jobs_sitemap_page(
+                   :'sm_tie'::timestamptz, '00000000-0000-0000-0000-000000000000', null, null, 1000)
+                 where published_at = :'sm_tie'::timestamptz),
+        dup as (select count(*) c from public.get_public_jobs_sitemap_page(
+                  :'sm_tie'::timestamptz, 'ffffffff-ffff-ffff-ffff-ffffffffffff', null, null, 1000) d
+                where d.id in (select id from p1))
+   select (select count(*) from ties) = 130
+      and (select count(*) from p1) = 20
+      and (select c from correct) = 110          -- poprawny kursor: reszta remisu, bez dubli
+      and (select c from skip) = 0               -- dziura: kursor tylko po published_at gubi 110 ofert
+      and (select c from dup) = 20),             -- duble: kursor włącznie zwraca oferty strony 1
+  'SM1042-5 kontrola ujemna: kursor bez id gubi oferty, kursor włącznie dubluje na granicy remisu');
+reset role;
+
+-- SM1042-6 (KONTROLA UJEMNA): oferta wygasła po terminie wraca do sitemapy, gdy zdjąć jej datę
+-- ważności — warunek expires_at faktycznie działa; to samo dla firmy niezweryfikowanej.
+update public.jobs set expires_at = null where slug = 'sm1042-hid-expired';
+update public.companies set status = 'verified' where id = :'SMU';
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  exists (select 1 from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug = 'sm1042-hid-expired')
+  and exists (select 1 from public.get_public_jobs_sitemap_page(null, null, null, null, 1000) where slug = 'sm1042-hid-unverified'),
+  'SM1042-6 kontrola ujemna: bez wygaśnięcia / z firmą verified oferty są w sitemapie');
+reset role;
+
+rollback;
 
 -- ============================================================================
 -- SJ968. Cel zapisu oferty (#882, 0199): kandydat zapisuje WYŁĄCZNIE ofertę publiczną
