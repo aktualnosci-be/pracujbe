@@ -26761,4 +26761,233 @@ rollback to savepoint cc_neg;
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- WP724. Web Push alertów zapisanych wyszukiwań (0219, #724)
+-- Rejestr urządzeń kandydata (RPC-only, odczyt własny), lista dozwolonych usług push (bez
+-- dowolnych adresów — SSRF), kolejka tylko dla `job_match`/`saved_search`, dzierżawa, 404/410
+-- unieważnia urządzenie, wycofanie wygasza kolejkę, przejęcie urządzenia przez inne konto,
+-- limit urządzeń, wygaśnięcie po 24 h, wyłączony alert, retencja.
+-- Kontrole ujemne: bramka typu powiadomienia zdjęta → propozycja/wiadomość trafia do kolejki;
+-- trigger zdjęty → alert bez wysyłki.
+-- ============================================================================
+\echo '--- WP724 Web Push ---'
+reset role; reset app.current_uid;
+\set WPCA 'd7240000-0000-0000-0000-000000000001'
+\set WPCB 'd7240000-0000-0000-0000-000000000002'
+\set WPEM 'd7240000-0000-0000-0000-000000000011'
+\set WPSS 'd7240000-0000-0000-0000-0000000000a1'
+\set WPEP1 'https://fcm.googleapis.com/fcm/send/wp724-device-1'
+\set WPEP2 'https://updates.push.services.mozilla.com/wpush/v2/wp724-device-2'
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  (:'WPCA', 'wp-ca@test.be', 'WP CA', '{"role":"candidate","first_name":"Wp","last_name":"CA","locale":"nl"}'),
+  (:'WPCB', 'wp-cb@test.be', 'WP CB', '{"role":"candidate","first_name":"Wp","last_name":"CB","locale":"fr"}'),
+  (:'WPEM', 'wp-em@test.be', 'WP EM', '{"role":"employer","first_name":"Wp","last_name":"EM","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.saved_searches(id, profile_id, name, locale, filters, filters_hash)
+  values (:'WPSS', :'WPCA', 'Magazyn', 'nl', '{"keyword":"magazyn"}', repeat('a', 32));
+
+-- WP724-1: kandydat rejestruje urządzenie → push_enabled = true, widzi tylko swoje.
+set role authenticated; set app.current_uid = :'WPCA'; select pg_temp.assert_client_role();
+select public.register_push_subscription(:'WPEP1', 'B' || repeat('A', 86), repeat('Q', 22), 'Chrome · Android') as wp_sub1 \gset
+select public.register_push_subscription(:'WPEP1', 'B' || repeat('A', 86), repeat('Q', 22), 'Chrome · Android') as wp_sub1b \gset
+select public.register_push_subscription(:'WPEP2', 'C' || repeat('A', 86), repeat('R', 22), null) as wp_sub2 \gset
+select pg_temp.assert(:'wp_sub1' = :'wp_sub1b', 'WP724-1 ponowna rejestracja tego samego endpointu = ten sam wiersz');
+select pg_temp.assert((select count(*) from public.push_subscriptions) = 2, 'WP724-1b właściciel widzi swoje urządzenia');
+select pg_temp.assert((select push_enabled from public.notification_preferences where profile_id = :'WPCA'),
+  'WP724-1c rejestracja włącza push_enabled');
+-- WP724-2: bezpośredni zapis odrzucony (RPC-only).
+select pg_temp.expect_error($$insert into public.push_subscriptions(profile_id, endpoint, p256dh, auth_secret)
+  values ('d7240000-0000-0000-0000-000000000001', 'https://fcm.googleapis.com/x/wp724-direct', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'permission denied', 'WP724-2 bezpośredni INSERT odrzucony');
+select pg_temp.expect_error($$update public.push_subscriptions set endpoint = 'https://fcm.googleapis.com/x/evil'$$,
+  'permission denied', 'WP724-2b bezpośredni UPDATE odrzucony');
+-- WP724-3: endpoint spoza listy dozwolonych usług (SSRF) i złe klucze → VALIDATION_FAILED.
+select pg_temp.expect_error($$select public.register_push_subscription('https://169.254.169.254/latest/meta-data', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3 adres wewnętrzny odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com.evil.be/x/abc', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3b host z dozwolonym prefiksem odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com:8443/x/abc', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3c port odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('http://fcm.googleapis.com/x/abcdefghij', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3d http odrzucony');
+select pg_temp.expect_error($$select public.register_push_subscription('https://user@fcm.googleapis.com/x/abc', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3e dane logowania w adresie odrzucone');
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-k', 'short', repeat('Q', 22))$$,
+  'VALIDATION_FAILED', 'WP724-3f zły klucz odrzucony');
+reset role;
+select pg_temp.assert(public.push_endpoint_allowed('https://wns2-par02p.notify.windows.com/w/?token=abc')
+  and public.push_endpoint_allowed('https://web.push.apple.com/QGvUo1ABC')
+  and not public.push_endpoint_allowed('https://evil.be/push.apple.com/abcdefgh'),
+  'WP724-3g lista dozwolonych usług (Windows, Apple; host w ścieżce odrzucony)');
+-- WP724-4: pracodawca nie rejestruje urządzenia (push tylko dla alertów kandydata).
+set role authenticated; set app.current_uid = :'WPEM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-em', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'PERMISSION_DENIED', 'WP724-4 pracodawca bez rejestracji');
+reset role;
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.push_subscriptions) = 0, 'WP724-4b inny kandydat nie widzi cudzych urządzeń');
+select pg_temp.expect_error($$select public.revoke_push_subscription('$$ || :'wp_sub1' || $$'::uuid)$$,
+  'NOT_FOUND', 'WP724-4c cudzego urządzenia nie da się wycofać');
+select pg_temp.assert(public.unregister_push_subscription(:'WPEP1') = false, 'WP724-4d cudzy endpoint nie jest wycofywany');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-anon', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'permission denied', 'WP724-4e anon bez dostępu');
+reset role;
+
+-- WP724-5: alert zapisanego wyszukiwania → jedna wysyłka na aktywne urządzenie; inne typy — nie.
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"kind":"saved_search","count":3,"name":"Magazyn"}', 'saved_search', :'WPSS')
+  returning id as wp_n1 \gset
+insert into public.notifications(profile_id, type, title, entity_type)
+  values (:'WPCA', 'offer_received', 'offer', 'offer') returning id as wp_n2 \gset
+insert into public.notifications(profile_id, type, title, entity_type)
+  values (:'WPCA', 'message_received', 'msg', 'conversation') returning id as wp_n3 \gset
+select pg_temp.assert((select count(*) from public.push_deliveries where notification_id = :'wp_n1') = 2,
+  'WP724-5 alert kolejkuje wysyłkę na każde aktywne urządzenie');
+select pg_temp.assert(not exists (select 1 from public.push_deliveries where notification_id in (:'wp_n2', :'wp_n3')),
+  'WP724-5b propozycje i wiadomości bez push');
+-- Kontrola ujemna: bramka typu zdjęta → propozycja trafia do kolejki (to bramka zamyka kanał).
+begin;
+create or replace function public.push_notification_allowed(p_type text, p_entity_type text)
+returns boolean language sql immutable as $$ select true $$;
+insert into public.notifications(profile_id, type, title, entity_type)
+  values (:'WPCA', 'offer_received', 'offer', 'offer') returning id as wp_nn \gset
+select pg_temp.assert(exists (select 1 from public.push_deliveries where notification_id = :'wp_nn'),
+  'WP724-5n kontrola ujemna: bez bramki typu propozycja szłaby push');
+rollback;
+-- Kontrola ujemna: bez triggera alert nie ma wysyłki.
+begin;
+drop trigger trg_notifications_push_enqueue on public.notifications;
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":1}', 'saved_search', :'WPSS') returning id as wp_nt \gset
+select pg_temp.assert(not exists (select 1 from public.push_deliveries where notification_id = :'wp_nt'),
+  'WP724-5t kontrola ujemna: bez triggera alert bez kolejki');
+rollback;
+-- push_enabled = false → brak kolejki.
+update public.notification_preferences set push_enabled = false where profile_id = :'WPCA';
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":1}', 'saved_search', :'WPSS') returning id as wp_n4 \gset
+select pg_temp.assert(not exists (select 1 from public.push_deliveries where notification_id = :'wp_n4'),
+  'WP724-5c wyłączony push = brak kolejki');
+update public.notification_preferences set push_enabled = true where profile_id = :'WPCA';
+
+-- WP724-6: claim tylko service_role, język odbiorcy, liczba ofert, dzierżawa.
+set role authenticated; set app.current_uid = :'WPCA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select * from public.claim_push_deliveries(10)$$, 'permission denied',
+  'WP724-6 klient nie pobiera kolejki');
+reset role;
+set role service_role;
+select count(*) as wp_claimed,
+       coalesce(bool_and(locale = 'nl' and job_count = 3 and entity_type = 'saved_search' and attempts = 1), false) as wp_claim_ok
+  from public.claim_push_deliveries(10) \gset
+select count(*) as wp_again from public.claim_push_deliveries(10) \gset
+reset role;
+select pg_temp.assert(:'wp_claimed' = '2' and :'wp_again' = '0', 'WP724-6b dwie wysyłki, dzierżawa blokuje drugie pobranie');
+select pg_temp.assert(:'wp_claim_ok'::boolean, 'WP724-6c język odbiorcy i liczba ofert w danych wysyłki');
+select d.id as wp_d1 from public.push_deliveries d where d.subscription_id = :'wp_sub1' and d.notification_id = :'wp_n1' \gset
+select d.id as wp_d2 from public.push_deliveries d where d.subscription_id = :'wp_sub2' and d.notification_id = :'wp_n1' \gset
+
+-- WP724-7: 410 → urządzenie unieważnione (`gone`); retry → termin w przyszłości; sent.
+set role service_role;
+select public.finish_push_delivery(:'wp_d1', 'gone', 'http_410') as wp_f1 \gset
+select public.finish_push_delivery(:'wp_d1', 'sent') as wp_f1b \gset
+select public.finish_push_delivery(:'wp_d2', 'retry', 'http_503', 300) as wp_f2 \gset
+reset role;
+select pg_temp.assert(:'wp_f1' = 't' and :'wp_f1b' = 'f', 'WP724-7 wynik tylko pod dzierżawą (CAS)');
+select pg_temp.assert((select revoked_reason = 'gone' from public.push_subscriptions where id = :'wp_sub1'),
+  'WP724-7b 410 unieważnia urządzenie');
+select pg_temp.assert((select status = 'queued' and lease_until is null and next_attempt_at > now() + interval '4 minutes'
+                         from public.push_deliveries where id = :'wp_d2'),
+  'WP724-7c ponowienie po Retry-After');
+update public.push_deliveries set next_attempt_at = now() where id = :'wp_d2';
+set role service_role;
+select count(*) as wp_c2 from public.claim_push_deliveries(10) \gset
+select public.finish_push_delivery(:'wp_d2', 'sent') as wp_f3 \gset
+reset role;
+select pg_temp.assert(:'wp_c2' = '1' and (select status = 'sent' and sent_at is not null from public.push_deliveries where id = :'wp_d2')
+  and (select last_success_at is not null and failure_count = 0 from public.push_subscriptions where id = :'wp_sub2'),
+  'WP724-7d wysłane: status i ostatnia udana wysyłka urządzenia');
+
+-- WP724-8: wyłączony alert → wysyłka wygaszona przy claimie; wysyłka sprzed doby → expired.
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n5 \gset
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n6 \gset
+update public.push_deliveries set created_at = now() - interval '25 hours' where notification_id = :'wp_n6';
+update public.saved_searches set alerts_enabled = false where id = :'WPSS';
+set role service_role;
+select count(*) as wp_c3 from public.claim_push_deliveries(10) \gset
+reset role;
+select pg_temp.assert(:'wp_c3' = '0'
+  and (select status from public.push_deliveries where notification_id = :'wp_n5') = 'suppressed'
+  and (select status from public.push_deliveries where notification_id = :'wp_n6') = 'expired',
+  'WP724-8 wyłączony alert wygaszony, wysyłka sprzed doby nieaktualna');
+update public.saved_searches set alerts_enabled = true where id = :'WPSS';
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n7 \gset
+update public.notification_preferences set push_enabled = false where profile_id = :'WPCA';
+set role service_role;
+select count(*) as wp_c4 from public.claim_push_deliveries(10) \gset
+reset role;
+select pg_temp.assert(:'wp_c4' = '0' and (select status from public.push_deliveries where notification_id = :'wp_n7') = 'suppressed',
+  'WP724-8b push wyłączony po kolejkowaniu = brak wysyłki');
+update public.notification_preferences set push_enabled = true where profile_id = :'WPCA';
+
+-- WP724-9: przejęcie urządzenia przez inne konto — niewysłane alerty poprzedniego wygaszone.
+insert into public.notifications(profile_id, type, title, data, entity_type, entity_id)
+  values (:'WPCA', 'job_match', 'saved_search', '{"count":2}', 'saved_search', :'WPSS') returning id as wp_n8 \gset
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select public.register_push_subscription(:'WPEP2', 'D' || repeat('A', 86), repeat('S', 22), null) as wp_sub2b \gset
+reset role;
+select pg_temp.assert(:'wp_sub2b' = :'wp_sub2'
+  and (select profile_id = :'WPCB'::uuid from public.push_subscriptions where id = :'wp_sub2')
+  and (select status from public.push_deliveries where notification_id = :'wp_n8') = 'suppressed',
+  'WP724-9 przejęte urządzenie nie dostaje alertów poprzedniego konta');
+
+-- WP724-10: wycofanie ostatniego urządzenia → push_enabled = false.
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select public.unregister_push_subscription(:'WPEP2') as wp_u1 \gset
+reset role;
+select pg_temp.assert(:'wp_u1' = 't'
+  and (select revoked_reason = 'user' from public.push_subscriptions where id = :'wp_sub2')
+  and not (select push_enabled from public.notification_preferences where profile_id = :'WPCB'),
+  'WP724-10 wycofanie ostatniego urządzenia wyłącza push');
+
+-- WP724-11: limit 10 aktywnych urządzeń na konto.
+set role authenticated; set app.current_uid = :'WPCB'; select pg_temp.assert_client_role();
+select count(public.register_push_subscription('https://fcm.googleapis.com/fcm/send/wp724-lim-' || g, 'B' || repeat('A', 86), repeat('Q', 22)))
+  from generate_series(1, 10) g;
+select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/fcm/send/wp724-lim-11', 'B' || repeat('A', 86), repeat('Q', 22))$$,
+  'PUSH_DEVICE_LIMIT', 'WP724-11 jedenaste urządzenie odrzucone');
+reset role;
+
+-- WP724-12: 5 kolejnych porażek unieważnia urządzenie (`failed`).
+select id as wp_lim1 from public.push_subscriptions where endpoint = 'https://fcm.googleapis.com/fcm/send/wp724-lim-1' \gset
+update public.push_subscriptions set failure_count = 4 where id = :'wp_lim1';
+insert into public.push_deliveries(subscription_id, notification_id, status, attempts, lease_until)
+  values (:'wp_lim1', :'wp_n1', 'queued', 1, now() + interval '1 minute') returning id as wp_d9 \gset
+set role service_role;
+select public.finish_push_delivery(:'wp_d9', 'failed', 'http_400') as wp_f9 \gset
+reset role;
+select pg_temp.assert((select revoked_reason = 'failed' from public.push_subscriptions where id = :'wp_lim1'),
+  'WP724-12 piąta porażka unieważnia urządzenie');
+
+-- WP724-13: retencja — stare wysyłki i dawno wycofane urządzenia znikają.
+update public.push_deliveries set created_at = now() - interval '8 days' where notification_id = :'wp_n1';
+update public.push_subscriptions set revoked_at = now() - interval '31 days' where id = :'wp_sub1';
+set role service_role;
+select public.purge_push_data() as wp_purged \gset
+reset role;
+select pg_temp.assert(:'wp_purged'::int >= 2
+  and not exists (select 1 from public.push_subscriptions where id = :'wp_sub1')
+  and exists (select 1 from public.push_subscriptions where id = :'wp_sub2'),
+  'WP724-13 retencja usuwa stare wysyłki i wycofane urządzenia (świeżo wycofane zostają)');
+-- WP724-14: usunięcie konta = kaskada urządzeń.
+delete from auth.users where id = :'WPCB';
+select pg_temp.assert(not exists (select 1 from public.push_subscriptions where profile_id = :'WPCB'),
+  'WP724-14 usunięcie konta usuwa urządzenia');
+reset role; reset app.current_uid;
+\echo 'WP724 Web Push: PASS'
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

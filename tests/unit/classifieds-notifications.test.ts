@@ -151,8 +151,8 @@ describe('preferencje e-mail bez kategorii rekrutacyjnych', () => {
 
     it('ukryte kolumny z bazy (FOR UPDATE), nie z wejścia klienta', async () => {
       resetFakeDb({ id: PROFILE, role: 'candidate' })
-        .rows('notification-preferences.recruitment-columns', [
-          { email_applications: false, email_offers: false, email_messages: false },
+        .rows('notification-preferences.server-columns', [
+          { email_applications: false, email_offers: false, email_messages: false, push_enabled: false },
         ])
         .rpc('set_notification_preferences', null);
       const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
@@ -163,15 +163,36 @@ describe('preferencje e-mail bez kategorii rekrutacyjnych', () => {
         email_applications: false, email_offers: false, email_messages: false,
         email_job_matches: false, email_marketing: true, push_enabled: false, in_app_enabled: true,
       });
-      expect(fakeDb.callsTo('notification-preferences.recruitment-columns')[0]?.text).toMatch(/FOR UPDATE/);
+      expect(fakeDb.callsTo('notification-preferences.server-columns')[0]?.text).toMatch(/FOR UPDATE/);
       // Wersja treści zgody = pola pokazane w trybie ogłoszeniowym.
       expect(call!.args['p_wording_version']).toBe(emailConsentWordingVersion('pl', 'candidate', false));
       expect(call!.args['p_wording_version']).not.toBe(emailConsentWordingVersion('pl', 'candidate', true));
     });
 
+    it('#724: push_enabled tylko z bazy — nieaktualny formularz nie wyłącza ani nie włącza push', async () => {
+      resetFakeDb({ id: PROFILE, role: 'candidate' })
+        .rows('notification-preferences.server-columns', [
+          { email_applications: true, email_offers: true, email_messages: true, push_enabled: true },
+        ])
+        .rpc('set_notification_preferences', null);
+      const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
+      expect(await updateNotificationPreferences({ ...input, pushEnabled: false })).toEqual({ ok: true });
+      expect(JSON.parse(fakeDb.callsTo('set_notification_preferences')[0]!.args['p_prefs'] as string))
+        .toMatchObject({ push_enabled: true });
+      // Kontrola ujemna: wejście `pushEnabled: true` przy wyłączonym push w bazie nie włącza kanału.
+      resetFakeDb({ id: PROFILE, role: 'candidate' })
+        .rows('notification-preferences.server-columns', [
+          { email_applications: true, email_offers: true, email_messages: true, push_enabled: false },
+        ])
+        .rpc('set_notification_preferences', null);
+      expect(await updateNotificationPreferences({ ...input, pushEnabled: true })).toEqual({ ok: true });
+      expect(JSON.parse(fakeDb.callsTo('set_notification_preferences')[0]!.args['p_prefs'] as string))
+        .toMatchObject({ push_enabled: false });
+    });
+
     it('brak wiersza preferencji → wartości domyślne kolumn (nie wejście klienta)', async () => {
       resetFakeDb({ id: PROFILE, role: 'employer' })
-        .rows('notification-preferences.recruitment-columns', [])
+        .rows('notification-preferences.server-columns', [])
         .rpc('set_notification_preferences', null);
       const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
       expect(await updateNotificationPreferences({ ...input, emailApplications: false })).toEqual({ ok: true });
@@ -184,16 +205,19 @@ describe('preferencje e-mail bez kategorii rekrutacyjnych', () => {
     withRecruitmentMode();
     beforeEach(() => vi.resetModules());
 
-    it('bez odczytu ukrytych kolumn', async () => {
-      resetFakeDb({ id: PROFILE, role: 'candidate' }).rpc('set_notification_preferences', null);
+    it('kategorie rekrutacyjne z wejścia (push_enabled nadal z bazy, #724)', async () => {
+      resetFakeDb({ id: PROFILE, role: 'candidate' })
+        .rows('notification-preferences.server-columns', [
+          { email_applications: true, email_offers: true, email_messages: true, push_enabled: true },
+        ])
+        .rpc('set_notification_preferences', null);
       const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
       expect(await updateNotificationPreferences({
         emailApplications: false, emailOffers: true, emailMessages: false,
         emailJobMatches: true, emailMarketing: false, pushEnabled: false, inAppEnabled: true, locale: 'en',
       })).toEqual({ ok: true });
-      expect(fakeDb.callsTo('notification-preferences.recruitment-columns')).toHaveLength(0);
       expect(JSON.parse(fakeDb.callsTo('set_notification_preferences')[0]!.args['p_prefs'] as string))
-        .toMatchObject({ email_applications: false, email_messages: false });
+        .toMatchObject({ email_applications: false, email_messages: false, push_enabled: true });
     });
   });
 });

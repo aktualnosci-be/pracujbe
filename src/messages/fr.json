@@ -4197,5 +4197,39 @@
     "extra_leave": "Jours de congé supplémentaires",
     "training": "Formations payées par l’employeur",
     "phone_laptop": "Téléphone ou ordinateur portable professionnel"
+  },
+  "push": {
+    "savedSearchTitle": "Nouvelles offres de votre recherche enregistrée",
+    "savedSearchBody": "Nouvelles offres : {count}. Consultez-les dans votre espace.",
+    "savedSearchBodyNoCount": "De nouvelles offres correspondent à votre recherche."
+  },
+  "pushSettings": {
+    "sectionTitle": "Notifications push",
+    "intro": "Notifications sur cet appareil pour les nouvelles offres de vos recherches enregistrées. Nous n’envoyons pas de notifications push pour autre chose.",
+    "inAppNote": "La notification push accompagne la notification de votre espace — si vous désactivez les notifications de l’espace, la notification push ne sera pas envoyée non plus.",
+    "unsupported": "Ce navigateur ne prend pas en charge les notifications push.",
+    "statusOn": "Les notifications sont activées sur cet appareil.",
+    "statusOff": "Les notifications sont désactivées sur cet appareil.",
+    "enable": "Activer sur cet appareil",
+    "enabling": "Activation…",
+    "disable": "Désactiver sur cet appareil",
+    "disabling": "Désactivation…",
+    "denied": "Les notifications de ce site sont bloquées dans le navigateur. Pour les activer, modifiez les autorisations du site dans les paramètres du navigateur.",
+    "enabled": "Notifications activées sur cet appareil.",
+    "disabled": "Notifications désactivées sur cet appareil.",
+    "removed": "Appareil supprimé.",
+    "errorGeneric": "Le réglage n’a pas pu être enregistré. Réessayez.",
+    "errorDeviceLimit": "La limite de 10 appareils est atteinte. Supprimez-en un dans la liste ci-dessous.",
+    "errorDenied": "Le navigateur a bloqué les notifications. Vous pouvez changer cela dans les paramètres du site.",
+    "errorDismissed": "L’autorisation des notifications n’a pas été donnée. Rien n’a été activé.",
+    "devicesTitle": "Appareils avec notifications",
+    "devicesEmpty": "Aucun appareil.",
+    "loadError": "La liste des appareils n’a pas pu être chargée.",
+    "deviceUnknown": "Appareil inconnu",
+    "thisDevice": "(cet appareil)",
+    "deviceAdded": "Ajouté : {date}",
+    "deviceLastSent": "Dernière notification : {date}",
+    "removeDevice": "Supprimer",
+    "removeDeviceLabel": "Supprimer l’appareil {name}"
   }
 }
