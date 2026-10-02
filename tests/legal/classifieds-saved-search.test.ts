@@ -311,7 +311,7 @@ describe('#1148 akcje w trybie ogłoszeniowym (konto kandydata bez onboardingu)'
     const RPCS = [
       'ai_budget_release_stale_reservations', 'expire_due_jobs', 'purge_guest_application_requests',
       'process_saved_search_alerts', 'process_email_campaigns', 'purge_job_funnel_data',
-      'purge_stale_message_attachments', 'rate_limit_gc', 'processed_webhooks_gc',
+      'purge_stale_message_attachments', 'rate_limit_gc', 'processed_webhooks_gc', 'purge_push_data',
     ];
     beforeEach(() => {
       resetFakeDb(null);

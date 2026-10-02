@@ -4191,5 +4191,39 @@
     "remindDue": "Czas na kontakt",
     "openSource": "Otwórz ogłoszenie",
     "listLabel": "Wpisy w dzienniku aplikacji"
+  },
+  "push": {
+    "savedSearchTitle": "Nowe oferty z zapisanego wyszukiwania",
+    "savedSearchBody": "Nowe oferty: {count}. Zobacz w panelu.",
+    "savedSearchBodyNoCount": "Są nowe oferty pasujące do Twojego wyszukiwania."
+  },
+  "pushSettings": {
+    "sectionTitle": "Powiadomienia push",
+    "intro": "Powiadomienia na tym urządzeniu o nowych ofertach z Twoich zapisanych wyszukiwań. Nie wysyłamy push w innych sprawach.",
+    "inAppNote": "Push przychodzi razem z powiadomieniem w panelu — gdy wyłączysz powiadomienia w panelu, push też nie przyjdzie.",
+    "unsupported": "Ta przeglądarka nie obsługuje powiadomień push.",
+    "statusOn": "Powiadomienia są włączone na tym urządzeniu.",
+    "statusOff": "Powiadomienia są wyłączone na tym urządzeniu.",
+    "enable": "Włącz na tym urządzeniu",
+    "enabling": "Włączanie…",
+    "disable": "Wyłącz na tym urządzeniu",
+    "disabling": "Wyłączanie…",
+    "denied": "Powiadomienia dla tej strony są zablokowane w przeglądarce. Aby je włączyć, zmień uprawnienia strony w ustawieniach przeglądarki.",
+    "enabled": "Włączono powiadomienia na tym urządzeniu.",
+    "disabled": "Wyłączono powiadomienia na tym urządzeniu.",
+    "removed": "Usunięto urządzenie.",
+    "errorGeneric": "Nie udało się zapisać ustawienia. Spróbuj ponownie.",
+    "errorDeviceLimit": "Osiągnięto limit 10 urządzeń. Usuń jedno z listy poniżej.",
+    "errorDenied": "Przeglądarka zablokowała powiadomienia. Możesz to zmienić w ustawieniach strony.",
+    "errorDismissed": "Nie udzielono zgody na powiadomienia. Nic nie zostało włączone.",
+    "devicesTitle": "Urządzenia z powiadomieniami",
+    "devicesEmpty": "Brak urządzeń.",
+    "loadError": "Nie udało się wczytać listy urządzeń.",
+    "deviceUnknown": "Nieznane urządzenie",
+    "thisDevice": "(to urządzenie)",
+    "deviceAdded": "Dodano: {date}",
+    "deviceLastSent": "Ostatnie powiadomienie: {date}",
+    "removeDevice": "Usuń",
+    "removeDeviceLabel": "Usuń urządzenie {name}"
   }
 }
