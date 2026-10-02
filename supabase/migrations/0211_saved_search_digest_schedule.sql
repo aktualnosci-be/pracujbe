@@ -1,13 +1,53 @@
 -- =============================================================================
--- Rollback 0997 — termin digestu zapisanych wyszukiwań (#1112).
--- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
--- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
--- (supabase/tests/saved-search-schedule-rollback.sql wykonuje go w transakcji i cofa).
+-- 0211 (numer tymczasowy — ostateczny nada integrator) — alerty zapisanych wyszukiwań bez
+-- dryfu terminu digestu (#1112, TIME21-04).
 --
--- Przywraca process_saved_search_alerts z 0138 (treść 1:1) i usuwa saved_search_next_run_at.
--- Zapisane `next_run_at` zostają (zwykłe terminy — kolejny przebieg policzy je po staremu).
+-- Problem: `process_saved_search_alerts` (0138) ustawiał `next_run_at = now() + 1 dzień/7 dni`,
+-- czyli od chwili PRZEBIEGU. Cron co godzinę (albo spóźniony/nieregularny) przesuwał porę
+-- digestu z każdym przebiegiem (08:00 → 08:20 → 08:45 …), a odstępy rosły ponad dobę/tydzień.
+--
+-- Zmiana:
+--   * `saved_search_next_run_at(poprzedni termin, częstotliwość, chwila przebiegu)` — kolejny
+--     termin = poprzedni termin + pełne okresy (1 dzień / 7 dni) w czasie ŚCIENNYM
+--     Europe/Brussels (pora nie przeskakuje o godzinę przy zmianie czasu); pierwszy termin
+--     PÓŹNIEJSZY niż chwila przebiegu (zaległe okresy są pomijane — jeden digest, bez serii);
+--   * `process_saved_search_alerts` — treść 1:1 z 0138, poza wyliczeniem `next_run_at`.
+-- Watermark (`last_checked_at`), wybór ofert, blokady firm, digest ≤ 5 ofert i klucze
+-- idempotencji bez zmian. Tryb ogłoszeniowy: bez zmian (alerty wynikają z filtrów, #1148).
+-- Rollback: supabase/rollback/0211_saved_search_digest_schedule.down.sql.
 -- =============================================================================
 
+create or replace function public.saved_search_next_run_at(
+  p_previous timestamptz, p_frequency text, p_run_at timestamptz
+) returns timestamptz language plpgsql stable set search_path = public, pg_temp as $$
+declare
+  v_days integer := case when p_frequency = 'weekly' then 7 else 1 end;
+  v_local timestamp;
+  v_steps bigint;
+  v_next timestamptz;
+begin
+  if p_run_at is null then return null; end if;
+  -- Brak poprzedniego terminu albo termin z przyszłości (taki wiersz nie jest wybierany) —
+  -- zachowanie sprzed 0211: okres od chwili przebiegu.
+  if p_previous is null or p_previous > p_run_at then
+    return p_run_at + make_interval(days => v_days);
+  end if;
+  v_local := p_previous at time zone 'Europe/Brussels';
+  -- Liczba okresów do pierwszego terminu po przebiegu (przybliżenie w dobach UTC; pętla
+  -- koryguje różnicę ±1 h przy zmianie czasu).
+  v_steps := floor(extract(epoch from (p_run_at - p_previous)) / (86400 * v_days))::bigint + 1;
+  v_next := (v_local + make_interval(days => (v_steps * v_days)::integer)) at time zone 'Europe/Brussels';
+  while v_next <= p_run_at loop
+    v_steps := v_steps + 1;
+    v_next := (v_local + make_interval(days => (v_steps * v_days)::integer)) at time zone 'Europe/Brussels';
+  end loop;
+  return v_next;
+end $$;
+revoke all on function public.saved_search_next_run_at(timestamptz, text, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.saved_search_next_run_at(timestamptz, text, timestamptz) to service_role;
+
+-- --- Worker (0138) — kolejny termin bez dryfu ------------------------------------------
 create or replace function public.process_saved_search_alerts(p_limit integer default 200)
 returns integer language plpgsql security definer set search_path = public, pg_temp as $$
 declare
@@ -94,8 +134,9 @@ begin
 
     update public.saved_searches
       set last_checked_at = v_run_at,
-          next_run_at = v_run_at + case v_search.frequency
-                                     when 'weekly' then interval '7 days' else interval '1 day' end,
+          -- 0211 (#1112): stała pora w Europe/Brussels od poprzedniego terminu, nie od chwili
+          -- przebiegu — spóźniony/nieregularny cron nie przesuwa kolejnych digestów.
+          next_run_at = public.saved_search_next_run_at(v_search.next_run_at, v_search.frequency, v_run_at),
           last_alert_at = case when v_count > 0 then v_run_at else last_alert_at end
       where id = v_search.id;
   end loop;
@@ -104,5 +145,3 @@ begin
 end $$;
 revoke all on function public.process_saved_search_alerts(integer) from public, anon, authenticated;
 grant execute on function public.process_saved_search_alerts(integer) to service_role;
-
-drop function if exists public.saved_search_next_run_at(timestamptz, text, timestamptz);

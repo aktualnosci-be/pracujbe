@@ -1500,12 +1500,12 @@ ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontro
 bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
 SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
 za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
-Termin digestu bez dryfu (#1112, migracja `0997` — numer tymczasowy): worker liczył
+Termin digestu bez dryfu (#1112, migracja `0211` — numer tymczasowy): worker liczył
 `next_run_at` od chwili przebiegu (cron co godzinę przesuwał porę digestu); teraz
 `saved_search_next_run_at` = poprzedni termin + pełne okresy w czasie ściennym Europe/Brussels
 (stała pora także przy zmianie czasu), pierwszy termin po przebiegu, zaległe okresy pominięte.
 Dowód: `rls.sql` sekcja SD1112 (kontrola ujemna: worker z 0138 dryfuje), rollback
-`0997_…down.sql` (`saved-search-schedule-rollback.sql`).
+`0211_…down.sql` (`saved-search-schedule-rollback.sql`).
 Tryb ogłoszeniowy (#1148, bez migracji): zapisane wyszukiwania i alerty działają bez zmian, bo
 wynikają wyłącznie z filtrów użytkownika. Strażnik `tests/legal/classifieds-saved-search.test.ts`:
 najnowsze definicje funkcji `*saved_search*` bez profilu kandydata i dopasowań (wyjątek: blokada

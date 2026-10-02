@@ -25016,7 +25016,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- SD1112. Termin digestu zapisanych wyszukiwań bez dryfu (#1112, TIME21-04, migracja 0997).
+-- SD1112. Termin digestu zapisanych wyszukiwań bez dryfu (#1112, TIME21-04, migracja 0211).
 --   * `saved_search_next_run_at`: poprzedni termin + pełne okresy w czasie ściennym
 --     Europe/Brussels, pierwszy termin po chwili przebiegu (zaległe okresy pominięte), pora
 --     stała także przy zmianie czasu (jesień i wiosna);
@@ -25068,7 +25068,7 @@ rollback;
 
 -- SD1112-N (kontrola ujemna): definicja z 0138 dryfuje — termin = chwila przebiegu + 1 dzień.
 begin;
-\ir ../rollback/0997_saved_search_digest_schedule.down.sql
+\ir ../rollback/0211_saved_search_digest_schedule.down.sql
 update public.saved_searches set alerts_enabled = true, frequency = 'daily',
   next_run_at = now() - interval '20 minutes' where id = :'sx2';
 set local role service_role;
@@ -25076,7 +25076,7 @@ select public.process_saved_search_alerts(1000);
 reset role;
 select pg_temp.assert(
   (select next_run_at from public.saved_searches where id = :'sx2') = now() + interval '1 day',
-  'SD1112-N kontrola ujemna: bez 0997 termin przesuwa się o spóźnienie przebiegu');
+  'SD1112-N kontrola ujemna: bez 0211 termin przesuwa się o spóźnienie przebiegu');
 -- P2C994 (0210, numer tymczasowy): współbieżność paczek kampanii (#906), synchronizacji
 --        tłumaczeń oferty przy zawieszeniu firmy (#802) i tokenu zaproszenia przy limicie
 --        e-maili (#793). Sesje równoległe przez dblink; fixture'y zatwierdzane osobną sesją.
