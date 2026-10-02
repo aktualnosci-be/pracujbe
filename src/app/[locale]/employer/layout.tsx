@@ -3,8 +3,10 @@ import type { ReactNode } from 'react';
 
 import { EmployerShell, type EmployerShellMode } from '@/components/employer/EmployerShell';
 import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
+import { RevokedCompanyAccess } from '@/components/employer/RevokedCompanyAccess';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
+import { panelLoginHref } from '@/lib/auth/panel-login-redirect';
 import type { Locale } from '@/i18n/routing';
 import { getCurrentIdentity, type PortalIdentity } from '@/lib/auth/current';
 import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
@@ -16,6 +18,7 @@ import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { getEmployerShellData } from '@/lib/data/employer';
 import { getMyTeamInvitations } from '@/lib/data/team';
+import { getRevokedCompanyNames } from '@/lib/data/revoked-company-access';
 import { getTranslations } from 'next-intl/server';
 import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
 
@@ -29,7 +32,9 @@ import type { CompanySwitcherCompany } from '@/components/employer/CompanySwitch
  * (`getCurrentIdentity`) oraz (2) aktywnego członkostwa w firmie (`company_members.is_active`,
  * odczyt pod RLS z UUID sesji). Brak sesji → /logowanie. Konto pracodawcy bez firmy (np.
  * nieudany bootstrap po potwierdzeniu adresu — #365) → formularz zakładania firmy
- * (CompanyOnboarding); inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa →
+ * (CompanyOnboarding); konto z samymi odebranymi członkostwami (#1210) → komunikat o odebranym
+ * dostępie + zaproszenia + własna firma przez `create_additional_company` (RevokedCompanyAccess);
+ * inne role bez firmy → /rejestracja-pracodawca. Błąd odczytu członkostwa →
  * chrome z komunikatem i ponowieniem (bez treści strony). Bez konfiguracji kont → tryb demo
  * (panel na danych DEMO). `force-dynamic`, bo guard zależy od sesji.
  *
@@ -42,15 +47,23 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Czy osoba ma aktywne członkostwo w jakiejkolwiek firmie (RLS: własne wiersze). `null` = błąd. */
-async function hasActiveMembership(identity: PortalIdentity): Promise<boolean | null> {
+type MembershipState = 'active' | 'revoked' | 'none';
+
+/**
+ * Stan członkostw osoby (RLS: własne wiersze): `active` = co najmniej jedno aktywne,
+ * `revoked` = są wyłącznie nieaktywne (dostęp odebrany, #1210), `none` = brak. `null` = błąd.
+ */
+async function membershipState(identity: PortalIdentity): Promise<MembershipState | null> {
   try {
     return await withUserTransaction(await getDomainPool(), identity.id, async (tx) => {
       const result = (await tx.query(
-        'SELECT EXISTS (SELECT 1 FROM public.company_members WHERE profile_id = $1 AND is_active = true) AS member',
+        `SELECT EXISTS (SELECT 1 FROM public.company_members WHERE profile_id = $1 AND is_active = true) AS member,
+                EXISTS (SELECT 1 FROM public.company_members WHERE profile_id = $1 AND is_active = false) AS revoked`,
         [identity.id],
-      )) as { rows: { member: boolean }[] };
-      return result.rows[0]?.member === true;
+      )) as { rows: { member: boolean; revoked?: boolean }[] };
+      const row = result.rows[0];
+      if (row?.member === true) return 'active';
+      return row?.revoked === true ? 'revoked' : 'none';
     });
   } catch {
     return null;
@@ -83,29 +96,32 @@ export default async function EmployerLayout({
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
     if (!identity) {
-      redirect({ href: '/logowanie', locale: locale as Locale });
+      // #1090: powrót na otwieraną stronę panelu po zalogowaniu.
+      redirect({ href: await panelLoginHref(), locale: locale as Locale });
       return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
     hasSession = true;
 
     // Aktywne członkostwo w firmie jest wymagane, by wejść do panelu pracodawcy.
-    const member = await hasActiveMembership(identity);
-    if (member === null) {
+    const state = await membershipState(identity);
+    if (state === null) {
       return (
         <EmployerShell mode="error" keepSessionAlive={hasSession} recruitmentEnabled={recruitmentEnabled}>
           {null}
         </EmployerShell>
       );
     }
-    if (!member) {
+    if (state !== 'active') {
       if (identity.role !== 'employer') {
         redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
       }
       // #403: zaproszenia do zespołów (błąd odczytu nie blokuje zakładania własnej firmy).
       // #365: nazwa firmy z rejestracji (metadane konta) wypełnia formularz domyślnie.
-      const [mine, defaultName] = await Promise.all([
+      const revoked = state === 'revoked';
+      const [mine, defaultName, revokedNames] = await Promise.all([
         getMyTeamInvitations(),
-        readSignupCompanyName(identity),
+        revoked ? Promise.resolve('') : readSignupCompanyName(identity),
+        revoked ? getRevokedCompanyNames(identity.id) : Promise.resolve([] as string[]),
       ]);
       const tTeam = await getTranslations({ locale, namespace: 'team' });
       const dateFmt = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'Europe/Brussels' });
@@ -120,10 +136,13 @@ export default async function EmployerLayout({
       });
       return (
         <EmployerShell mode="ok" keepSessionAlive={hasSession} recruitmentEnabled={recruitmentEnabled}>
-          <CompanyOnboarding
-            defaultName={defaultName}
-            invitations={invitations}
-          />
+          {revoked ? (
+            // #1210: `create_first_company` odmawia kontu z odebranym dostępem — własna firma
+            // idzie ścieżką `create_additional_company`, a komunikat mówi, co się stało.
+            <RevokedCompanyAccess companyNames={revokedNames} invitations={invitations} />
+          ) : (
+            <CompanyOnboarding defaultName={defaultName} invitations={invitations} />
+          )}
         </EmployerShell>
       );
     }

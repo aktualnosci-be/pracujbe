@@ -37,6 +37,17 @@ describe('company read state', () => {
     });
   });
 
+  it('#708: język opisu firmy — tylko obsługiwany kod; inna wartość z bazy = brak języka', async () => {
+    const row = { id: 'company-1', name: 'Acme', slug: 'acme', status: 'verified', has_description: true };
+    db([{ ...row, description_locale: 'fr' }]);
+    const ok = await getMyCompany();
+    expect(ok.status === 'ok' && ok.company?.descriptionLanguage).toEqual({ hasDescription: true, locale: 'fr' });
+    // Kontrola ujemna: kod spoza języków serwisu nie trafia do formularza.
+    db([{ ...row, description_locale: 'de' }]);
+    const other = await getMyCompany();
+    expect(other.status === 'ok' && other.company?.descriptionLanguage).toEqual({ hasDescription: true, locale: null });
+  });
+
   it('allows creation only when active membership is absent', async () => {
     db([]);
     vi.mocked(getActiveCompany).mockResolvedValue({
@@ -76,6 +87,7 @@ describe('company read state', () => {
         description: null,
         descriptionReview: null,
         agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
+        descriptionLanguage: { hasDescription: false, locale: null },
         canEdit: true,
       },
     });
@@ -86,6 +98,7 @@ describe('company read state', () => {
       id: 'company-1', name: 'Acme', status: 'verified', description: 'Stary opis',
       description_pending: 'Nowy opis', description_review_status: 'pending',
       description_pending_at: '2026-09-29 10:00:00.123+00', description_review_reason: null,
+      description_locale_pending: 'fr',
     }]);
     expect(await getMyCompany()).toMatchObject({
       company: {
@@ -95,6 +108,7 @@ describe('company read state', () => {
           text: 'Nowy opis',
           submittedAt: '2026-09-29 10:00:00.123+00',
           reason: null,
+          locale: 'fr',
         },
       },
     });
@@ -218,6 +232,7 @@ describe('getCompanyById (#843) — firma z linku decyzji, niezależnie od aktyw
         description: null,
         descriptionReview: null,
         agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
+        descriptionLanguage: { hasDescription: false, locale: null },
         canEdit: true,
       },
     });

@@ -158,10 +158,20 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     });
   });
 
-  it('gmina spoza 10 tłumaczonych miast: nazwa z bazy w języku strony (#1119)', async () => {
-    dictionary({ exact: [{ slug: 'aalst', name: 'Alost' }] });
-    expect(await jobCityAssist({ city: 'Aalst 9300', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Alost' } });
-    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['Aalst 9300', 'fr']);
+  it('gmina spoza tłumaczonych miast (katalog landingów #920): nazwa ze słownika', async () => {
+    dictionary({ exact: [{ slug: 'lokeren', name: 'Lokeren' }] });
+    expect(await jobCityAssist({ city: 'Lokeren', locale: 'fr' })).toMatchObject({ match: { slug: 'lokeren', name: 'Lokeren' } });
+  });
+
+  it('miasto z katalogu landingów (#920): nazwa w języku widoku', async () => {
+    dictionary({ exact: [{ slug: 'aalst', name: 'Aalst' }] });
+    expect(await jobCityAssist({ city: 'Aalst', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Alost' } });
+  });
+
+  it('gmina spoza katalogu tłumaczonych miast: nazwa z bazy w języku strony (#1119)', async () => {
+    dictionary({ exact: [{ slug: 'ronse', name: 'Renaix' }] });
+    expect(await jobCityAssist({ city: 'Ronse 9600', locale: 'fr' })).toMatchObject({ match: { slug: 'ronse', name: 'Renaix' } });
+    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['Ronse 9600', 'fr']);
   });
 
   it('nieznana nazwa = brak dopasowania (nie błąd)', async () => {

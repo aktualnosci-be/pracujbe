@@ -2,6 +2,7 @@ import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import nlMessages from '../../src/messages/nl.json';
+import plMessages from '../../src/messages/pl.json';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
 
@@ -78,6 +79,36 @@ test('profil: BreadcrumbList = widoczna ścieżka (Strona główna → Oferty pr
   expect(items[0]!.item).toMatch(/\/nl$/);
   expect(items[1]!.item).toMatch(/\/nl\/oferty-pracy$/);
   expect(items[2]!.item).toMatch(new RegExp(`/nl${PROFILE}$`));
+});
+
+test('#686: strona WWW firmy = nazwany link zewnętrzny (nowa karta, bezpieczny rel), też w JSON-LD', async ({ page }) => {
+  await page.goto(`/pl${PROFILE}`);
+  const link = page.getByRole('link', { name: `example.com/${SLUG} ${plMessages.companyProfile.opensInNewTab}` });
+  await expect(link).toHaveAttribute('href', `https://www.example.com/${SLUG}`);
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', /noopener/);
+  await expect(link).toHaveAttribute('rel', /noreferrer/);
+  const [org] = await organizations(page);
+  expect(org!.sameAs).toBe(`https://www.example.com/${SLUG}`);
+  // Logo spoza witryny nie jest ładowane (CSP) — nagłówek pokazuje inicjały, bez obrazu.
+  await expect(page.locator('header img')).toHaveCount(0);
+});
+
+test('#708: opis w języku strony bez dopisku; opis w innym języku oznaczony (lang + informacja)', async ({ page }) => {
+  await page.goto(`/pl${PROFILE}`);
+  await expect(page.getByTestId('company-description')).toHaveAttribute('lang', 'pl');
+  await expect(page.getByTestId('company-description-language')).toHaveCount(0);
+
+  // Fikcyjna firma bez ofert ma opis tylko po niderlandzku.
+  await page.goto(`/pl${WITHOUT_JOBS}`);
+  await expect(page.getByTestId('company-description')).toHaveAttribute('lang', 'nl');
+  await expect(page.getByTestId('company-description-language')).toHaveText(
+    plMessages.companyProfile.descriptionLanguageOther.replace('{language}', plMessages.languageNames.nl),
+  );
+  // Kontrola ujemna: w języku opisu brak dopisku, a meta description = opis firmy.
+  await page.goto(`/nl${WITHOUT_JOBS}`);
+  await expect(page.getByTestId('company-description-language')).toHaveCount(0);
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', 'Fictief bedrijf zonder actieve vacatures.');
 });
 
 test('profil bez aktywnych ofert: noindex, follow i brak canonical', async ({ page }) => {

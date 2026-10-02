@@ -32,6 +32,12 @@ import { kickAuthEmailQueue } from '@/lib/auth/email-kick';
 import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
+import {
+  SIGNUP_BROWSER_COOKIE,
+  SIGNUP_BROWSER_MAX_AGE,
+  isSignupBrowserFor,
+  signupBrowserMarker,
+} from '@/lib/auth/signup-browser';
 import { companyNameFromMetadata } from '@/lib/auth/signup-company-name';
 import { isAgeAttestationError } from '@/lib/age-policy/constants';
 import { roleFromProfileRead, type ProfileRole } from '@/lib/auth/profile-role';
@@ -51,6 +57,7 @@ import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { accountRateLimitKey } from '@/lib/auth/account-rate-limit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { captureActionError, isDatabaseError } from '@/lib/db/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
@@ -134,6 +141,45 @@ async function currentLocale(): Promise<Locale> {
   const value = await getLocale();
   const supported: readonly string[] = routing.locales;
   return supported.includes(value) ? (value as Locale) : routing.defaultLocale;
+}
+
+/**
+ * Błędy zgłoszone już bliżej źródła (np. `auth.signIn.resolveRole`) i rzucone dalej — wyższa
+ * warstwa nie zgłasza ich drugi raz.
+ */
+const reportedErrors = new WeakSet<object>();
+
+function reportAuthError(error: unknown, area: string): void {
+  if (typeof error === 'object' && error !== null) {
+    if (reportedErrors.has(error)) return;
+    reportedErrors.add(error);
+  }
+  // SDK opakowuje błąd bazy (`cause`): SQLSTATE z pierwszego błędu bazy w łańcuchu.
+  let source: unknown = error;
+  for (let e: unknown = error, depth = 0; e && depth < 4; depth += 1) {
+    if (isDatabaseError(e)) {
+      source = e;
+      break;
+    }
+    e = (e as { cause?: unknown }).cause;
+  }
+  captureActionError(source, area);
+}
+
+function isAuthUnconfigured(error: unknown): boolean {
+  return isAppError(error) && error.context?.reason === 'portal_auth_unconfigured';
+}
+
+/**
+ * Kod błędu akcji kont (kontynuacja #1068). Oczekiwane wyniki (złe hasło, niepotwierdzony
+ * e-mail, limit, zły link, walidacja, deklaracja wieku) zwracają swój kod bez zgłoszenia.
+ * `INTERNAL` — nieznany błąd SDK, baza, sieć — trafia do kanału błędów z obszarem i SQLSTATE
+ * (bez komunikatu i bez adresu e-mail). Brak konfiguracji kont (tryb demo) to stan oczekiwany.
+ */
+function failureCode(error: unknown, area: string): ErrorCode {
+  if (isAppError(error) && error.code !== 'INTERNAL') return error.code;
+  if (!isAuthUnconfigured(error)) reportAuthError(error, area);
+  return 'INTERNAL';
 }
 
 /** Runtime Better Auth; brak konfiguracji kont → kontrolowany `INTERNAL`. */
@@ -285,14 +331,18 @@ export async function signIn(
     } catch (e) {
       // Bez znanej roli nie zostawiamy półotwartej sesji: unieważnienie i kontrolowany błąd
       // zamiast przekierowania do panelu innej roli.
-      captureError(e, { area: 'auth.signIn.resolveRole' });
+      reportAuthError(e, 'auth.signIn.resolveRole');
       await discardSession(auth, { token: result.token });
       throw e;
     }
   } catch (e) {
-    const code = isAppError(e) ? e.code : 'INTERNAL';
+    const code = failureCode(e, 'auth.signIn');
     // `sendOnSignIn`: poprawne hasło niepotwierdzonego konta zleca nowy link — wysyłka od razu (W1).
-    if (code === 'AUTH_EMAIL_NOT_CONFIRMED') kickAuthEmailQueue();
+    if (code === 'AUTH_EMAIL_NOT_CONFIRMED') {
+      // Poprawne hasło = ta przeglądarka należy do właściciela konta: nowy link zaloguje tutaj (#1090).
+      await rememberSignupBrowser(parsed.data.email);
+      kickAuthEmailQueue();
+    }
     return { ok: false, error: code };
   }
 
@@ -319,6 +369,27 @@ async function rememberVerifyNext(next: string | null): Promise<void> {
     path: '/',
     maxAge: VERIFY_NEXT_MAX_AGE,
   });
+}
+
+/**
+ * Oznacza tę przeglądarkę jako tę, która założyła konto dla adresu (#1090) — tylko ona dostaje
+ * automatyczne logowanie z linku potwierdzającego. Awaria zapisu cookie nie przerywa akcji
+ * (link nadal potwierdzi adres, logowanie ręczne).
+ */
+async function rememberSignupBrowser(email: string): Promise<void> {
+  const marker = signupBrowserMarker(email, env.authSecret);
+  if (!marker) return;
+  try {
+    (await cookies()).set(SIGNUP_BROWSER_COOKIE, marker, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.siteUrl.startsWith('https:'),
+      path: '/',
+      maxAge: SIGNUP_BROWSER_MAX_AGE,
+    });
+  } catch (error) {
+    captureError(error, { area: 'auth.rememberSignupBrowser' });
+  }
 }
 
 /** Komunikat błędu bazy (także opakowany przez SDK w `cause`) o braku ważnej deklaracji wieku. */
@@ -388,8 +459,9 @@ export async function registerCandidate(
   try {
     await signUp((action, evidence) => withCandidateSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(safeNextPath(next));
+    await rememberSignupBrowser(parsed.data.email);
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.registerCandidate') };
   }
 
   // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
@@ -422,8 +494,9 @@ export async function registerEmployer(
   try {
     await signUp((action, evidence) => withEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
+    await rememberSignupBrowser(parsed.data.email);
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.registerEmployer') };
   }
 
   // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
@@ -466,6 +539,7 @@ export async function registerInvitedEmployer(
     }
     await signUp((action, evidence) => withInvitedEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
+    await rememberSignupBrowser(parsed.data.email);
     // Konto już powstało; nieudane zużycie (np. równoległe wysłanie) nie cofa rejestracji —
     // zaproszenie i tak przyjmuje tylko właściciel zweryfikowanego adresu.
     try {
@@ -474,7 +548,7 @@ export async function registerInvitedEmployer(
       captureError(e, { area: 'auth.registerInvitedEmployer.consume' });
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.registerInvitedEmployer') };
   }
 
   // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
@@ -514,8 +588,9 @@ export async function requestPasswordReset(
   let auth: AuthRuntime;
   try {
     auth = await portalAuth();
-  } catch {
-    return { ok: false, error: 'INTERNAL' };
+  } catch (error) {
+    // #1068: awaria inicjalizacji runtime auth (pula/baza) widoczna dla operatora.
+    return { ok: false, error: failureCode(error, 'auth.requestPasswordReset.runtime') };
   }
   try {
     await auth.api.requestPasswordReset({
@@ -523,7 +598,8 @@ export async function requestPasswordReset(
       headers: await headers(),
     });
   } catch (error) {
-    captureError(mapAuthError(error), { area: 'auth.requestPasswordReset' });
+    // Wynik zawsze neutralny; do kanału tylko błąd nieoczekiwany (nie limit SDK ani walidacja).
+    failureCode(mapAuthError(error), 'auth.requestPasswordReset');
   }
 
   // Zawsze (także bez konta i przy awarii zlecenia): po odpowiedzi, więc bez sygnału o koncie (W1).
@@ -558,7 +634,7 @@ export async function updatePassword(input: UpdatePasswordInput): Promise<AuthAc
       throw mapAuthError(error);
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.updatePassword') };
   }
 
   return { ok: true };
@@ -607,8 +683,13 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
 
     // Przeglądarka z aktywną sesją (np. inne konto) nie dostaje automatycznego logowania z linku:
     // nowa sesja nie nadpisuje istniejącej — adres zostaje potwierdzony, użytkownik loguje się sam.
+    // #1090: automatyczne logowanie tylko w przeglądarce, która założyła konto (znacznik HMAC
+    // adresu) — link otwarty na innym urządzeniu albo przez skaner poczty sesji nie zostawia.
     const sessionCookie = context.authCookies.sessionToken.name;
-    const browserHasSession = Boolean((await cookies()).get(sessionCookie)?.value);
+    const jar = await cookies();
+    const browserHasSession = Boolean(jar.get(sessionCookie)?.value);
+    const signupBrowser = email ? isSignupBrowserFor(jar.get(SIGNUP_BROWSER_COOKIE)?.value, email, env.authSecret) : false;
+    const withholdSession = browserHasSession || !signupBrowser;
     let sessionIssued = false;
     try {
       const verified = await auth.api.verifyEmail({
@@ -617,12 +698,12 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
         returnHeaders: true,
       });
       sessionIssued = verified.headers.getSetCookie().some((c) => c.startsWith(`${sessionCookie}=`));
-      if (!(sessionIssued && browserHasSession)) await applyAuthCookies(verified.headers);
+      if (!(sessionIssued && withholdSession)) await applyAuthCookies(verified.headers);
     } catch (error) {
       throw mapAuthError(error);
     }
 
-    if (sessionIssued && browserHasSession) {
+    if (sessionIssued && withholdSession) {
       // Wydanej sesji nikt nie odbierze (cookie nie zostało zapisane) — unieważniamy ją w bazie.
       try {
         const created = email ? await context.internalAdapter.findUserByEmail(email) : null;
@@ -643,7 +724,7 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       try {
         role = await readProfileRole(user.id);
       } catch (e) {
-        captureError(e, { area: 'auth.confirmEmail.resolveRole' });
+        reportAuthError(e, 'auth.confirmEmail.resolveRole');
         await discardSession(auth, { userId: user.id });
         throw e;
       }
@@ -668,10 +749,11 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       const next =
         nextPath && !isRecruitmentEnabled() && /\/candidate\/onboarding(?:[/?#]|$)/.test(nextPath) ? null : nextPath;
       store.delete(VERIFY_NEXT_COOKIE);
+      store.delete(SIGNUP_BROWSER_COOKIE);
       target = next ? { path: next } : { panel: role };
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    return { ok: false, error: failureCode(e, 'auth.confirmEmail') };
   }
 
   if ('path' in target) return redirectPath(target.path);
