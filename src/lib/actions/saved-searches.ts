@@ -59,7 +59,7 @@ const filtersSchema = z
     language: z.enum(LANGUAGE_FILTER_CODES as unknown as [LanguageCode, ...LanguageCode[]]).optional(),
     languageLevel: z.enum(LANGUAGE_FILTER_LEVELS).optional(),
     workTime: z.enum(WORK_TIME_FILTERS).optional(),
-    // 0975 (#858): typy grafiku pracy (lista jak `job_shift_pattern_values()` w bazie).
+    // 0227 (#858): typy grafiku pracy (lista jak `job_shift_pattern_values()` w bazie).
     shiftPatterns: z.array(z.enum(SHIFT_PATTERNS)).min(1).max(SHIFT_PATTERNS.length).optional(),
     near: text100.optional(),
     radiusKm: z.union(RADIUS_KM_OPTIONS.map((km) => z.literal(km)) as unknown as [

@@ -96,7 +96,7 @@ export interface SidebarFilters {
   languageLevel: LanguageFilterLevel | null;
   /** #811 (0194): wymiar pracy (URL `workTime`); oferta z oboma wariantami pasuje do obu. */
   workTime: WorkTimeFilter | null;
-  /** #858 (0975): typy grafiku pracy (URL `shift`, CSV) — oferta z którymkolwiek z nich. */
+  /** #858 (0227): typy grafiku pracy (URL `shift`, CSV) — oferta z którymkolwiek z nich. */
   shiftPatterns: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (URL `near`); pusty = bez filtra. */
   near: string;

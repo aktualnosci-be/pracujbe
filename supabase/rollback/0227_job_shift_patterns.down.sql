@@ -1,85 +1,26 @@
 -- =============================================================================
--- 0975_job_shift_patterns.sql — strukturalny grafik pracy oferty i filtr listy (#858).
--- NUMER TYMCZASOWY — ostateczny nada integrator.
+-- Rollback 0227 — strukturalny grafik pracy oferty i filtr listy (#858).
+-- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
+-- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
+-- (supabase/tests/job-shift-patterns-rollback.sql wykonuje go w transakcji i cofa).
 --
--- Problem: godziny i system zmian były wyłącznie tekstem (`working_hours`, `shifts`), więc
--- kandydat nie mógł wiarygodnie znaleźć pracy dziennej, zmianowej, nocnej albo weekendowej —
--- słowo kluczowe zależy od sformułowania pracodawcy (PL/NL/FR/EN).
---
--- Naprawa:
--- 1. `jobs.shift_patterns text[]` — jeden lub więcej typów z zamkniętej listy
---    (`job_shift_pattern_values()`: day, two_shift, three_shift, night, weekend, split,
---    continuous), null = brak deklaracji. CHECK `job_shift_patterns_valid` (wartości z listy,
---    bez duplikatów, 1–7 pozycji). Zapis zawsze przez `job_shift_patterns_from_jsonb`
---    (kolejność listy, bez duplikatów, pusta lista = null, nieznana wartość = VALIDATION_FAILED).
---    Tekst `working_hours`/`shifts` zostaje jako opis szczegółów. Starych ofert NIE
---    klasyfikujemy automatycznie (bez zgadywania z tekstu).
--- 2. Filtr `p_shift_patterns text[]` (ostatni parametr, domyślnie null) w `get_public_jobs`,
---    `get_public_jobs_count`, `get_public_job_filter_facets` (zawęża bazę wszystkich wymiarów)
---    i kopii dla alertów `saved_search_jobs_after` (blok 1:1 — test saved-search-keyset-sync):
---    oferta pasuje, gdy ma którykolwiek z wybranych typów (`&&`); oferta bez deklaracji nie
---    pasuje. Stare sygnatury (0194) są usuwane, by wywołanie nie było niejednoznaczne.
--- 3. Zapisane wyszukiwania: klucz kanoniczny `shiftPatterns` (`saved_search_canonical_filters`,
---    mapowanie w `saved_search_keyset_page`) — alert widzi ten sam zbiór ofert co lista.
--- 4. Kreator: klucz `shift_patterns` w `save_job_draft` (stan 0216) i `update_published_job`
---    (stan 0203); kopia szkicu przez trigger na `job_duplications` (jak work_time w 0194).
--- 5. `get_public_job_shift_patterns(p_job_id)` — odczyt dla strony oferty publicznej
---    (`job_is_public`), osobno od `get_public_job` (bez zmiany jego typu wyniku).
---
--- Rollback: supabase/rollback/0975_job_shift_patterns.down.sql
--- (dowód: supabase/tests/job-shift-patterns-rollback.sql).
+-- Przywraca: get_public_jobs, get_public_jobs_count, get_public_job_filter_facets,
+-- saved_search_jobs_after, saved_search_canonical_filters, saved_search_keyset_page
+-- i save_job_draft ze stanu 0216 (save_job_draft; lista, licznik, facety i kopia alertów — stan 0214); update_published_job ze stanu 0203. Usuwa kolumnę
+-- jobs.shift_patterns (DEKLARACJE GRAFIKU PRZEPADAJĄ) i funkcje pomocnicze. Zapisane
+-- wyszukiwania z kluczem `shiftPatterns` trzeba przed rollbackiem usunąć albo oczyścić —
+-- stara kanonizacja go nie zna, a alert by go pominął.
+-- Aplikacja wysyła nowy parametr RPC — przed rollbackiem wycofać wersję aplikacji.
 -- =============================================================================
 
--- --- 1. Kolumna i reguły wartości --------------------------------------------------------------
-create or replace function public.job_shift_pattern_values()
-returns text[] language sql immutable parallel safe set search_path = public, pg_temp as $$
-  select array['day', 'two_shift', 'three_shift', 'night', 'weekend', 'split', 'continuous']::text[];
-$$;
-revoke all on function public.job_shift_pattern_values() from public;
-grant execute on function public.job_shift_pattern_values() to anon, authenticated, service_role;
+drop trigger if exists trg_job_duplications_copy_shift_patterns on public.job_duplications;
+drop function if exists public.job_duplications_copy_shift_patterns();
+drop function if exists public.get_public_job_shift_patterns(uuid);
 
-create or replace function public.job_shift_patterns_valid(p text[])
-returns boolean language sql immutable parallel safe set search_path = public, pg_temp as $$
-  select p is null
-      or (cardinality(p) between 1 and 7
-          and array_position(p, null) is null
-          and p <@ public.job_shift_pattern_values()
-          and cardinality(p) = (select count(distinct v) from unnest(p) v));
-$$;
-revoke all on function public.job_shift_patterns_valid(text[]) from public;
-grant execute on function public.job_shift_patterns_valid(text[]) to anon, authenticated, service_role;
-
--- jsonb z kreatora → kanoniczna tablica (kolejność listy). Brak/null/[] = null (brak deklaracji).
-create or replace function public.job_shift_patterns_from_jsonb(p jsonb)
-returns text[] language plpgsql immutable set search_path = public, pg_temp as $$
-declare v_out text[];
-begin
-  if p is null or jsonb_typeof(p) = 'null' then return null; end if;
-  if jsonb_typeof(p) <> 'array' or jsonb_array_length(p) > 7
-     or exists (select 1 from jsonb_array_elements(p) e where jsonb_typeof(e) <> 'string')
-     or exists (select 1 from jsonb_array_elements_text(p) e
-                where not e = any (public.job_shift_pattern_values())) then
-    raise exception 'VALIDATION_FAILED: nieznany typ grafiku pracy' using errcode = '22023';
-  end if;
-  select array_agg(v order by array_position(public.job_shift_pattern_values(), v)) into v_out
-    from (select distinct e as v from jsonb_array_elements_text(p) e) s;
-  return v_out;
-end $$;
-revoke all on function public.job_shift_patterns_from_jsonb(jsonb) from public;
-grant execute on function public.job_shift_patterns_from_jsonb(jsonb) to authenticated, service_role;
-
-alter table public.jobs
-  add column if not exists shift_patterns text[],
-  add constraint jobs_shift_patterns_check check (public.job_shift_patterns_valid(shift_patterns));
-comment on column public.jobs.shift_patterns is
-  '0975 (#858): typy grafiku pracy deklarowane przez pracodawcę (job_shift_pattern_values); null = brak danych.';
-create index if not exists idx_jobs_shift_patterns_active on public.jobs using gin (shift_patterns)
-  where status = 'active' and deleted_at is null and shift_patterns is not null;
-
--- --- 2. get_public_jobs i get_public_jobs_count (stan 0214) + p_shift_patterns ------------------
+-- --- 5. get_public_jobs (stan 0167) + nowe filtry ------------------------------------------------
 drop function if exists public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer);
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]);
 create or replace function public.get_public_jobs(
   p_locale         text        default 'pl',
   p_keyword        text        default null,
@@ -103,9 +44,7 @@ create or replace function public.get_public_jobs(
   p_language_level text        default null,
   p_work_time      text        default null,
   p_near           text        default null,
-  p_radius_km      integer     default null,
-  -- 0975 (#858): typy grafiku pracy (oferta z którymkolwiek z nich)
-  p_shift_patterns text[]      default null
+  p_radius_km      integer     default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -191,11 +130,6 @@ begin
       -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
       and (coalesce(p_work_time, '') = ''
            or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-      -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
-      -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
-      -- ze starego opisu godzin/zmian).
-      and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
-           or j.shift_patterns && p_shift_patterns)
       -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
       -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
       -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -225,16 +159,16 @@ end;
 $$;
 revoke all on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer
 ) from public;
 grant execute on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer
 ) to anon, authenticated;
 
 drop function if exists public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]);
 create or replace function public.get_public_jobs_count(
   p_locale         text      default 'pl',
   p_keyword        text      default null,
@@ -255,9 +189,7 @@ create or replace function public.get_public_jobs_count(
   p_language_level text        default null,
   p_work_time      text        default null,
   p_near           text        default null,
-  p_radius_km      integer     default null,
-  -- 0975 (#858): typy grafiku pracy (oferta z którymkolwiek z nich)
-  p_shift_patterns text[]      default null
+  p_radius_km      integer     default null
 ) returns bigint language plpgsql stable security definer
 set search_path = public, pg_temp
 -- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
@@ -318,11 +250,6 @@ begin
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-    -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
-    -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
-    -- ze starego opisu godzin/zmian).
-    and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
-         or j.shift_patterns && p_shift_patterns)
     -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -334,18 +261,18 @@ end;
 $$;
 revoke all on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer
 ) from public;
 grant execute on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer
 ) to anon, authenticated;
 
 
--- --- 3. Facety (stan 0214) + p_shift_patterns (zawęża bazę wszystkich wymiarów) -------------------
+-- --- 6. Facety (stan 0183 z PR #1186 — gmina nadrzędna części; bez niej stan 0167) + nowe filtry
 drop function if exists public.get_public_job_filter_facets(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]);
 create or replace function public.get_public_job_filter_facets(
   p_locale text default 'pl', p_keyword text default null, p_city text default null,
   p_categories text[] default null, p_locations text[] default null,
@@ -357,9 +284,7 @@ create or replace function public.get_public_job_filter_facets(
   -- 0194: język, poziom, wymiar pracy, promień (zawężają bazę wszystkich wymiarów)
   p_language text default null, p_language_level text default null,
   p_work_time text default null, p_near text default null,
-  p_radius_km integer default null,
-  -- 0975 (#858): typy grafiku pracy
-  p_shift_patterns text[] default null
+  p_radius_km integer default null
 ) returns table (dimension text, key text, total bigint)
 language plpgsql stable security definer
 set search_path = public, pg_temp
@@ -429,11 +354,6 @@ begin
       -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
       and (coalesce(p_work_time, '') = ''
            or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-      -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
-      -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
-      -- ze starego opisu godzin/zmian).
-      and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
-           or j.shift_patterns && p_shift_patterns)
       -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
       -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
       -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -510,13 +430,13 @@ begin
     (coalesce(p_no_language,false)=false or b.no_language_required) and not b.is_agency;
 end;
 $$;
-revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[]) from public;
-grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[]) to anon, authenticated;
+revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer) from public;
+grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer) to anon, authenticated;
 
--- --- 4. Kopia filtrów dla alertów (test saved-search-keyset-sync: blok = get_public_jobs) -----
+-- --- 7. Kopia filtrów dla alertów (test saved-search-keyset-sync: blok = get_public_jobs) -----
 drop function if exists public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer);
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]);
 create or replace function public.saved_search_jobs_after(
   p_locale              text,
   p_keyword             text,
@@ -539,8 +459,7 @@ create or replace function public.saved_search_jobs_after(
   p_language_level      text    default null,
   p_work_time           text    default null,
   p_near                text    default null,
-  p_radius_km           integer default null,
-  p_shift_patterns      text[]  default null
+  p_radius_km           integer default null
 )
 returns table (id uuid, published_at timestamptz)
 language plpgsql stable security definer
@@ -604,11 +523,6 @@ begin
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-    -- #858: grafik pracy deklarowany przez pracodawcę (`jobs.shift_patterns`); oferta pasuje,
-    -- gdy ma co najmniej jeden z wybranych typów. Oferta bez deklaracji nie pasuje (bez zgadywania
-    -- ze starego opisu godzin/zmian).
-    and (p_shift_patterns is null or cardinality(p_shift_patterns) = 0
-         or j.shift_patterns && p_shift_patterns)
     -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
@@ -625,15 +539,15 @@ end;
 $$;
 revoke all on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer
 ) from public, anon, authenticated;
 grant execute on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer
 ) to service_role;
 
 
--- --- 5. Zapisane wyszukiwania: klucz kanoniczny `shiftPatterns` (stan 0194) ------------------
+-- --- 8. Zapisane wyszukiwania: nowe klucze kanoniczne (stan 0092) i strona kursora (stan 0158) --
 create or replace function public.saved_search_canonical_filters(p_filters jsonb, p_locale text)
 returns jsonb language plpgsql stable set search_path = public, pg_temp as $$
 declare
@@ -650,9 +564,7 @@ begin
     select 1 from jsonb_object_keys(p_filters) k
     where k not in ('keyword', 'city', 'categories', 'locations', 'contractTypes',
                     'salaryMin', 'salaryMax', 'salaryUnit', 'accommodation', 'immediate',
-                    'noLanguage', 'language', 'languageLevel', 'workTime', 'near', 'radiusKm',
-                    -- 0975 (#858)
-                    'shiftPatterns')
+                    'noLanguage', 'language', 'languageLevel', 'workTime', 'near', 'radiusKm')
   ) then
     raise exception 'VALIDATION_FAILED: nieznany filtr' using errcode = '22023';
   end if;
@@ -786,15 +698,6 @@ begin
     v_out := v_out || jsonb_build_object('radiusKm', 25);
   end if;
 
-  -- 0975 (#858): typy grafiku pracy (lista z `job_shift_pattern_values`, posortowana, bez duplikatów).
-  v_arr := public.saved_search_text_array(p_filters -> 'shiftPatterns', 20);
-  if v_arr is not null then
-    if not v_arr <@ public.job_shift_pattern_values() then
-      raise exception 'VALIDATION_FAILED: nieznany typ grafiku' using errcode = '22023';
-    end if;
-    v_out := v_out || jsonb_build_object('shiftPatterns', to_jsonb(v_arr));
-  end if;
-
   if v_out = '{}'::jsonb then
     raise exception 'VALIDATION_FAILED: wymagany co najmniej jeden filtr' using errcode = '22023';
   end if;
@@ -845,9 +748,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     p_language_level     => p_filters ->> 'languageLevel',
     p_work_time          => p_filters ->> 'workTime',
     p_near               => p_filters ->> 'near',
-    p_radius_km          => (p_filters ->> 'radiusKm')::integer,
-    -- 0975 (#858)
-    p_shift_patterns     => (select array_agg(x) from jsonb_array_elements_text(p_filters -> 'shiftPatterns') x)
+    p_radius_km          => (p_filters ->> 'radiusKm')::integer
   ) k;
 $$;
 revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
@@ -855,7 +756,7 @@ revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz,
 grant execute on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
   to service_role;
 
--- --- 6. Kreator: save_job_draft (stan 0216) + shift_patterns -----------------------------------
+-- --- 9. Kreator: save_job_draft (stan 0184 — token wersji szkicu) + work_time ----------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -887,9 +788,7 @@ begin
                     -- 0172: kanał aplikowania u ogłoszeniodawcy
                     'apply_url', 'apply_email', 'apply_phone',
                     -- 0194, #811: wymiar czasu pracy
-                    'work_time',
-                    -- 0975, #858: typy grafiku pracy
-                    'shift_patterns')
+                    'work_time')
     limit 1;
   if v_bad is null then
     select k into v_bad from jsonb_object_keys(tr) k
@@ -968,8 +867,7 @@ begin
       apply_url                = case when j ? 'apply_url' then nullif(btrim(coalesce(j->>'apply_url', '')), '') else apply_url end,
       apply_email              = case when j ? 'apply_email' then nullif(btrim(coalesce(j->>'apply_email', '')), '') else apply_email end,
       apply_phone              = case when j ? 'apply_phone' then nullif(btrim(coalesce(j->>'apply_phone', '')), '') else apply_phone end,
-      work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end,
-      shift_patterns           = case when j ? 'shift_patterns' then public.job_shift_patterns_from_jsonb(j->'shift_patterns') else shift_patterns end
+      work_time                = case when j ? 'work_time' then nullif(j->>'work_time', '') else work_time end
     where id = p_job_id;
   end if;
 
@@ -1052,7 +950,6 @@ end $$;
 revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 7. update_published_job (stan 0203) + shift_patterns --------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -1138,8 +1035,6 @@ begin
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
     -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji; przeniesione z main).
     work_time                = nullif(j->>'work_time', ''),
-    -- 0975 (#858): typy grafiku pracy (brak klucza = brak deklaracji, jak work_time).
-    shift_patterns           = public.job_shift_patterns_from_jsonb(j->'shift_patterns'),
     updated_at               = now()
   where id = p_job_id;
   delete from public.job_operation_context
@@ -1223,28 +1118,9 @@ end $$;
 revoke all on function public.update_published_job(uuid, jsonb, timestamptz) from public;
 grant execute on function public.update_published_job(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 8. Strona oferty: grafik oferty publicznej ------------------------------------------------
-create function public.get_public_job_shift_patterns(p_job_id uuid)
-returns text[] language sql stable security definer set search_path = public, pg_temp as $$
-  select j.shift_patterns
-    from public.jobs j
-    where j.id = p_job_id and public.job_is_public(p_job_id);
-$$;
-revoke all on function public.get_public_job_shift_patterns(uuid) from public;
-grant execute on function public.get_public_job_shift_patterns(uuid) to anon, authenticated, service_role;
-
--- --- 9. Kopia oferty jako szkic (0148): grafik przenosi trigger (jak work_time w 0194) ----------
-create or replace function public.job_duplications_copy_shift_patterns()
-returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
-begin
-  update public.jobs d set shift_patterns = s.shift_patterns
-  from public.jobs s
-  where s.id = new.source_job_id and d.id = new.new_job_id and d.status = 'draft';
-  return null;
-end $$;
-revoke all on function public.job_duplications_copy_shift_patterns() from public;
-
-drop trigger if exists trg_job_duplications_copy_shift_patterns on public.job_duplications;
-create trigger trg_job_duplications_copy_shift_patterns
-  after insert on public.job_duplications
-  for each row execute function public.job_duplications_copy_shift_patterns();
+drop index if exists public.idx_jobs_shift_patterns_active;
+alter table public.jobs drop constraint if exists jobs_shift_patterns_check;
+alter table public.jobs drop column if exists shift_patterns;
+drop function if exists public.job_shift_patterns_from_jsonb(jsonb);
+drop function if exists public.job_shift_patterns_valid(text[]);
+drop function if exists public.job_shift_pattern_values();

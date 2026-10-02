@@ -4,7 +4,7 @@ import { AxeBuilder } from './fixtures/axe';
 import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
 
 /**
- * #858 (migracja 0975 — numer tymczasowy): filtr „Grafik pracy” listy ofert — panel
+ * #858 (migracja 0227 — numer tymczasowy): filtr „Grafik pracy” listy ofert — panel
  * z JavaScriptem i formularz bez JavaScriptu (parametr `shift`), chip na każdą wartość,
  * oferta bez deklaracji odpada, szczegół oferty pokazuje grafik. Dane demo (bez bazy).
  */

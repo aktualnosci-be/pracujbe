@@ -85,7 +85,7 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.workTime ?? null,
     params.near?.trim() ? params.near.trim() : null,
     params.near?.trim() ? (params.radiusKm ?? null) : null,
-    // 0975 (#858): typy grafiku pracy (oferta z którymkolwiek z nich).
+    // 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich).
     params.shiftPatterns?.length ? params.shiftPatterns : null,
   ];
 }
@@ -540,7 +540,7 @@ export async function getPublicJobCosts(
 }
 
 /**
- * Grafik pracy oferty publicznej (#858, 0975) — RPC pod rolą anon zwraca tablicę tylko dla
+ * Grafik pracy oferty publicznej (#858, 0227) — RPC pod rolą anon zwraca tablicę tylko dla
  * oferty publicznej (`job_is_public`); null = brak deklaracji albo oferta niepubliczna.
  */
 export async function getPublicJobShiftPatterns(

@@ -176,7 +176,7 @@ interface FormValues {
   shifts: string;
   /** #811 (0194): wymiar pracy ('' = nie podano). */
   workTime: '' | WorkTime;
-  /** #858 (0975): typy grafiku pracy (pusta lista = nie podano). */
+  /** #858 (0227): typy grafiku pracy (pusta lista = nie podano). */
   shiftPatterns: ShiftPattern[];
   startImmediately: boolean;
   startDate: string;
@@ -1550,7 +1550,7 @@ export function JobWizard({
                   </Select>
                   <p id="job-work-time-hint" className="text-sm text-muted-foreground">{t('workTimeHint')}</p>
                 </div>
-                {/* #858 (0975): grafik pracy — filtr listy ofert; opis zmian niżej zostaje uzupełnieniem. */}
+                {/* #858 (0227): grafik pracy — filtr listy ofert; opis zmian niżej zostaje uzupełnieniem. */}
                 <fieldset
                   id={domId('shiftPatterns')}
                   className={FORM_FIELD}

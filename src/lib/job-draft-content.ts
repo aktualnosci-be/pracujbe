@@ -42,7 +42,7 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
           shifts: nullIfEmpty(v.shifts),
           // #811 (0194): brak wyboru = brak deklaracji (null czyści zapisany wymiar).
           work_time: v.workTime ?? null,
-          // #858 (0975): typy grafiku; pusta lista = brak deklaracji (baza zapisuje null).
+          // #858 (0227): typy grafiku; pusta lista = brak deklaracji (baza zapisuje null).
           shift_patterns: normalizeShiftPatterns(v.shiftPatterns),
           start_immediately: v.startImmediately,
           start_date: v.startDate ?? null,

@@ -339,7 +339,7 @@ function NoScriptFilterForm({
         {t('workTimeNote')}
       </p>
 
-      {/* 0975 (#858): grafik pracy — bez JS ten sam parametr `shift` (powtórzony klucz łączy
+      {/* 0227 (#858): grafik pracy — bez JS ten sam parametr `shift` (powtórzony klucz łączy
           `flattenSearchParams` w CSV). */}
       <fieldset className="space-y-1" aria-describedby="nojs-shift-note">
         <legend className="mb-2 text-sm font-semibold text-foreground">{t('shiftPatterns')}</legend>

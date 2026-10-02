@@ -23,13 +23,13 @@ import { step2Schema } from '@/lib/validation/job';
 import { getJobs } from '@/lib/jobs';
 
 /**
- * #858 (0975): strukturalny grafik pracy oferty — lista wartości wspólna z bazą, parametr
+ * #858 (0227): strukturalny grafik pracy oferty — lista wartości wspólna z bazą, parametr
  * adresu `shift`, zapisane wyszukiwanie `shiftPatterns`, zapis kroku 2 kreatora i filtr
  * danych demo (lustro warunku SQL `&&`).
  */
 
 const MIGRATION = readFileSync(
-  path.join(process.cwd(), 'supabase', 'migrations', '0975_job_shift_patterns.sql'),
+  path.join(process.cwd(), 'supabase', 'migrations', '0227_job_shift_patterns.sql'),
   'utf8',
 );
 const MESSAGES = ['pl', 'nl', 'fr', 'en'].map((locale) => ({
@@ -46,7 +46,7 @@ const t = {
   languageNames: (key: string) => key,
 };
 
-describe('0975: lista wartości = baza', () => {
+describe('0227: lista wartości = baza', () => {
   it('job_shift_pattern_values() w migracji = SHIFT_PATTERNS (ta sama kolejność)', () => {
     const match = MIGRATION.match(/select array\[([^\]]+)\]::text\[\];/);
     expect(match).not.toBeNull();
@@ -66,7 +66,7 @@ describe('0975: lista wartości = baza', () => {
   });
 });
 
-describe('0975: reguły TS', () => {
+describe('0227: reguły TS', () => {
   it('normalizacja: kolejność listy, bez duplikatów i nieznanych wartości', () => {
     expect(normalizeShiftPatterns(['night', 'day', 'night', 'nope'])).toEqual(['day', 'night']);
     expect(normalizeShiftPatterns(undefined)).toEqual([]);
@@ -83,7 +83,7 @@ describe('0975: reguły TS', () => {
   });
 });
 
-describe('0975: adres listy, chipy i zapisane wyszukiwanie', () => {
+describe('0227: adres listy, chipy i zapisane wyszukiwanie', () => {
   it('parametr `shift` (CSV) ↔ filtry panelu, także powtórzony klucz bez JS', () => {
     const f = parseSidebarFilters(flattenSearchParams({ shift: ['weekend', 'day'] }));
     expect(f.shiftPatterns).toEqual(['day', 'weekend']);
@@ -117,7 +117,7 @@ describe('0975: adres listy, chipy i zapisane wyszukiwanie', () => {
   });
 });
 
-describe('0975: kreator — krok 2', () => {
+describe('0227: kreator — krok 2', () => {
   const base = { contractType: 'permanent', workingHours: '38 h', startImmediately: false };
 
   it('zapis kroku niesie `shift_patterns` (pusta lista = brak deklaracji)', () => {
@@ -132,7 +132,7 @@ describe('0975: kreator — krok 2', () => {
   });
 });
 
-describe('0975: dane demo filtrują jak SQL', () => {
+describe('0227: dane demo filtrują jak SQL', () => {
   it('praca weekendowa: tylko oferty z deklaracją weekendu', async () => {
     const all = await getJobs({ locale: 'pl', pageSize: 100 });
     const weekend = await getJobs({ locale: 'pl', shiftPatterns: ['weekend'], pageSize: 100 });

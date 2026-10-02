@@ -601,7 +601,7 @@ export interface JobDraftValues {
   shifts: string;
   /** #811 (0194): `jobs.work_time`; pusty = brak deklaracji. */
   workTime: string;
-  /** #858 (0975): `jobs.shift_patterns`; pusta lista = brak deklaracji. */
+  /** #858 (0227): `jobs.shift_patterns`; pusta lista = brak deklaracji. */
   shiftPatterns: string[];
   startImmediately: boolean;
   startDate: string;

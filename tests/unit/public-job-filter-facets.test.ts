@@ -76,7 +76,7 @@ describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
     }
     const [listSql, listValues] = calls.find(([sql]) => sql.includes('p_sort'))!;
     expect(listSql).toContain('p_sort => $21::text');
-    // 0167: $14 = p_direct_only, 0194: $15–$19 = język, poziom, wymiar, promień, 0975: $20 =
+    // 0167: $14 = p_direct_only, 0194: $15–$19 = język, poziom, wymiar, promień, 0227: $20 =
     // grafik pracy (NULL bez filtra), potem sortowanie i stronicowanie.
     expect(listValues.slice(13)).toEqual([null, null, null, null, null, null, null, 'salary', 12, 0]);
   });

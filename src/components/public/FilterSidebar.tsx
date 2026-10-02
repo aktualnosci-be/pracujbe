@@ -598,7 +598,7 @@ export function FilterFields({
         </fieldset>
       </section>
 
-      {/* Grafik pracy (#858, 0975) — oferta z którymkolwiek z wybranych typów */}
+      {/* Grafik pracy (#858, 0227) — oferta z którymkolwiek z wybranych typów */}
       <section>
         <fieldset aria-describedby={`${idPrefix}-shift-note`}>
           <legend className="mb-[14px] break-words text-[15px] font-bold text-foreground">

@@ -14879,7 +14879,7 @@ create or replace function public.get_public_jobs(
   p_work_time      text        default null,
   p_near           text        default null,
   p_radius_km      integer     default null,
-  -- 0975: grafik pracy
+  -- 0227: grafik pracy
   p_shift_patterns text[]      default null
 )
 returns table (
@@ -25764,7 +25764,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- SP858. Strukturalny grafik pracy oferty i filtr listy (#858, migracja 0975 — numer tymczasowy).
+-- SP858. Strukturalny grafik pracy oferty i filtr listy (#858, migracja 0227 — numer tymczasowy).
 --   `jobs.shift_patterns` (lista zamknięta, CHECK), zapis przez kreator (save_job_draft,
 --   update_published_job) i kopię szkicu, filtr `p_shift_patterns` (oferta z którymkolwiek
 --   z wybranych typów; bez deklaracji nie pasuje) w liście, liczniku, facetach i kopii alertów,
@@ -26548,10 +26548,10 @@ select pg_temp.assert(
 
 -- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
 savepoint pf1215_old;
--- 0975 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
+-- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
 -- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
 set constraints all immediate;
-\ir ../rollback/0975_job_shift_patterns.down.sql
+\ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.pf1215_snapshot() as pf_old_anon \gset
@@ -26669,10 +26669,10 @@ select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_
   'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
 
 savepoint kq866_old;
--- 0975 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
+-- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
 -- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
 set constraints all immediate;
-\ir ../rollback/0975_job_shift_patterns.down.sql
+\ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0214_keyword_job_qualifications.down.sql
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(pg_temp.kq_slugs('pl', 'vca-kq866') = ''

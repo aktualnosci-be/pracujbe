@@ -378,7 +378,7 @@ const SH = {
 type ShKey = keyof typeof SH;
 
 /**
- * Typy grafiku ofert demonstracyjnych (#858, 0975) — jawne dane zestawu (odpowiednik
+ * Typy grafiku ofert demonstracyjnych (#858, 0227) — jawne dane zestawu (odpowiednik
  * `jobs.shift_patterns`, deklaracji pracodawcy), nie zgadywanie z tekstu.
  */
 const SH_PATTERNS: Record<ShKey, ShiftPattern[]> = {

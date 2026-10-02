@@ -1,5 +1,5 @@
 /**
- * Grafik pracy oferty (#858, migracja 0975 — numer tymczasowy) — moduł czysty, bez Zoda
+ * Grafik pracy oferty (#858, migracja 0227 — numer tymczasowy) — moduł czysty, bez Zoda
  * (importują go klienckie panele filtrów, #390). Ta sama lista co w bazie:
  * `public.job_shift_pattern_values()` (CHECK `jobs.shift_patterns`, filtr `p_shift_patterns`
  * listy ofert, kanonizacja zapisanych wyszukiwań `shiftPatterns`). Zgodność pilnuje test

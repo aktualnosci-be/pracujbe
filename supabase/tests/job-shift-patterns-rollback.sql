@@ -1,5 +1,5 @@
 -- =============================================================================
--- SP858-R — rollback migracji 0975 (grafik pracy oferty i filtr listy, #858). Uruchamiany przez
+-- SP858-R — rollback migracji 0227 (grafik pracy oferty i filtr listy, #858). Uruchamiany przez
 -- scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji
 -- i jest cofany.
 -- =============================================================================
@@ -18,7 +18,7 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
                         published_at,work_time,shift_patterns) values
   ('f8580000-0000-4000-8000-00000000f001','f8580000-0000-4000-8000-00000000f000','sp858r-a','Rollback SP858R','production','permanent','Gent','Flandria','active','pl', now(), 'part_time', array['night']),
   ('f8580000-0000-4000-8000-00000000f002','f8580000-0000-4000-8000-00000000f000','sp858r-b','Rollback SP858R','production','permanent','Gent','Flandria','active','pl', now(), null, null);
--- Przed rollbackiem: filtr 0975 działa (obok filtrów 0194).
+-- Przed rollbackiem: filtr 0227 działa (obok filtrów 0194).
 select pg_temp.assert(
   public.get_public_jobs_count('pl', 'sp858r', p_shift_patterns => array['night']) = 1
   and public.get_public_jobs_count('pl', 'sp858r', p_work_time => 'part_time') = 1
@@ -27,7 +27,7 @@ select pg_temp.assert(
 
 -- Odroczone triggery kolejki tłumaczeń (0146) z insertów fikstury — przed ALTER TABLE.
 set constraints all immediate;
-\ir ../rollback/0975_job_shift_patterns.down.sql
+\ir ../rollback/0227_job_shift_patterns.down.sql
 
 -- Po rollbacku: sygnatury i zachowanie stanu 0194 (filtry 0194 nadal działają).
 select pg_temp.assert(
@@ -51,4 +51,4 @@ select pg_temp.assert(
   and exists (select 1 from information_schema.columns
               where table_schema = 'public' and table_name = 'jobs' and column_name = 'shift_patterns'),
   'SP858-R2 rollback testu cofnięty');
-\echo 'SP858-R rollback 0975: PASS'
+\echo 'SP858-R rollback 0227: PASS'

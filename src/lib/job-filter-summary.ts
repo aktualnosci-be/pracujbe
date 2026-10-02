@@ -106,7 +106,7 @@ export function describeJobListFilters(
       removeKey: 'workTime',
     });
   }
-  // 0975 (#858): typy grafiku pracy — chip na wartość (jak rodzaj umowy).
+  // 0227 (#858): typy grafiku pracy — chip na wartość (jak rodzaj umowy).
   for (const pattern of sf.shiftPatterns) {
     items.push({
       id: `shift-${pattern}`,

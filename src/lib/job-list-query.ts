@@ -98,7 +98,7 @@ export interface SavedSearchFilters {
   languageLevel?: LanguageFilterLevel;
   /** #811 (0194): wymiar pracy. */
   workTime?: WorkTimeFilter;
-  /** #858 (0975): typy grafiku pracy (baza zapisuje posortowane, bez duplikatów). */
+  /** #858 (0227): typy grafiku pracy (baza zapisuje posortowane, bez duplikatów). */
   shiftPatterns?: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (baza zapisuje małymi literami). */
   near?: string;

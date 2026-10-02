@@ -260,7 +260,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
-  // 0975 (#858): grafik pracy w języku widza (te same etykiety co filtr listy).
+  // 0227 (#858): grafik pracy w języku widza (te same etykiety co filtr listy).
   const shiftPatternLabels = job.shiftPatterns?.length
     ? await getTranslations('filters.shiftPatternValues').then((tShift) =>
         job.shiftPatterns!.map((pattern) => tShift(pattern)).join(', '),

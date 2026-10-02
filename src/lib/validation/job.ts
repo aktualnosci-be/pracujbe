@@ -99,7 +99,7 @@ const step2Base = z.object({
   shifts: z.string().trim().max(120, 'job.error.shiftsTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   /** #811 (0194): wymiar pracy (filtr listy); brak = pracodawca nie podaje. */
   workTime: z.enum(WORK_TIME_VALUES).optional(),
-  /** #858 (0975): typy grafiku pracy (filtr listy); pusta lista = pracodawca nie podaje. */
+  /** #858 (0227): typy grafiku pracy (filtr listy); pusta lista = pracodawca nie podaje. */
   shiftPatterns: z.array(z.enum(SHIFT_PATTERNS)).max(SHIFT_PATTERNS.length).optional(),
   startImmediately: z.boolean().default(false),
   startDate: z

@@ -581,7 +581,7 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       shifts: nullIfEmpty(s2.shifts),
       // #811 (0194): wymiar pracy (brak = brak deklaracji).
       work_time: s2.workTime ?? null,
-      // #858 (0975): typy grafiku (pusta lista = brak deklaracji).
+      // #858 (0227): typy grafiku (pusta lista = brak deklaracji).
       shift_patterns: normalizeShiftPatterns(s2.shiftPatterns),
       start_immediately: s2.startImmediately,
       start_date: s2.startDate ?? null,

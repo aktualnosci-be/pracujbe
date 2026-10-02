@@ -245,7 +245,7 @@ export interface JobDetail extends JobListItem {
    */
   workTime?: WorkTime;
   /**
-   * #858 (0975): typy grafiku pracy zadeklarowane przez pracodawcę (`jobs.shift_patterns`,
+   * #858 (0227): typy grafiku pracy zadeklarowane przez pracodawcę (`jobs.shift_patterns`,
    * osobny odczyt `get_public_job_shift_patterns`); brak = nie podano albo odczyt nieudany.
    */
   shiftPatterns?: ShiftPattern[];
@@ -279,7 +279,7 @@ export interface GetJobsParams {
   languageLevel?: LanguageFilterLevel;
   /** #811 (0194): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
   workTime?: WorkTimeFilter;
-  /** #858 (0975): typy grafiku — oferta z którymkolwiek z nich (bez deklaracji nie pasuje). */
+  /** #858 (0227): typy grafiku — oferta z którymkolwiek z nich (bez deklaracji nie pasuje). */
   shiftPatterns?: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
   near?: string;
@@ -659,7 +659,7 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
-  // 0975 (#858): grafik pracy — odczyt pomocniczy; awaria = sam opis tekstowy godzin/zmian.
+  // 0227 (#858): grafik pracy — odczyt pomocniczy; awaria = sam opis tekstowy godzin/zmian.
   let shiftPatterns: ShiftPattern[] = [];
   try {
     const { getPublicJobShiftPatterns } = await import('@/lib/db/public-jobs');

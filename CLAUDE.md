@@ -857,7 +857,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
   jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
   ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
-  Grafik pracy (#858, migracja `0975` — numer tymczasowy): `jobs.shift_patterns text[]` = typy
+  Grafik pracy (#858, migracja `0227` — numer tymczasowy): `jobs.shift_patterns text[]` = typy
   z zamkniętej listy (`job_shift_pattern_values()`: day, two_shift, three_shift, night, weekend,
   split, continuous; lustro `src/lib/job-shift-patterns.ts`), null = brak deklaracji; CHECK
   `job_shift_patterns_valid`, zapis przez `job_shift_patterns_from_jsonb` (kolejność listy, bez
@@ -869,7 +869,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   klasyfikujemy z tekstu. Zapisane wyszukiwanie: klucz `shiftPatterns`. Szczegół oferty:
   „Grafik pracy” z `get_public_job_shift_patterns` (odczyt pomocniczy, `get_public_job` bez
   zmian). Dowód: `rls.sql` sekcja SP858 (kontrole ujemne: bez warunku w liście i kopii alertów,
-  bez CHECK, bez klucza w kreatorze), rollback `0975_…down.sql` (`job-shift-patterns-rollback.sql`,
+  bez CHECK, bez klucza w kreatorze), rollback `0227_…down.sql` (`job-shift-patterns-rollback.sql`,
   także przed 0194 w `job-filters-rollback.sql` i `city-sections-filters-rollback.sql`), unit
   `job-shift-patterns`. **Otwarte:** grafik w JobPosting i audycie edycji, filtr wykluczający
   (np. „bez weekendów”).
