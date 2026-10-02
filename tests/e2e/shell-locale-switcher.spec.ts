@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { waitForHydrated } from "./fixtures/hydration";
 
 const names = { pl: "Polski", nl: "Nederlands", fr: "Français", en: "English" } as const;
 
@@ -6,6 +7,8 @@ test("nazwy języków w przełączniku mają atrybut lang swojego języka", asyn
   await page.goto("/pl/oferty-pracy");
   const footer = page.getByRole("contentinfo");
   // Klawiaturą: baner cookies (fixed) może przykrywać stopkę przy pierwszej wizycie.
+  // Enter otwiera listę dopiero po hydratacji (handler klawiatury z Reacta).
+  await waitForHydrated(footer.getByRole("combobox"));
   await footer.getByRole("combobox").focus();
   await page.keyboard.press("Enter");
 
@@ -20,6 +23,7 @@ test("nazwy języków w przełączniku mają atrybut lang swojego języka", asyn
 test("po zmianie języka w stopce fokus wraca na przełącznik, nie na body", async ({ page }) => {
   await page.goto("/pl/oferty-pracy?q=kierowca");
   const combobox = page.getByRole("contentinfo").getByRole("combobox");
+  await waitForHydrated(combobox);
   await combobox.focus();
   await page.keyboard.press("Enter");
   await page.keyboard.press("End");
@@ -35,7 +39,10 @@ test.describe("menu mobilne", () => {
 
   test("po zmianie języka w panelu fokus trafia na przycisk menu", async ({ page }) => {
     await page.goto("/nl/oferty-pracy?q=chauffeur");
-    await page.getByRole("button", { name: "Menu" }).click();
+    // Panel menu otwiera się dopiero po hydratacji (handler `onClick` z Reacta).
+    const menu = page.getByRole("button", { name: "Menu" });
+    await waitForHydrated(menu);
+    await menu.click();
     await page.getByRole("dialog").getByRole("combobox").focus();
     await page.keyboard.press("Enter");
     await page.keyboard.press("Home");

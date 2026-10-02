@@ -39,11 +39,16 @@ export function emailFieldsFor(
   return recruitmentEnabled ? EMAIL_FIELDS[role] : EMAIL_FIELDS[role].filter((f) => !RECRUITMENT_EMAIL_FIELDS.has(f));
 }
 
-/** Pola z opisem z perspektywy pracodawcy (`employer<Field>Description`). */
+/**
+ * Pola z opisem z perspektywy pracodawcy (`employer<Field>Description`). `inAppEnabled` (#1120):
+ * opis wymienia wiadomości serwisowe, których preferencja nie ukrywa
+ * (`@/lib/notifications/service-messages`).
+ */
 const EMPLOYER_DESCRIPTION_FIELDS: ReadonlySet<ToggleField> = new Set([
   'emailApplications',
   'emailOffers',
   'emailMessages',
+  'inAppEnabled',
 ]);
 
 /** Klucz opisu pola w namespace `settings`. */

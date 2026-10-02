@@ -9,6 +9,7 @@ import {
   type CampaignEditorErrors,
   type CampaignEditorForm,
 } from '@/lib/admin/campaign-editor';
+import { parseUnavailableJobSlugs, unavailableJobFieldErrors } from '@/lib/admin/campaign-job-availability';
 import { campaignSendingReady, isCampaignStatus } from '@/lib/admin/campaigns';
 import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
@@ -34,7 +35,7 @@ import { captureError } from '@/lib/error-report';
 
 export type CampaignActionResult =
   | { ok: true; demo?: boolean }
-  | { ok: false; error: ErrorCode; reason?: 'senderMissing' };
+  | { ok: false; error: ErrorCode; reason?: 'senderMissing' | 'jobsUnavailable'; slugs?: string[] };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -64,7 +65,11 @@ async function callCampaignRpc(
       );
     } catch (error) {
       if (isDatabaseError(error)) {
-        return { ok: false, error: reportUnmappedDbError(error, area, mapPgError(databaseErrorMessage(error))) };
+        const message = databaseErrorMessage(error);
+        // #720 (0224): oferta z treści przestała być publiczna — aktywacja odrzucona.
+        const slugs = parseUnavailableJobSlugs(message);
+        if (slugs) return { ok: false, error: 'VALIDATION_FAILED', reason: 'jobsUnavailable', slugs };
+        return { ok: false, error: reportUnmappedDbError(error, area, mapPgError(message)) };
       }
       throw error;
     }
@@ -165,6 +170,14 @@ export async function createEmailCampaignRevision(
       const message = databaseErrorMessage(error);
       if (message.includes('VALIDATION_FAILED: slug')) {
         return { ok: false, error: 'VALIDATION_FAILED', fields: { slug: 'slug' } };
+      }
+      // #720 (0224): slug oferty bez oferty publicznej → błąd przy polu sluga oferty.
+      const slugs = parseUnavailableJobSlugs(message);
+      if (slugs) {
+        const fields = unavailableJobFieldErrors(form, slugs);
+        return Object.keys(fields).length > 0
+          ? { ok: false, error: 'VALIDATION_FAILED', fields }
+          : { ok: false, error: 'VALIDATION_FAILED' };
       }
       const code = mapPgError(message);
       return { ok: false, error: reportUnmappedDbError(error, 'admin.createEmailCampaignRevision', code) };

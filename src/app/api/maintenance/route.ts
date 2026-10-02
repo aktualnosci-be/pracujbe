@@ -14,6 +14,7 @@ import {
   retentionMode,
 } from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
+import { TECHNICAL_GC_BATCH_LIMIT, TECHNICAL_GC_MAX_BATCHES } from '@/lib/maintenance/technical-gc';
 import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
@@ -189,6 +190,18 @@ async function run(request: Request): Promise<Response> {
     }
   }
 
+  /** #746: partie GC tabel technicznych; błąd partii = błąd zadania (bez kolejnych partii). */
+  async function batchedTask(name: Task, fn: string, args: RpcArgs): Promise<{ deleted: number; backlog: boolean } | null> {
+    let deleted = 0;
+    for (let batch = 0; batch < TECHNICAL_GC_MAX_BATCHES; batch += 1) {
+      const n = await task(name, fn, { ...args, p_limit: TECHNICAL_GC_BATCH_LIMIT });
+      if (n === null) return null;
+      deleted += n;
+      if (n < TECHNICAL_GC_BATCH_LIMIT) return { deleted, backlog: false };
+    }
+    return { deleted, backlog: true };
+  }
+
   // #609: rezerwacje budżetu AI porzucone po awarii procesu (crash/restart między rezerwacją
   // i rozliczeniem) — GC po TTL, niezależnie od pozostałych zadań.
   const releasedAiBudgetReservations = await task(
@@ -286,8 +299,11 @@ async function run(request: Request): Promise<Response> {
   // K2/#17 (0163): tabele techniczne — okna limitera starsze niż doba (dolna granica w bazie)
   // i rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. Bez danych do decyzji o
   // retencji: e-maile (`email_deliveries_gc`) czekają na #574.
-  const purgedRateLimits = await task('rateLimits', 'rate_limit_gc', { p_older_than_seconds: 86_400 });
-  const purgedWebhookInbox = await task('webhookInbox', 'processed_webhooks_gc', { p_older_than_days: 30 });
+  // #746 (0224): w partiach — każda partia w osobnej, krótkiej transakcji (SKIP LOCKED w bazie),
+  // pełna partia = zaległość → kolejna partia, najwyżej TECHNICAL_GC_MAX_BATCHES na przebieg
+  // (reszta w następnym). #722: inbox liczony od zakończenia (`updated_at`), nie od odebrania.
+  const purgedRateLimits = await batchedTask('rateLimits', 'rate_limit_gc', { p_older_than_seconds: 86_400 });
+  const purgedWebhookInbox = await batchedTask('webhookInbox', 'processed_webhooks_gc', { p_older_than_days: 30 });
   // #17/#833: GC sierot bucketu Railway przed workerem kolejki — sieroty znikają w tym samym
   // przebiegu. Dwa niezależne, logiczne buckety (CV i załączniki wiadomości) na jednym fizycznym
   // buckecie: awaria jednego przebiegu nie blokuje drugiego (osobne try/catch, osobne zadanie).
@@ -367,8 +383,10 @@ async function run(request: Request): Promise<Response> {
     retention,
     jobFunnel,
     purgedMessageAttachments: purgedMessageAttachments ?? 0,
-    purgedRateLimits: purgedRateLimits ?? 0,
-    purgedWebhookInbox: purgedWebhookInbox ?? 0,
+    purgedRateLimits: purgedRateLimits?.deleted ?? 0,
+    purgedWebhookInbox: purgedWebhookInbox?.deleted ?? 0,
+    // #746: true = przebieg doszedł do limitu partii; reszta zaległości w następnym przebiegu.
+    technicalGcBacklog: Boolean(purgedRateLimits?.backlog || purgedWebhookInbox?.backlog),
     storageGc,
     messageAttachmentsGc,
     dsaRetention,

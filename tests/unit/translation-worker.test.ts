@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { BUDGET_DEFER_SECONDS, processTranslationBatch } from '@/lib/translation/worker';
+import { BUDGET_DEFER_SECONDS, MIN_LEASE_REMAINING_MS, processTranslationBatch } from '@/lib/translation/worker';
 import {
   FixtureTranslationProvider,
   TranslationProviderError,
@@ -206,3 +206,32 @@ describe('processTranslationBatch', () => {
     });
   });
 });
+
+describe('dzierżawa przed wywołaniem modelu (#644)', () => {
+  it('za krótka dzierżawa → bez wywołania modelu i bez zapisu (zadanie wraca do puli)', async () => {
+    const s = store([job({ lease_expires_at: new Date(Date.now() + MIN_LEASE_REMAINING_MS - 1_000).toISOString() })]);
+    const p = provider(GOOD);
+    const events: { outcome: string; code?: string }[] = [];
+    const r = await processTranslationBatch({ store: s, provider: p, onEvent: (e) => events.push(e) });
+    expect(r).toMatchObject({ claimed: 1, applied: 0, dropped: 1 });
+    expect(p.translate).not.toHaveBeenCalled();
+    expect(s.complete).not.toHaveBeenCalled();
+    expect(s.fail).not.toHaveBeenCalled();
+    expect(events).toEqual([expect.objectContaining({ outcome: 'dropped', code: 'lease_too_short' })]);
+  });
+
+  it('nieczytelny termin dzierżawy → bez wywołania modelu', async () => {
+    const p = provider(GOOD);
+    await processTranslationBatch({ store: store([job({ lease_expires_at: 'nie-data' })]), provider: p });
+    expect(p.translate).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: dzierżawa z zapasem (także jako Date z bazy) → model wołany, wynik zapisany', async () => {
+    const p = provider(GOOD);
+    const lease = new Date(Date.now() + MIN_LEASE_REMAINING_MS + 5_000) as unknown as string;
+    const r = await processTranslationBatch({ store: store([job({ lease_expires_at: lease })]), provider: p });
+    expect(p.translate).toHaveBeenCalledTimes(1);
+    expect(r.applied).toBe(1);
+  });
+});
+
