@@ -82,6 +82,26 @@ export function cityKey(value: string): string {
     .trim();
 }
 
+const WORD_START = '(?<![\\p{L}\\p{N}_])';
+const WORD_END = '(?![\\p{L}\\p{N}_])';
+const POSTAL_CODE = new RegExp(`${WORD_START}(?:be? ?)?[1-9][0-9]{3}${WORD_END}`, 'gu');
+const COUNTRY = new RegExp(`${WORD_START}(?:belgie|belgique|belgium|belgia|belgien)${WORD_END}`, 'gu');
+
+/**
+ * Klucz miasta bez dopisku (#1119, lustro SQL `location_lookup_key`, migracja 0212): bez
+ * belgijskiego kodu pocztowego (4 cyfry, opcjonalnie z prefiksem B/BE), nawiasów, przecinków
+ * i nazwy kraju — „Bruxelles 1000”, „B-1000 Bruxelles”, „Gent, België” → nazwa miasta. Baza
+ * sprawdza go dopiero, gdy pełny klucz `cityKey` nie wskazuje miejscowości.
+ */
+export function cityLookupKey(value: string): string {
+  return cityKey(value)
+    .replace(/[(),;/]+/g, ' ')
+    .replace(POSTAL_CODE, ' ')
+    .replace(COUNTRY, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const COORDINATES_BY_KEY = new Map<string, Coordinates>();
 for (const city of BELGIAN_CITIES) {
   const coordinates = { lat: city.lat, lng: city.lng };

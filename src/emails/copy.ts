@@ -38,6 +38,7 @@ export const EMAIL_TYPES = [
   'teamInvitation',
   'teamInvitationSignup',
   'jobMatch',
+  'followedCompanyJobs',
   'guestApplicationConfirm',
   'guestApplicationSent',
   'guestStatusChanged',
@@ -142,6 +143,14 @@ export const jobMatchAlertOffLabel: Record<Locale, string> = {
   nl: 'Alleen deze melding uitzetten',
   fr: 'Désactiver uniquement cette alerte',
   en: 'Turn off only this alert',
+};
+
+/** Link „wyłącz alerty tej firmy” w e-mailu `followedCompanyJobs` (adres podaje worker, nie payload). */
+export const followedCompanyAlertOffLabel: Record<Locale, string> = {
+  pl: 'Wyłącz alerty tylko od tej firmy',
+  nl: 'Alleen meldingen van dit bedrijf uitzetten',
+  fr: 'Désactiver uniquement les alertes de cette entreprise',
+  en: 'Turn off alerts from this company only',
 };
 
 /**
@@ -1533,6 +1542,41 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
         body: 'A new job matches your saved search “{searchName}”. You can find it below.',
       },
       outro: 'We send this alert at most once per period you chose. You can turn it off or delete the search in your candidate panel.',
+    },
+  },
+
+  followedCompanyJobs: {
+    pl: {
+      subject: 'Nowe oferty firmy {companyName}',
+      preview: 'Firma {companyName} opublikowała nowe oferty: {count}.',
+      heading: 'Nowe oferty obserwowanej firmy',
+      body: 'Firma {companyName}, którą obserwujesz, opublikowała nowe oferty pracy. Liczba nowych ofert: {count}. Poniżej znajdziesz najnowsze z nich.',
+      cta: 'Zarządzaj alertami',
+      outro: 'Wysyłamy ten alert najwyżej raz na okres wybrany przy obserwowanej firmie. Możesz go wyłączyć albo przestać obserwować firmę w panelu kandydata.',
+    },
+    nl: {
+      subject: 'Nieuwe vacatures van {companyName}',
+      preview: '{companyName} heeft nieuwe vacatures geplaatst: {count}.',
+      heading: 'Nieuwe vacatures van een bedrijf dat je volgt',
+      body: '{companyName}, een bedrijf dat je volgt, heeft nieuwe vacatures geplaatst. Aantal nieuwe vacatures: {count}. Hieronder vind je de nieuwste.',
+      cta: 'Meldingen beheren',
+      outro: 'We sturen deze melding hoogstens één keer per gekozen periode. Je kunt ze uitzetten of het bedrijf niet meer volgen in je kandidatenpaneel.',
+    },
+    fr: {
+      subject: 'Nouvelles offres de {companyName}',
+      preview: '{companyName} a publié de nouvelles offres : {count}.',
+      heading: 'Nouvelles offres d’une entreprise que vous suivez',
+      body: '{companyName}, une entreprise que vous suivez, a publié de nouvelles offres d’emploi. Nombre de nouvelles offres : {count}. Voici les plus récentes.',
+      cta: 'Gérer les alertes',
+      outro: 'Nous envoyons cette alerte au maximum une fois par période choisie. Vous pouvez la désactiver ou ne plus suivre l’entreprise dans votre espace candidat.',
+    },
+    en: {
+      subject: 'New jobs at {companyName}',
+      preview: '{companyName} has posted new jobs: {count}.',
+      heading: 'New jobs from a company you follow',
+      body: '{companyName}, a company you follow, has posted new jobs. Number of new jobs: {count}. The latest ones are listed below.',
+      cta: 'Manage alerts',
+      outro: 'We send this alert at most once per period you chose. You can turn it off or stop following the company in your candidate panel.',
     },
   },
 

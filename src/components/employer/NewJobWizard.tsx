@@ -50,6 +50,7 @@ function NewJobWizardForCompany({
       companyId={companyId}
       initialJobId={result?.jobId ?? undefined}
       initialValues={result?.values}
+      contentLocale={result?.contentLocale}
       importReview={result ? { fields: result.review, suspicious: result.suspicious } : undefined}
       importSlot={
         <JobImportPanel

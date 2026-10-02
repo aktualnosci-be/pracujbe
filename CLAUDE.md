@@ -833,6 +833,19 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
+  Plan dla wartości parametrów (#1215, audyt PERF-01, migracja `0213` — numer tymczasowy):
+  `get_public_jobs`/`_count`/`get_public_job_filter_facets` i `saved_search_jobs_after` to
+  `plpgsql` z `set plan_cache_mode = force_custom_plan` i `set jit = off` (dawniej `LANGUAGE sql`
+  = plan generyczny, pełny skan aktywnych ofert przy każdym wywołaniu). Tytuł do słowa kluczowego
+  = podzapytanie, lista dołącza tłumaczenie do wierszy strony, indeksy częściowe klucza
+  wynagrodzenia (`idx_jobs_public_salary_month`/`_hour`), facety biorą nazwę miejscowości po
+  kluczu głównym. Kontrakt (sygnatury, wyniki z kolejnością, granty) bez zmian; blok FROM … WHERE
+  nadal wspólny z kopią alertów (`saved-search-keyset-sync`). PG16, 9600 aktywnych ofert:
+  strona 1 233 → 1 ms, sort po wynagrodzeniu 616 → 2 ms, licznik 212 → 5 ms, facety 245 → 41 ms
+  (`docs/railway/OPERATIONS.md` §3). Dowód: `rls.sql` sekcja PF1215 (odciski wyników 34 kombinacji
+  = definicje z 0194; kontrola ujemna: stara definicja czyta wszystkie oferty), rollback
+  `0213_…down.sql` (`public-jobs-plan-rollback.sql`). Zmiana filtrów listy = ta sama zmiana
+  w czterech funkcjach (w plpgsql).
   Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
   (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
   (`f.locations.join(',')` + `splitParam`/`value.split(',')` nie rozróżniały separatora listy
@@ -853,12 +866,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   („do 2000”) nie wysyła dolnej granicy z końca suwaka (`salaryQueryParams`, licznik
   `matchesSidebar`). Lustro demo (`getJobsFromDemo`) szuka jak SQL: słowo kluczowe tylko w tytule,
   miasto tylko w nazwie miasta. Dowód: unit `city-aliases` (#1077, kontrole ujemne starej reguły),
-  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. **Otwarte (wymaga migracji,
-  #1076/M-4):** oferta zapisana z dopiskiem („Bruxelles 1000”) wypada z filtra rozpoznanego miasta
-  (dopasowanie po aliasie/`location_id`, nie po tekście) — potrzebny OR z tekstem albo normalizacja
-  kodu pocztowego w `resolve_location_id`; facet lokalizacji spoza 10 miast pokazuje nazwę
-  kanoniczną `locations.name` (aliasy w bazie bez kolumny języka), więc nazwa w języku widoku
-  wymaga kolumny `locale` w `location_aliases`.
+  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. Miasto z dopiskiem i facet w języku widoku (#1119, #1076/M-4, migracja `0212` — numer
+  tymczasowy): `location_lookup_key` (lustro `cityLookupKey` w `belgian-cities.ts`) usuwa z klucza
+  miasta belgijski kod pocztowy (4 cyfry, prefiks B/BE), nawiasy/przecinki i nazwę kraju;
+  `resolve_location_id` szuka najpierw pełnego klucza, potem klucza bez dopisku, więc „Bruxelles
+  1000”, „B-1050 Bruxelles”, „Leuven (3000)”, „Aalst, België” dostają `location_id` (trigger zapisu,
+  trigger słownika, backfill bez podbicia `updated_at`), a `location_filter_ids`/
+  `search_city_candidates` stosują tę samą regułę do wartości filtra i wyszukiwania (sam kod
+  pocztowy = brak miejscowości). Nazwy w języku serwisu: tabela `location_names` (miejscowość ×
+  pl/nl/fr/en, tylko nazwy różne od `locations.name`, bez 10 miast z plików tłumaczeń; blok danych
+  generuje `scripts/locations/build-migration.mjs` z migawki Wikidata) + `location_display_name(nazwa,
+  język)` — zwraca nazwę tylko, gdy wskazuje TĘ SAMĄ miejscowość (nazwa facetu = wartość filtra;
+  egzonim innej gminy, np. „Saint-Nicolas”, pominięty). Facety w bazie bez zmian: nazwę podmienia
+  zapytanie aplikacji wokół RPC (`getPublicJobFilterFacets`, `$1` = język; te same nazwy scalone),
+  podpowiedź miasta w kreatorze używa `resolve_location_id` i `location_display_name`. Dowód:
+  `rls.sql` sekcja PC1119 (kontrole ujemne: `resolve_location_id` z 0153, funkcja nazw bez
+  strażnika), rollback `0212_…down.sql` + `location-postal-names-rollback.sql` (ponowne nałożenie =
+  backfill), unit `location-postal-names`, `matching-locations` (blok = generator, kontrola ujemna),
+  `job-location`. **Otwarte:** matching liczy odległość z `cityKey` (bez klucza bez dopisku;
+  funkcja wyłączona w trybie ogłoszeniowym), kod pocztowy bez nazwy miasta (brak słownika kodów).
   Nowe filtry listy (migracja `0194` — numer tymczasowy): waluta (#787) — widełki i sort
   „najwyższe wynagrodzenie” są w EUR, kwot w innej walucie nie przeliczamy (brak datowanego
   kursu): oferta w PLN jest nieporównywalna jak inny okres stawki (nie odpada z filtra kwoty,
@@ -878,6 +904,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   pola. Dowód: `rls.sql` sekcja FL974 (kontrole ujemne N1–N6), rollback `0194_…down.sql`
   (`job-filters-rollback.sql`; w `city-sections-filters-rollback.sql` przed 0183), unit
   `job-filters-0194`, `job-work-time`, E2E `job-filters-0194` (bez JS, axe 320/1280 px).
+  Słowo kluczowe w kwalifikacjach (#866, migracja `0214`, stosowana PO 0213
+  z #1275): lista, licznik, facety i kopia filtrów alertów dopasowują słowo kluczowe także do
+  umiejętności (`job_skills`), certyfikatów (`job_certificates`) i wymagań (`job_requirements`,
+  tylko w języku pokazywanym na szczególe: język strony, a bez wymagań danego rodzaju — język
+  oferty); prefiltr `search_keyword_candidates` po indeksach trigramowych, dokładny warunek
+  `job_keyword_qualification_match`. Opis oferty poza zakresem. Lustro demo szuka w tytule
+  i wymaganiach. Dowód: `rls.sql` sekcja KQ866 (kontrola ujemna: definicje z 0213), rollback
+  `0214_…down.sql` (`keyword-qualifications-rollback.sql`), unit `jobs-demo-search-mirror`.
   Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
   fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
   lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało
@@ -1324,6 +1358,15 @@ dowodzie (inaczej puste pola — karta „nieznana oferta”, zapis usuwalny). D
 SJ968 (kontrole ujemne: bez strażnika, odczyt z 0162, strażnik bez `FOR SHARE` w dwóch sesjach),
 rollback `0199_…down.sql`, `portal-candidate` (PG16), unit `candidate-saved-jobs`.
 
+Porównanie zapisanych ofert (#816, bez migracji): `/candidate/zapisane` ma checkbox „Porównaj” przy każdej
+DOSTĘPNEJ ofercie (formularz GET `?porownaj=`, działa bez JS; skrypt tylko pilnuje limitu 3 i przycisku od 2)
+i tabelę `SavedJobsComparison` nad listą: wynagrodzenie (waluta i okres z oferty, bez przeliczeń), rodzaj umowy,
+godziny, zmiany, zakwaterowanie i dojazd („Koszty i dodatki” albo flagi), kluczowe wymagania obowiązkowe (≤ 5),
+jawny „Brak danych”, link do oferty. Wybór ograniczony do własnych zapisów (`parseCompareSelection`), oferta
+zamknięta/wygasła/wstrzymana albo z błędem odczytu = kolumna ze stanem bez linku; szczegóły z `getJobBySlug`
+(bez nowych zapytań o dane procesu). Model: `src/lib/saved-job-compare.ts`. Dowód: unit `saved-job-compare`,
+`saved-search-pause-follow-ui`, E2E `candidate-saved-closed` (porównanie, 4 języki, 320 px, axe).
+
 Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
 prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
 + `src/components/candidate/candidate-styles.ts`; odstępstwa w `docs/design/people-passport/README.md`.
@@ -1500,6 +1543,12 @@ ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontro
 bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
 SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
 za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
+Termin digestu bez dryfu (#1112, migracja `0211` — numer tymczasowy): worker liczył
+`next_run_at` od chwili przebiegu (cron co godzinę przesuwał porę digestu); teraz
+`saved_search_next_run_at` = poprzedni termin + pełne okresy w czasie ściennym Europe/Brussels
+(stała pora także przy zmianie czasu), pierwszy termin po przebiegu, zaległe okresy pominięte.
+Dowód: `rls.sql` sekcja SD1112 (kontrola ujemna: worker z 0138 dryfuje), rollback
+`0211_…down.sql` (`saved-search-schedule-rollback.sql`).
 Tryb ogłoszeniowy (#1148, bez migracji): zapisane wyszukiwania i alerty działają bez zmian, bo
 wynikają wyłącznie z filtrów użytkownika. Strażnik `tests/legal/classifieds-saved-search.test.ts`:
 najnowsze definicje funkcji `*saved_search*` bez profilu kandydata i dopasowań (wyjątek: blokada
@@ -1509,6 +1558,27 @@ publiczna, akcje/strony/trasy bez bramki trybu, `/api/maintenance` woła worker 
 profilem: zapis, nazwa, alert, digest, wyłączenie z linku; kontrola ujemna: wymóg onboardingu).
 E2E `tests/e2e-real/saved-search-classifieds.spec.ts` (`E2E_PORTAL_LEGAL_MODE=`, mutacja
 `saved-search-requires-onboarding` = czerwony).
+Pauza alertów i obserwowanie firmy (#810, #855, migracja `0215` — numer tymczasowy, bez zmiany
+`get_public_jobs` ani `saved_search_jobs_after`): jedna czasowa pauza dla konta (`saved_search_alert_pauses`,
+RPC `set_saved_search_alerts_pause(date)`: jutro..+366 dni, Europe/Brussels; `null` = wznów od razu). Worker
+`process_saved_search_alerts` pomija konta w pauzie (wyszukiwanie zostaje do wykonania), a po jej końcu liczy
+nowości od `paused_until` — oferty z okresu pauzy nie wracają lawiną, późniejsze trafiają do kolejnych alertów;
+ustawienia pojedynczych wyszukiwań bez zmian. Panel `/candidate/wyszukiwania`: `SavedSearchesPause` (data,
+„Wstrzymaj”/„Wznów teraz”; błąd odczytu = jawny komunikat, nie „brak pauzy”). Obserwowanie firmy = zapisane
+wyszukiwanie z `saved_searches.company_id` (filtry v1 `{}`, hash `md5('company:'||id)`, limit 20 wspólny):
+RPC `follow_company`/`unfollow_company`/`get_my_followed_companies` (tylko kandydat, firma `verified` z profilem,
+zablokowana przez kandydata = `NOT_FOUND`); worker bierze dla nich nowe aktywne niewygasłe oferty firmy po
+`company_id` (blokady #97, deduplikacja pary wyszukiwanie–oferta, zgody, wypisanie z linku jak przy wyszukiwaniu);
+digest to osobny szablon `followedCompanyJobs` („Nowe oferty firmy …”, PL/NL/FR/EN, payload `companyName`/`count`/`jobs`,
+kategoria `job_matches` i pula marketingowa jak `jobMatch`, link i `List-Unsubscribe` tokenem alertu wyłączają tylko tę
+obserwację). Przycisk „Obserwuj firmę” (`FollowCompanyButton`, wyspa na ISR-owym
+profilu `/pracodawcy/<slug>`: gość = link logowania z powrotem, pracodawca/demo nic); firma nie ma odczytu
+obserwujących. Dowód: `rls.sql` sekcje PS969/FC969 (kontrole ujemne na definicji workera: bez klauzuli pauzy,
+bez dolnej granicy, bez filtra firmy, bez klauzuli pauzy w kolejce), rollback `0215_…down.sql`
+(`saved-search-pause-follow-rollback.sql` w `test-rls.sh`), unit `saved-search-pause-follow`,
+`saved-search-pause-follow-ui`, `saved-search-followups`. Digest zakolejkowany przed pauzą jest wygaszany
+(`suppressed_alert_paused`) przy claimie i tuż przed wysyłką — `email_delivery_suppression_reason` w 0215 bazuje na
+definicji z 0186 (oba szablony alertu, z niepotwierdzonym adresem marketingu #1038). **Otwarte:** wypisanie z alertów firmy w jednym kliknięciu z pauzą.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
@@ -1725,6 +1795,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   integracja `portal-employer-actions`, unit `job-wizard-draft-version`. **Otwarte:** wersja
   szkicu po imporcie (pierwszy zapis bez kontroli), szkic wczytany i niezmieniony wysyła zapis
   przy pierwszym „Dalej” (brak migawki z bazy).
+  Wznowienie od zapisanego kroku (#834, migracja `0216` — numer tymczasowy): `jobs.draft_step`
+  (smallint 1–9, CHECK `jobs_draft_step_range`, null = start od kroku 1 — stare szkice, import,
+  kopia szkicu) = najdalszy krok kreatora z udanym zapisem. `updateJobDraft` dokłada do treści
+  `draft_step = krok`, a `save_job_draft` (definicja z 0194 + ten klucz) podnosi go `greatest`
+  w tej samej transakcji co treść (powrót do wcześniejszego kroku nie cofa postępu; wartość spoza
+  1–9 = `VALIDATION_FAILED` bez zapisu; zapis bez klucza nie zmienia postępu). `getJobDraft` →
+  `resumeStep` (tylko szkic), strona edycji → `JobWizard initialStep` (`resumeWizardStep`; tryb
+  edycji opublikowanej oferty zawsze od kroku 1). Samo wznowienie i „Wstecz” niczego nie
+  zapisują. Dowód: `rls.sql` sekcja DS834 (kontrola ujemna: funkcja z 0194 pomija klucz),
+  rollback `supabase/rollback/0216_…down.sql` + `job-draft-step-rollback.sql`, unit
+  `job-wizard-resume-step` (kontrole ujemne), `save-job-draft-step`.
   Podgląd wynagrodzenia w kroku 9 (#1224, bez migracji): `normalizeSalary`/`formatSalaryRange`
   z etykietami `jobs.passport.*` (jak karta i szczegół) zamiast surowych pól formularza — „do 3000 €
   brutto / mies.”, waluta i separatory wg locale. Test `job-wizard-salary-preview` (kontrola ujemna).
@@ -1820,10 +1901,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   tymczasowy): `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucają już
   tylko pusty tytuł (dawny warunek „draft%/placeholder” z 0031 blokował np. „Draftsman”); dowód
   `rls.sql` sekcja BZ1221 (kontrole ujemne: definicje sprzed 0203), rollback
-  `0203_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):** język
-  proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
+  `0203_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):**
+  screening-pytania nie są przenoszone
   przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
   i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
+  Import AI proponuje język treści wykryty w źródle (#1048, bez migracji): pole `sourceLanguage`
+  structured output (kod ISO 639-1) → `importContentLocale` (`src/lib/ai-import/map.ts`: tylko
+  podstawowy podznacznik z dwóch liter, `nl-BE` → `nl`; nazwa języka, `de` i śmieci → `null`)
+  → szkic tworzony w tym języku (`createJobDraft(contentLocale)`), wynik akcji niesie
+  `contentLocale`/`contentLocaleDetected`, kreator startuje z nim w polu „Język ogłoszenia”, panel
+  importu pokazuje `jobImport.detectedLanguage`; brak/język spoza serwisu = język panelu. Dowód:
+  unit `ai-import-map`, `job-import-action`, `job-import-panel` (kontrole ujemne), E2E `job-import`.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -2105,6 +2193,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `rls.sql` sekcja TI179 (kontrola ujemna: definicja z 0086 bez `locale`), unit
   `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
   (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
+  Ponowienie po błędzie sieci (#1113, bez migracji): formularz zaproszenia i „Odnów” wysyłają
+  klucz operacji (UUID w `useRef`, nowy po sukcesie albo po zmianie adresu/roli/języka), a akcja
+  liczy z niego nonce linku (`teamInviteTokenForOperation`: HMAC sekretu z konta, firmy, danych
+  operacji i klucza) — ponowienie = ten sam token, więc `invite_company_member` nie wysyła
+  drugiego e-maila (klucz idempotencji e-maila zawiera skrót tokenu) i nie unieważnia linku
+  z pierwszej wiadomości; bez klucza token losowy jak dotąd. Dowód: unit `team-actions`,
+  `team-invitation-renew`, `team-invitations-ui` (kontrole ujemne: inny klucz/dane = nowy token).
   Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
   `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
   `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
@@ -2114,6 +2209,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
   nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
   TM403-13c przez `INVITATION_LIMIT_REACHED`).
+  Przywrócenie wyłączonego członka przez zaproszenie (#867, migracja `0217` — numer tymczasowy):
+  zaproszenie na adres osoby z NIEAKTYWNYM członkostwem wymaga, by zapraszający zarządzał jej
+  dotychczasową rolą i rolą z zaproszenia (reguła `set_company_member_active`) — strażnik BEFORE
+  INSERT/UPDATE na `company_invitations` (`MEMBER_REACTIVATION_DENIED` → `team.error.reactivationDenied`,
+  bez redefinicji `invite_company_member`) i ponownie `respond_to_company_invitation` przy
+  przyjęciu (`REACTIVATION_NOT_ALLOWED` → `team.error.reactivationNotAllowed`; obejmuje zaproszenia
+  sprzed migracji i zapraszającego, który stracił uprawnienia). Admin nie przywróci wyłączonego
+  admina zaproszeniem na rekrutera; owner może. Dowód: `rls.sql` sekcja TMR867 (kontrola ujemna:
+  rollback `0217_…down.sql` = obejście działa), `team-reactivation-rollback.sql`, unit `team-actions`.
+  Token a limit e-maili (#793, migracja `0210`): odświeżenie zaproszenia dla adresu bez konta
+  wymienia `signup_token_hash` dopiero po udanym zakolejkowaniu e-maila z nowym tokenem — odmowa
+  limitu 3/dobę zostawia token z ostatnio wysłanego e-maila (link działa); wynik RPC bez zmian,
+  adres z kontem jak dotąd. Podpowiedź `team.inviteLinkHint` opisuje limit. Dowód: `rls.sql`
+  TI611-3 (równolegle) i P2C994 (kontrola ujemna: definicja z 0178 wymienia token bez e-maila).
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — **wyłączone w trybie ogłoszeniowym (#1131)** — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -2301,6 +2410,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
   (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
   unit `translation-worker`, `translation-job-sync`.
+  Wyścig wznowienia oferty z zawieszeniem firmy (#802, migracja `0210`):
+  `sync_job_translation_source` czyta firmę z `FOR SHARE OF c` — synchronizacja oferty czeka na
+  zatwierdzenie zmiany statusu firmy i widzi `suspended` (źródło nieaktywne, zadania nie wracają);
+  wiersz oferty bez blokady (brak zakleszczenia ze stroną firmy); migracja ponownie synchronizuje
+  aktywne źródła. Częściowy przekład (#896, bez migracji): `machineTranslation.untranslated` =
+  niepuste pola bez klucza w przekładzie; opis oferty i opis firmy w oryginale mają `lang` języka
+  źródła. Dowód: `rls.sql` P2C994 (kontrola ujemna: sync z 0190 reaktywuje źródło), unit
+  `job-machine-translation`, `job-detail-partial-translation-lang` (kontrole ujemne).
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -2640,6 +2757,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
   `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
   (edytor), `admin-a11y` (nowe trasy).
+  Równoległe paczki (#906, migracja `0210` — numer tymczasowy): `enqueue_campaign_batch` blokuje
+  wiersz kampanii `FOR NO KEY UPDATE` (dawniej `FOR SHARE`), więc druga paczka czeka na pierwszą
+  i widzi jej rezerwacje; `completed` tylko, gdy zapytanie nie znalazło nikogo do rezerwacji
+  (konflikt nie kończy kampanii). Dowód: `rls.sql` sekcja P2C994 (dblink, limit 1; kontrola
+  ujemna: definicja z 0186 kończy kampanię i pomija drugiego odbiorcę).
   Zapis a edycja w toku (#820): `createEmailCampaignRevision` jest idempotentny po `clientKey`
   (retry z tym samym kluczem NIE aktualizuje treści), więc pola edytora muszą być zablokowane
   na czas zapisu — inaczej edycja wpisana w trakcie oczekiwania na odpowiedź serwera ginie po
@@ -3028,6 +3150,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   nie blokuje zwykłego zapisu). Dowód: unit `breach-register` (`#835` — retry bez zmian = sukces,
   retry ze zmianą = konflikt z wersją, kontrola ujemna: awaria odczytu porównawczego nie blokuje
   zapisu; `breachFormsMatch` — zgodność po normalizacji i wykrycie różnicy pól).
+  Jesienna zmiana czasu (#1112, bez migracji): `appLocalInputToUtc(value, previousIso)` —
+  niezmienione pole `datetime-local` w niejednoznacznej godzinie 02:00–03:00 zwraca zapisaną
+  chwilę zamiast przesunięcia o godzinę (formularz podaje wartości z `initial`). Dowód: unit
+  `breach-register` (kontrola ujemna: bez podpowiedzi oba wystąpienia dają tę samą chwilę).
   Wspólny `csvCell` (#876, bez migracji): neutralizacja formuł arkusza rozszerzona o wiodący LF
   (`\n`) i pełnoszerokie warianty operatorów (`＝ ＋ － ＠`) — poprzedni regex `/^[=+\-@\t\r]/`
   pomijał oba przypadki z listy OWASP CSV Injection, więc kontrolowana wartość zaczynająca się
@@ -3279,9 +3405,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/analytics/route-policy.ts`). Dowód: `rls.sql` sekcja M2RD (kontrole ujemne: polityka 0033,
   strażnik 0084, bramki 0099, `is_admin` z 0019, brak triggerów), rollback `rls-data-hardening-rollback.sql`
   (w `scripts/test-rls.sh`), unit `analytics-route-policy`, `admin-retention`, `admin-jobs`, integracja
-  `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
-  kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
-  ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
+  `auth-actions` (dwa linki resetu). Eksport kandydata (#1091, migracja `0218` — numer tymczasowy):
+  `export_my_data` dopisuje `contentReports` (zgłoszenia treści złożone przez kandydata, bez zgłoszonej
+  treści, `target_id` i kodu dostępu; kształt jak w eksporcie pracodawcy) i `retentionWarnings`
+  (wysłane ostrzeżenia retencji z terminem); dowód `rls.sql` sekcja CX1091 (kontrole ujemne: bez filtra
+  właściciela, rollback 0218), rollback `candidate-export-reports-rollback.sql`. **Otwarte (#1091):**
+  historia widoczności profilu w eksporcie (funkcja wyłączona w trybie ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
 - [~] Wydajność bazy i nazwy bez znaków sterujących (audyt 29.09, #1245/#1244/#1096, migracja `0206` — numer
   tymczasowy, rollback `supabase/rollback/0206_…down.sql`): indeksy pod usuwanie konta i kaskady FK
   (`notifications`/`email_deliveries` po `entity_id`, `saved_search_alerts.profile_id`, kolumny aktora
