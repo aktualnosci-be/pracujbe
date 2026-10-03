@@ -22,6 +22,8 @@ export interface FilterSummaryTranslators {
   contractTypes: FilterTranslator;
   /** Przestrzeń `languageNames` (nazwa języka w języku widza, 0194). */
   languageNames: FilterTranslator;
+  /** Przestrzeń `jobBenefits` (nazwy świadczeń, #826). */
+  benefits: FilterTranslator;
 }
 
 /**
@@ -122,6 +124,9 @@ export function describeJobListFilters(
       removeKey: 'near',
       alsoRemove: ['radius'],
     });
+  }
+  for (const code of sf.benefits) {
+    items.push({ id: `benefit-${code}`, label: t.benefits(code), removeKey: 'benefits', removeValue: code });
   }
   if (sf.date !== 'any') {
     const key = sf.date === '24h' ? 'date24h' : sf.date === '7d' ? 'date7d' : 'date30d';

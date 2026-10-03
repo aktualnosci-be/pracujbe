@@ -577,7 +577,9 @@
       "skillsMandatory": "Compétences requises",
       "skillsOptional": "Compétences appréciées",
       "certificates": "Certificats et habilitations"
-    }
+    },
+    "benefitsTitle": "Avantages extralégaux",
+    "benefitsOther": "Autres avantages"
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1471,7 +1473,9 @@
     "radiusNote": "La distance est mesurée à vol d’oiseau depuis une commune de notre liste. Les offres sans commune reconnue ne sont pas affichées avec ce filtre. Les offres en télétravail sont affichées quel que soit le rayon.",
     "radiusChip": "À {km} km maximum de {place}",
     "nearUnknown": "Nous n’avons pas reconnu la commune « {place} ». Indiquez le nom d’une commune ou d’une ville belge, par exemple Gand ou Liège.",
-    "salaryCurrencyNote": "Les montants dans une autre devise que l’euro ne sont pas convertis : ces offres restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire."
+    "salaryCurrencyNote": "Les montants dans une autre devise que l’euro ne sont pas convertis : ces offres restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire.",
+    "benefits": "Avantages extralégaux",
+    "benefitsNote": "Nous affichons les offres avec chaque avantage coché. Les offres dont l’employeur n’a indiqué aucun avantage ne sont pas prises en compte."
   },
   "notifications": {
     "title": "Notifications",
@@ -1776,7 +1780,7 @@
     "noLanguageRequired": "Emploi sans connaissance linguistique",
     "conditionsLabel": "Conditions de travail",
     "conditionsPlaceholder": "ex. CDI",
-    "benefitsLabel": "Avantages",
+    "benefitsLabel": "Autres avantages et détails",
     "benefitsPlaceholder": "ex. Primes et indemnités",
     "companyDescriptionLabel": "Description de l'entreprise",
     "companyDescriptionPlaceholder": "Présentez brièvement l'entreprise aux candidats.",
@@ -1891,6 +1895,8 @@
     "workTimeFull": "Temps plein",
     "workTimePart": "Temps partiel",
     "workTimeBoth": "Temps plein ou partiel",
+    "benefitCodesLegend": "Avantages extralégaux",
+    "benefitCodesHint": "Cochez ce que vous proposez. Les candidats peuvent filtrer les offres selon ces avantages. Les chèques-repas et le remboursement des déplacements comptent aussi depuis « Frais et avantages ».",
     "workModeLabel": "Mode de travail",
     "workModeHint": "« Télétravail complet » signifie que le travail se fait toujours à distance. S’il faut parfois venir sur place, choisissez « Hybride ».",
     "workMode": {
@@ -4298,6 +4304,20 @@
     "remindDue": "Il est temps de relancer",
     "openSource": "Ouvrir l'annonce",
     "listLabel": "Entrées du journal de candidatures"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Chèques-repas",
+    "eco_vouchers": "Éco-chèques",
+    "commute_allowance": "Remboursement des frais de déplacement",
+    "bike_allowance": "Indemnité vélo",
+    "company_car": "Voiture de société",
+    "mobility_budget": "Budget mobilité",
+    "hospital_insurance": "Assurance hospitalisation",
+    "group_insurance": "Assurance groupe",
+    "year_end_bonus": "Prime de fin d’année (13e mois)",
+    "extra_leave": "Jours de congé supplémentaires",
+    "training": "Formations payées par l’employeur",
+    "phone_laptop": "Téléphone ou ordinateur portable professionnel"
   },
   "countryNames": {
     "BE": "Belgique",

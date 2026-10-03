@@ -152,7 +152,7 @@ export default async function JobsListPage({
 
   const page = parsePage(flat['page']);
 
-  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames, tSearchAssist] = await Promise.all([
+  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames, tBenefits, tSearchAssist] = await Promise.all([
     getTranslations('jobs'),
     getTranslations('filters'),
     getTranslations('categories'),
@@ -160,6 +160,7 @@ export default async function JobsListPage({
     getTranslations('common'),
     getTranslations('nav'),
     getTranslations('languageNames'),
+    getTranslations('jobBenefits'),
     getTranslations('jobSearchAssist'),
   ]);
 
@@ -267,7 +268,7 @@ export default async function JobsListPage({
   const chips: Array<{ id: string; label: string; href: string }> = describeJobListFilters(
     listQuery,
     locale,
-    { filters: tFilters, categories: tCat, contractTypes: tContract, languageNames: tLanguageNames },
+    { filters: tFilters, categories: tCat, contractTypes: tContract, languageNames: tLanguageNames, benefits: tBenefits },
   ).map((item) => ({
     id: item.id,
     label: item.label,

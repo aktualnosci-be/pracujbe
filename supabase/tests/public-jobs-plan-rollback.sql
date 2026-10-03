@@ -19,11 +19,11 @@ $$;
 \set PF_COUNT 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'
 \set PF_FACETS 'public.get_public_job_filter_facets(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'
 \set PF_SAVED 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer)'
--- Stan bieżący: 0227 (grafik pracy, numer tymczasowy) dodaje parametr p_shift_patterns.
-\set PF_LIST_CUR 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])'
-\set PF_COUNT_CUR 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'
-\set PF_FACETS_CUR 'public.get_public_job_filter_facets(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'
-\set PF_SAVED_CUR 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])'
+-- Stan bieżący: 0227 (grafik pracy) dodaje p_shift_patterns, 0229 (świadczenia, numer tymczasowy) — p_benefits.
+\set PF_LIST_CUR 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[])'
+\set PF_COUNT_CUR 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[])'
+\set PF_FACETS_CUR 'public.get_public_job_filter_facets(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[])'
+\set PF_SAVED_CUR 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[])'
 
 select pg_temp.assert(
   pg_temp.pf_lang(:'PF_LIST_CUR'::regprocedure) = 'plpgsql'
@@ -35,6 +35,10 @@ select pg_temp.assert(
   'PF1215-R0 baza w stanie po 0213');
 
 begin;
+-- 0229 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
+\ir ../rollback/0229_job_benefits.down.sql
+-- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
+\ir ../rollback/0228_job_work_mode.down.sql
 -- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
 \ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql

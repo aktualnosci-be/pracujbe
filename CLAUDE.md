@@ -2073,6 +2073,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Dowód: `rls.sql` CB10 (kontrola ujemna CB10n bez strażnika), unit `job-costs`,
   `update-published-job`, E2E `job-costs`. **Otwarte (właściciel):** filtry listy po nowych
   polach, tabela stawek komisji.
+- [x] Strukturalne świadczenia oferty (#826, migracja `0229` — numer tymczasowy; rozszerza 0169):
+  `jobs.benefit_codes` = kody ze stałego katalogu `job_benefit_catalog()` (lustro
+  `src/lib/job-benefits.ts`, etykiety `jobBenefits.*` w 4 językach): bony żywieniowe, ekobony,
+  zwrot dojazdu, dodatek rowerowy, samochód służbowy, budżet mobilności, ubezpieczenie szpitalne
+  i grupowe, premia na koniec roku, dodatkowe dni wolne, szkolenia, telefon/laptop. Brak kodu =
+  „nie podano”, starych ofert nie klasyfikujemy; tekstowe `benefits` = „Inne benefity i szczegóły”.
+  `job_effective_benefits` łączy kody z polami 0169 (kwota bonów → bony, zwrot dojazdu). Kreator:
+  checkboxy w kroku 8 (`benefitCodes`, `jobCostsPatch` → `save_job_draft`/`update_published_job`),
+  kopia szkicu (trigger), audyt edycji. Szczegół: sekcja „Świadczenia” (`get_public_job_benefits`,
+  odczyt pomocniczy). Filtr `p_benefits` (oferta ma KAŻDE wybrane) w liście, liczniku, bazie
+  facetów i kopii dla alertów; URL `benefits=` (CSV, bez JS powtórzony klucz), chipy, klucz
+  kanoniczny zapisanego wyszukiwania `benefits`. Dowód: `rls.sql` sekcja BN976 (kontrole ujemne:
+  bez warunku, bez pochodnych 0169, kopia alertów, bez CHECK), rollback `0229_…down.sql`
+  (`job-benefits-rollback.sql`; przywraca dokładnie definicje list z 0227 oraz `save_job_draft`/
+  `update_published_job`/`job_edit_audit_snapshot` z 0228 — w testach rollbacku 0229 przed 0228,
+  0227, 0214/0213/0194), unit `job-benefits`. Definicje = stan 0227 (grafik pracy, #858) i 0228
+  (tryb pracy, #792) + świadczenia: `p_benefits` po `p_shift_patterns`, sygnatury 0227 usuwane (bez przeciążeń).
+  **Otwarte:** liczniki facetów per świadczenie, `jobBenefits` w JobPosting, kwoty/częstotliwość
+  poza bonami żywieniowymi.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”

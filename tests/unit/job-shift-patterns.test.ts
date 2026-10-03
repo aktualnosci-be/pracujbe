@@ -44,6 +44,7 @@ const t = {
   categories: (key: string) => key,
   contractTypes: (key: string) => key,
   languageNames: (key: string) => key,
+  benefits: (key: string) => key,
 };
 
 describe('0227: lista wartości = baza', () => {

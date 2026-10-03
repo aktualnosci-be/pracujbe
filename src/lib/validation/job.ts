@@ -24,6 +24,7 @@ import {
   ACCOMMODATION_KINDS,
 } from '@/lib/job-costs';
 import { WORK_TIME_VALUES } from '@/lib/job-filter-options';
+import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
 import { APPLICANT_COUNTRIES, WORK_MODES } from '@/lib/job-work-mode';
 
 /**
@@ -276,6 +277,8 @@ const euroAmount = (min: number, max: number, message: string) =>
 const step8Base = z.object({
   conditions: z.array(textLine).max(20, 'job.error.conditionsTooMany').default([]),
   benefits: z.array(textLine).max(20, 'job.error.benefitsTooMany').default([]),
+  // 0229 (#826): świadczenia z katalogu (kody = `job_benefit_catalog()`); brak = nie podano.
+  benefitCodes: z.array(z.enum(JOB_BENEFIT_CODES)).max(JOB_BENEFIT_CODES.length).default([]),
   accommodation: z.boolean().default(false),
   transport: z.boolean().default(false),
   accommodationKind: z.enum(ACCOMMODATION_KINDS).optional(),

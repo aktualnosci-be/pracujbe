@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { benefitsMatch, parseJobBenefitsRow, type JobBenefitCode, type JobBenefits } from '@/lib/job-benefits';
 import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
@@ -217,6 +218,12 @@ export interface JobDetail extends JobListItem {
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
   /**
+   * Świadczenia (#826, 0229 — `get_public_job_benefits`): kody efektywne z katalogu (z bonami
+   * i zwrotem dojazdu z „Kosztów i dodatków”) + tekstowe „inne”. Brak = odczyt nieudany albo
+   * nic nie podano — strona nie pokazuje sekcji.
+   */
+  benefits?: JobBenefits;
+  /**
    * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
    * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
    */
@@ -286,6 +293,8 @@ export interface GetJobsParams {
   near?: string;
   /** #824: promień w km (z `near`). */
   radiusKm?: RadiusKm;
+  /** #826 (0229): świadczenia — oferta ma KAŻDE wybrane (kody katalogu). */
+  benefits?: JobBenefitCode[];
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -442,6 +451,10 @@ function getJobsFromDemo(
   if (params.shiftPatterns?.length) {
     const wanted = params.shiftPatterns;
     jobs = jobs.filter((job) => shiftPatternsMatch(job.shiftPatterns, wanted));
+  }
+  if (params.benefits?.length) {
+    const wanted = params.benefits;
+    jobs = jobs.filter((job) => benefitsMatch(job.benefits?.codes ?? [], wanted));
   }
   if (params.near?.trim()) {
     const center = belgianCityCoordinates(params.near.trim());
@@ -675,6 +688,14 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobShiftPatterns' });
   }
+  // 0229 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
+  let benefits: JobBenefits | undefined;
+  try {
+    const { getPublicJobBenefits } = await import('@/lib/db/public-jobs');
+    benefits = parseJobBenefitsRow(await getPublicJobBenefits(pool, job.id, locale));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobBenefits' });
+  }
   // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
   let qualifications: JobQualifications | undefined;
   try {
@@ -689,6 +710,7 @@ async function getJobBySlugFromDb(
     ...job,
     ...(costs ? { costs } : {}),
     ...(shiftPatterns.length > 0 ? { shiftPatterns } : {}),
+    ...(benefits && (benefits.codes.length > 0 || benefits.other.length > 0) ? { benefits } : {}),
     ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),

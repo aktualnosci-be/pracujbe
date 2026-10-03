@@ -69,17 +69,19 @@ export async function suggestJobSearchFilters(input: unknown): Promise<JobSearch
 
     const { mapped } = result;
     const locale = request.locale;
-    const [filters, categories, contractTypes, languageNames] = await Promise.all([
+    const [filters, categories, contractTypes, languageNames, benefits] = await Promise.all([
       getTranslations({ locale, namespace: 'filters' }),
       getTranslations({ locale, namespace: 'categories' }),
       getTranslations({ locale, namespace: 'contractTypes' }),
       getTranslations({ locale, namespace: 'languageNames' }),
+      getTranslations({ locale, namespace: 'jobBenefits' }),
     ]);
     const items = describeJobListFilters(parseJobListQuery(mapped.params, locale), locale, {
       filters,
       categories,
       contractTypes,
       languageNames,
+      benefits,
     });
     return {
       ok: true,

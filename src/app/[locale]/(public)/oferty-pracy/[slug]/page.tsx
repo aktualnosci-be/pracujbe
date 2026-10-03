@@ -246,7 +246,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const messagingOn = isRecruitmentEnabled('messaging');
   const explainProvider = jobExplainProvider();
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, tBenefits, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -256,6 +256,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('contentReport'),
     getTranslations('landing'),
     getTranslations('languageNames'),
+    getTranslations('jobBenefits'),
     getFormatter(),
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
@@ -348,12 +349,21 @@ export default async function JobDetailPage({ params }: PageProps) {
   // SEO bez zmian: wersja z przekładem nadal kanonizuje się do oryginału i nie ma JobPosting.
   const translation = job.machineTranslation;
   const contentLang = version.fallback && !translation ? version.contentLocale : undefined;
+  // „Inne benefity” to tekst pracodawcy bez przekładu (#826): przy przekładzie strony zostaje
+  // w języku źródła, więc `lang` = język źródła, gdy różni się od strony.
+  const benefitsOtherLang = translation
+    ? translation.sourceLocale !== locale
+      ? translation.sourceLocale
+      : undefined
+    : contentLang;
+
   // #896: przy częściowym przekładzie pole bez klucza w przekładzie zostaje w oryginale —
   // oznaczamy je językiem źródła, a nie językiem dokumentu (WCAG 3.1.2).
   const fieldLang = (field: TranslatableScalar): string | undefined =>
     translation
       ? (translation.untranslated?.includes(field) ? translation.sourceLocale : undefined)
       : contentLang;
+
   // #866: wpis pracodawcy (umiejętność spoza słownika, certyfikat) jest w języku treści oferty —
   // także przy przekładzie (#33), który kwalifikacji nie tłumaczy; nazwa ze słownika = język strony.
   const qualificationLang = job.contentLocale && job.contentLocale !== pageLocale ? job.contentLocale : undefined;
@@ -707,6 +717,37 @@ export default async function JobDetailPage({ params }: PageProps) {
                     </li>
                   ))}
                 </ul>
+              </Section>
+            ) : null}
+
+            {/* #826 (0229): świadczenia — kody z katalogu w języku strony, „inne” w języku treści. */}
+            {job.benefits && (job.benefits.codes.length > 0 || job.benefits.other.length > 0) ? (
+              <Section title={t('benefitsTitle')}>
+                <div data-testid="job-benefits">
+                  {job.benefits.codes.length > 0 ? (
+                    <ul className="grid gap-3 sm:grid-cols-2">
+                      {job.benefits.codes.map((code) => (
+                        <li key={code} className="flex items-start gap-2.5" data-benefit={code}>
+                          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+                          <span className="text-foreground">{tBenefits(code)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {job.benefits.other.length > 0 ? (
+                    <>
+                      <h3 className="mb-2 mt-4 text-sm font-semibold text-foreground">{t('benefitsOther')}</h3>
+                      <ul lang={benefitsOtherLang} className="grid gap-3 sm:grid-cols-2">
+                        {job.benefits.other.map((item) => (
+                          <li key={item} className="flex items-start gap-2.5">
+                            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+                            <span className="text-foreground">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
               </Section>
             ) : null}
 

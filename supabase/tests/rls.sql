@@ -2949,9 +2949,9 @@ reset role;
 
 -- SP188-7: granty jak dotąd — anon/authenticated tak, PUBLIC nie.
 select pg_temp.assert(
-  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])', 'execute')
-  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute')
+  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[])', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[])', 'execute')
   and not exists (
     select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
     where p.pronamespace = 'public'::regnamespace
@@ -12742,9 +12742,9 @@ select pg_temp.assert(
   and not has_function_privilege('authenticated', 'public.search_title_candidates(text)', 'execute')
   and not has_function_privilege('anon', 'public.search_city_candidates(text)', 'execute')
   and not has_function_privilege('authenticated', 'public.search_city_candidates(text)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])', 'execute')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute')
-  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'execute'),
+  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[])', 'execute')
+  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[])', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- =============================================================================
@@ -14846,7 +14846,7 @@ reset role;
 -- (po kluczu wynagrodzenia), przed `limit`/`offset` — introspekcja niezależna od danych.
 select pg_temp.assert(
   regexp_replace(pg_get_functiondef(
-    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])'::regprocedure),
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])'::regprocedure),
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
   'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
@@ -14880,7 +14880,8 @@ create or replace function public.get_public_jobs(
   p_near           text        default null,
   p_radius_km      integer     default null,
   -- 0227: grafik pracy
-  p_shift_patterns text[]      default null
+  p_shift_patterns text[]      default null,
+  p_benefits       text[]      default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -14942,7 +14943,7 @@ language sql stable security definer set search_path = public, pg_temp as $jlneg
 $jlneg$;
 select pg_temp.assert(
   not (regexp_replace(pg_get_functiondef(
-    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])'::regprocedure),
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])'::regprocedure),
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
   'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
@@ -18814,7 +18815,7 @@ reset role;
 begin;
 do $ft$
 declare
-  v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'::regprocedure);
+  v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[])'::regprocedure);
 begin
   if position('or not c.is_agency' in v_def) = 0 then
     raise exception 'ASSERT FAILED: FT167-9d brak warunku agencji w get_public_jobs_count';
@@ -25586,7 +25587,7 @@ begin
   end if;
   execute replace(v_def, p_from, p_to);
 end $$;
-\set FLSIG 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])'
+\set FLSIG 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])'
 -- N1: bez waluty (stara reguła 0091) 3000 PLN staje się „3000 EUR” w sortowaniu i filtrze.
 begin;
 select pg_temp.fl_patch(:'FLSIG', 'j.salary_period, j.currency, p_salary_unit) end', 'j.salary_period, p_salary_unit) end');
@@ -25627,7 +25628,7 @@ select pg_temp.assert(
 rollback;
 -- N6: kopia dla alertów bez nowego warunku daje inny zbiór niż lista.
 begin;
-select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[])',
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[],text[])',
   'j.work_time in (p_work_time, ''both'')', 'true');
 set local role service_role;
 select pg_temp.assert(
@@ -25640,7 +25641,7 @@ rollback;
 -- to samo w liczniku, facetach i kopii alertów.
 begin;
 select pg_temp.fl_patch(:'FLSIG', 'or j.remote is true', 'or false');
-select pg_temp.fl_patch('public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])',
+select pg_temp.fl_patch('public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[])',
   'or j.remote is true', 'or false');
 select pg_temp.assert(
   pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2']
@@ -25648,7 +25649,7 @@ select pg_temp.assert(
   'FL974-N7 bez gałęzi pracy zdalnej zdalna oferta daleko poza promieniem odpada');
 rollback;
 begin;
-select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[])',
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[],text[])',
   'or j.remote is true', 'or false');
 set local role service_role;
 select pg_temp.assert(
@@ -25665,6 +25666,188 @@ select pg_temp.assert(
    cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-2', 'fl974-5', 'fl974-7'],
   'FL974-7g kopia alertów: oferty zdalne w każdym promieniu (= lista FL974-5a)');
 reset role;
+
+-- ============================================================================
+-- BN976. Strukturalne świadczenia oferty (#826, migracja 0229 — numer tymczasowy).
+--   `jobs.benefit_codes` (katalog `job_benefit_catalog()`), świadczenia efektywne
+--   (`job_effective_benefits`: kody + bony żywieniowe z kwoty + zwrot dojazdu z 0169), filtr
+--   `p_benefits` (oferta ma KAŻDE wybrane) w liście, liczniku, facetach i kopii dla alertów,
+--   klucz kanoniczny `benefits` zapisanego wyszukiwania, zapis kreatora, kopia szkicu, odczyt
+--   sekcji szczegółu. Kontrole ujemne: definicje bez warunku, bez pochodnych z 0169 i kopia
+--   alertów bez warunku dają inny (błędny) wynik.
+-- ============================================================================
+\echo '--- BN976 świadczenia oferty ---'
+\set BNC  'b9760000-0000-4000-8000-0000000000c1'
+\set BNE  'b9760000-0000-4000-8000-0000000000e1'
+\set BNK  'b9760000-0000-4000-8000-0000000000a1'
+\set BNJ1 'b9760000-0000-4000-8000-000000000001'
+\set BNJ2 'b9760000-0000-4000-8000-000000000002'
+\set BNJ3 'b9760000-0000-4000-8000-000000000003'
+\set BNJ4 'b9760000-0000-4000-8000-000000000004'
+\set BNJ5 'b9760000-0000-4000-8000-000000000005'
+\set BNJD 'b9760000-0000-4000-8000-0000000000d1'
+\set BNJC 'b9760000-0000-4000-8000-0000000000d2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'BNE','bne@test.be','Bea E','{"role":"employer","first_name":"Bea","last_name":"E","locale":"nl"}'),
+  (:'BNK','bnk@test.be','Bart K','{"role":"candidate","first_name":"Bart","last_name":"K","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'BNC','Firma BN976','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'BNC',:'BNE','owner',true);
+-- is_demo: oferty sekcji nie trafiają do kolejki tłumaczeń (0146 pomija demo), więc nie
+-- zmieniają testów claimu kolejki uruchamianych później.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        published_at,benefit_codes,transport,transport_reimbursed,meal_voucher_daily,is_demo) values
+  (:'BNJ1',:'BNC','bn976-1','Magazynier BN976 eco','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '1 minute', array['eco_vouchers','training'], false, false, null, true),
+  (:'BNJ2',:'BNC','bn976-2','Magazynier BN976 bony','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '2 minutes', '{}', false, false, 8, true),
+  (:'BNJ3',:'BNC','bn976-3','Magazynier BN976 dojazd','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '3 minutes', '{}', true, true, null, true),
+  (:'BNJ4',:'BNC','bn976-4','Magazynier BN976 nic','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '4 minutes', '{}', false, false, null, true),
+  (:'BNJ5',:'BNC','bn976-5','Magazynier BN976 auto','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '5 minutes', array['meal_vouchers','company_car'], false, false, null, true);
+insert into public.job_translations(job_id, locale, title, description, benefits) values
+  (:'BNJ1', 'pl', 'Magazynier BN976 eco', 'Opis', array['Karta sportowa']),
+  (:'BNJ1', 'nl', 'Magazijnier BN976 eco', 'Beschrijving', array['Sportkaart']);
+
+create function pg_temp.bn_ids(p_sql text) returns text[] language plpgsql as $$
+declare v text[];
+begin
+  execute format('select coalesce(array_agg(right(slug, 1) order by slug), ''{}'') from (%s) q', p_sql) into v;
+  return v;
+end $$;
+create function pg_temp.bn_check(p_args text, p_expected text[], p_name text) returns void language plpgsql as $$
+declare v_list text[]; v_count bigint; v_facet bigint;
+begin
+  v_list := pg_temp.bn_ids(format('select slug from public.get_public_jobs(p_locale => ''pl'', p_keyword => ''bn976'', p_limit => 100%s)', p_args));
+  execute format('select public.get_public_jobs_count(p_locale => ''pl'', p_keyword => ''bn976''%s)', p_args) into v_count;
+  execute format('select total from public.get_public_job_filter_facets(p_locale => ''pl'', p_keyword => ''bn976''%s) where dimension = ''total''', p_args) into v_facet;
+  if v_list is distinct from p_expected or v_count <> cardinality(p_expected) or v_facet <> cardinality(p_expected) then
+    raise exception 'ASSERT FAILED: % (lista %, licznik %, facety %, oczekiwano %)', p_name, v_list, v_count, v_facet, p_expected;
+  end if;
+end $$;
+
+-- BN976-0: katalog i świadczenia efektywne.
+select pg_temp.assert(
+  cardinality(public.job_benefit_catalog()) = 12
+  and public.job_effective_benefits('{}', true, 8) = array['meal_vouchers','commute_allowance']
+  and public.job_effective_benefits(array['training','meal_vouchers'], false, 5) = array['meal_vouchers','training']
+  and public.job_effective_benefits(null, null, null) = '{}'::text[],
+  'BN976-0 katalog 12 kodów; bony z kwoty i zwrot dojazdu z 0169, porządek katalogu, bez powtórzeń');
+select pg_temp.expect_error($$insert into public.jobs(company_id,slug,title,category,contract_type,city,region,status,benefit_codes)
+  values ('b9760000-0000-4000-8000-0000000000c1','bn976-x','X','warehouse','permanent','Gent','Flandria','draft',array['free_beer'])$$,
+  'jobs_benefit_codes_known', 'BN976-0b CHECK odrzuca kod spoza katalogu');
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.bn_check('', array['1','2','3','4','5'], 'BN976-1 bez filtra: wszystkie');
+select pg_temp.bn_check(', p_benefits => array[''eco_vouchers'']', array['1'], 'BN976-2a ekocheki');
+select pg_temp.bn_check(', p_benefits => array[''meal_vouchers'']', array['2','5'], 'BN976-2b bony: kwota z 0169 albo zaznaczony kod');
+select pg_temp.bn_check(', p_benefits => array[''commute_allowance'']', array['3'], 'BN976-2c zwrot dojazdu z 0169');
+select pg_temp.bn_check(', p_benefits => array[''eco_vouchers'',''training'']', array['1'], 'BN976-2d oba świadczenia (AND)');
+select pg_temp.bn_check(', p_benefits => array[''eco_vouchers'',''company_car'']', array[]::text[], 'BN976-2e brak oferty z obydwoma');
+select pg_temp.bn_check(', p_benefits => array[''free_beer'']', array[]::text[], 'BN976-2f nieznany kod: brak wyników (nie brak filtra)');
+select pg_temp.bn_check(', p_benefits => array[]::text[]', array['1','2','3','4','5'], 'BN976-2g pusta lista = bez filtra');
+-- BN976-3: sekcja szczegółu — kody efektywne i „inne” z tłumaczenia wybieranego jak w get_public_job.
+select pg_temp.assert(
+  (select codes from public.get_public_job_benefits(:'BNJ1', 'nl')) = array['eco_vouchers','training']
+  and (select other from public.get_public_job_benefits(:'BNJ1', 'nl')) = array['Sportkaart']
+  and (select other from public.get_public_job_benefits(:'BNJ1', 'fr')) = array['Karta sportowa']
+  and (select codes from public.get_public_job_benefits(:'BNJ2', 'pl')) = array['meal_vouchers']
+  and (select other from public.get_public_job_benefits(:'BNJ4', 'pl')) = '{}'::text[],
+  'BN976-3a odczyt sekcji oferty publicznej');
+reset role;
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale,benefit_codes) values
+  (:'BNJD',:'BNC',:'BNE','draft-bn976','Magazynier BN976 szkic','warehouse','permanent','Gent','Flandria','draft','pl', array['training']);
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_public_job_benefits(:'BNJD', 'pl')) = 0,
+  'BN976-3b szkic: brak wiersza (tylko oferta publiczna)');
+reset role;
+
+-- BN976-4: kreator — normalizacja, brak klucza nie czyści, zły kod odrzucony, null = pusta.
+set role authenticated; set app.current_uid = :'BNE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'BNJD'::uuid, '{"job":{"benefit_codes":["training","eco_vouchers","training"]}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select benefit_codes from public.jobs where id = :'BNJD') = array['eco_vouchers','training'],
+  'BN976-4a save_job_draft: deduplikacja i porządek katalogu');
+set role authenticated; set app.current_uid = :'BNE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'BNJD'::uuid, '{"job":{"title":"Magazynier BN976 szkic 2"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select benefit_codes from public.jobs where id = :'BNJD') = array['eco_vouchers','training'],
+  'BN976-4b krok bez klucza nie czyści świadczeń');
+set role authenticated; set app.current_uid = :'BNE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"benefit_codes":["free_beer"]}}'::jsonb)$q$, :'BNJD'),
+  'nieznane świadczenie', 'BN976-4c kod spoza katalogu odrzucony');
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"benefit_codes":"training"}}'::jsonb)$q$, :'BNJD'),
+  'nieznane świadczenie', 'BN976-4d nie-tablica odrzucona');
+select public.save_job_draft(:'BNJD'::uuid, '{"job":{"benefit_codes":null}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select benefit_codes from public.jobs where id = :'BNJD') = '{}'::text[], 'BN976-4e null = brak deklaracji');
+select pg_temp.assert(public.job_edit_audit_snapshot(j) -> 'benefit_codes' = '["eco_vouchers","training"]'::jsonb,
+  'BN976-4f migawka audytu edycji zawiera świadczenia') from public.jobs j where j.id = :'BNJ1';
+-- BN976-5: kopia szkicu przenosi świadczenia.
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'BNJC',:'BNC',:'BNE','draft-bn976-copy','Kopia BN976','warehouse','permanent','Gent','Flandria','draft','pl');
+insert into public.job_duplications(company_id, created_by, client_key, source_job_id, new_job_id)
+  values (:'BNC', :'BNE', gen_random_uuid(), :'BNJ5', :'BNJC');
+select pg_temp.assert((select benefit_codes from public.jobs where id = :'BNJC') = array['meal_vouchers','company_car']
+  and (select benefit_codes from public.jobs where id = :'BNJC') = (select benefit_codes from public.jobs where id = :'BNJ5'),
+  'BN976-5 kopia szkicu przenosi świadczenia');
+
+-- BN976-6: zapisane wyszukiwanie — klucz kanoniczny i ten sam zbiór w stronie kursora alertów.
+set role authenticated; set app.current_uid = :'BNK'; select pg_temp.assert_client_role();
+select saved_search_id as bns from public.save_saved_search('BN976', 'pl',
+  '{"keyword":"BN976","benefits":["meal_vouchers"]}', '?keyword=BN976&benefits=meal_vouchers') \gset
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"benefits":["free_beer"]}')$$, 'nieznane świadczenie', 'BN976-6a nieznany kod odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select filters -> 'benefits' from public.saved_searches where id = :'bns') = '["meal_vouchers"]'::jsonb
+  and public.saved_search_canonical_filters('{"benefits":["training","eco_vouchers","training"]}', 'pl')
+      = '{"benefits":["eco_vouchers","training"]}'::jsonb,
+  'BN976-6b klucz kanoniczny `benefits` w porządku katalogu');
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     (select filters from public.saved_searches where id = :'bns'), 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['bn976-2', 'bn976-5'],
+  'BN976-6c strona kursora alertów = lista (BN976-2b)');
+reset role;
+
+-- BN976-N: kontrole ujemne (zmiany definicji w transakcjach cofanych).
+\set BNSIG 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])'
+-- N1: lista bez warunku świadczeń — filtr nic nie zawęża (BN976-2a wykrywa regresję).
+begin;
+select pg_temp.fl_patch(:'BNSIG', '@> p_benefits', 'is not null');
+select pg_temp.assert(
+  pg_temp.bn_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'bn976', p_benefits => array['eco_vouchers'])$q$)
+    = array['1','2','3','4','5'],
+  'BN976-N1 bez warunku lista zwraca wszystko');
+rollback;
+-- N2: bez pochodnych z 0169 oferta z kwotą bonów i ze zwrotem dojazdu wypada z filtra.
+begin;
+select pg_temp.fl_patch('public.job_effective_benefits(text[],boolean,numeric)', 'p_meal_voucher_daily is not null', 'false');
+-- Indeks wyrażeniowy trzyma wartości starej definicji — przebudowa, żeby plan z indeksem
+-- (wybór planera zależy od statystyk) widział zmienioną funkcję tak samo jak skan tabeli.
+reindex index public.idx_jobs_effective_benefits_active;
+select pg_temp.assert(
+  pg_temp.bn_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'bn976', p_benefits => array['meal_vouchers'])$q$)
+    = array['5'],
+  'BN976-N2 bez kwoty bonów z 0169 BN976-2b wykrywa regresję');
+rollback;
+-- N3: kopia dla alertów bez warunku daje inny zbiór niż lista.
+begin;
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[],text[])',
+  '@> p_benefits', 'is not null');
+set local role service_role;
+select pg_temp.assert(
+  (select cardinality(p.ids) from public.saved_search_keyset_page(
+     (select filters from public.saved_searches where id = :'bns'), 'pl', null, null, null, 1000) p) = 5,
+  'BN976-N3 rozjazd kopii filtrów wykrywa BN976-6c');
+rollback;
+-- N4: bez CHECK kod spoza katalogu trafia do bazy (BN976-0b wykrywa regresję).
+begin;
+alter table public.jobs drop constraint jobs_benefit_codes_known;
+insert into public.jobs(company_id,slug,title,category,contract_type,city,region,status,benefit_codes)
+  values (:'BNC','bn976-n4','X','warehouse','permanent','Gent','Flandria','draft',array['free_beer']);
+select pg_temp.assert(exists (select 1 from public.jobs where slug = 'bn976-n4'), 'BN976-N4 bez CHECK zły kod przechodzi');
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- SDR1111. Przegląd funkcji SECURITY DEFINER na tabelach z deleted_at (#1111, 0193).
@@ -25917,7 +26100,7 @@ begin
 end $$;
 -- N1: lista bez warunku grafiku — SP858-1c wykrywa regresję.
 begin;
-select pg_temp.sp_patch('public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[])',
+select pg_temp.sp_patch('public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer,text[],text[])',
   'or j.shift_patterns && p_shift_patterns', 'or true');
 select pg_temp.assert(
   pg_temp.sp_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'sp858', p_shift_patterns => array['day'])$q$)
@@ -25926,7 +26109,7 @@ select pg_temp.assert(
 rollback;
 -- N2: kopia alertów bez warunku daje inny zbiór niż lista — SP858-7c wykrywa regresję.
 begin;
-select pg_temp.sp_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[])',
+select pg_temp.sp_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer,text[],text[])',
   'or j.shift_patterns && p_shift_patterns', 'or true');
 set local role service_role;
 select pg_temp.assert(
@@ -25949,6 +26132,9 @@ select pg_temp.sp_patch('public.save_job_draft(uuid,jsonb,timestamptz)', '''shif
 set local role authenticated; set local app.current_uid = :'SPE'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"shift_patterns":["day"]}}'::jsonb)$q$, :'SPJD'),
   'nieznane pole shift_patterns', 'SP858-N4 bez klucza kreator nie zapisze grafiku');
+rollback;
+reset role; reset app.current_uid;
+
 -- OC778. Współbieżność (0226): ostatni aktywny właściciel firmy (#778) i blokada źródła
 --        „Kopiuj jako szkic” (#1098). Dwie RÓWNOLEGŁE sesje (dblink) odbierają rolę albo
 --        dostęp dwóm różnym właścicielom tej samej firmy — przez RPC (dezaktywacja, degradacja,
@@ -26539,19 +26725,22 @@ select pg_temp.assert(:pf_t1 - :pf_t0 = 0,
   'PF1215-4c licznik bez słowa kluczowego nie czyta tłumaczeń, przeczytano ' || (:pf_t1 - :pf_t0));
 select pg_temp.assert(
   (select proconfig @> array['plan_cache_mode=force_custom_plan', 'jit=off'] and prolang = (select oid from pg_language where lanname = 'plpgsql')
-     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])'::regprocedure)
-  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[])', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[])', 'EXECUTE'),
+     and prosecdef from pg_proc where oid = 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[])'::regprocedure)
+  and has_function_privilege('anon', 'public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[])', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[])', 'EXECUTE')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[])', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.saved_search_jobs_after(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[])', 'EXECUTE'),
   'PF1215-4d plpgsql SECURITY DEFINER z force_custom_plan i bez JIT; granty bez zmian');
 
 -- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
 savepoint pf1215_old;
--- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
--- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
+-- 0229 (świadczenia) i 0227 (grafik pracy, numery tymczasowe) dodają parametry do tych funkcji —
+-- najpierw ich rollbacki, od najnowszej (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
 set constraints all immediate;
+\ir ../rollback/0229_job_benefits.down.sql
+-- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
+\ir ../rollback/0228_job_work_mode.down.sql
 \ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0213_public_jobs_custom_plan.down.sql
 set role anon; select pg_temp.assert_client_role();
@@ -26583,7 +26772,7 @@ select pg_temp.assert(:'pf_new_saved' = :'pf_old_saved',
   'PF1215-3 saved_search_jobs_after (strona, kursor, filtry) = definicja z 0194');
 select pg_temp.assert(
   (select prolang = (select oid from pg_language where lanname = 'plpgsql')
-   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[])'::regprocedure),
+   from pg_proc where oid = 'public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[])'::regprocedure),
   'PF1215-5 po cofnięciu savepointu stan 0213 zostaje');
 
 rollback;
@@ -26670,9 +26859,12 @@ select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_
   'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
 
 savepoint kq866_old;
--- 0227 (grafik pracy, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback
--- (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
+-- 0229 (świadczenia) i 0227 (grafik pracy, numery tymczasowe) dodają parametry do tych funkcji —
+-- najpierw ich rollbacki, od najnowszej (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
 set constraints all immediate;
+\ir ../rollback/0229_job_benefits.down.sql
+-- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
+\ir ../rollback/0228_job_work_mode.down.sql
 \ir ../rollback/0227_job_shift_patterns.down.sql
 \ir ../rollback/0214_keyword_job_qualifications.down.sql
 set role anon; select pg_temp.assert_client_role();
@@ -27951,6 +28143,9 @@ select pg_temp.assert((select work_mode = 'remote' and remote_applicant_countrie
   'WD-N2 kontrola ujemna: bez CHECK praca zdalna bez kraju przechodzi (WD2b wykrywa regresję)');
 rollback;
 begin;
+-- 0229 (świadczenia) redefiniuje save_job_draft/update_published_job na 0228 — najpierw jej rollback.
+set constraints all immediate;
+\ir ../rollback/0229_job_benefits.down.sql
 \ir ../rollback/0228_job_work_mode.down.sql
 set local role authenticated; set local app.current_uid = :'WDE'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJC',

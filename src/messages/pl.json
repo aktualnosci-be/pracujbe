@@ -577,7 +577,9 @@
       "skillsMandatory": "Wymagane umiejętności",
       "skillsOptional": "Mile widziane umiejętności",
       "certificates": "Certyfikaty i uprawnienia"
-    }
+    },
+    "benefitsTitle": "Świadczenia",
+    "benefitsOther": "Inne benefity"
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1471,7 +1473,9 @@
     "radiusNote": "Liczymy odległość w linii prostej od miejscowości z naszej listy. Oferty bez rozpoznanej miejscowości nie są pokazywane przy tym filtrze. Oferty pracy zdalnej są pokazywane przy każdym promieniu.",
     "radiusChip": "Do {km} km od: {place}",
     "nearUnknown": "Nie rozpoznaliśmy miejscowości „{place}”. Wpisz nazwę belgijskiej gminy albo miasta, np. Gandawa lub Liège.",
-    "salaryCurrencyNote": "Kwot w innej walucie niż euro nie przeliczamy — takie oferty pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu."
+    "salaryCurrencyNote": "Kwot w innej walucie niż euro nie przeliczamy — takie oferty pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu.",
+    "benefits": "Świadczenia",
+    "benefitsNote": "Pokazujemy oferty z każdym zaznaczonym świadczeniem. Oferty, w których pracodawca nie podał świadczeń, nie są uwzględniane."
   },
   "notifications": {
     "title": "Powiadomienia",
@@ -1776,7 +1780,7 @@
     "noLanguageRequired": "Praca bez znajomości języka",
     "conditionsLabel": "Warunki pracy",
     "conditionsPlaceholder": "np. Umowa na czas nieokreślony",
-    "benefitsLabel": "Benefity",
+    "benefitsLabel": "Inne benefity i szczegóły",
     "benefitsPlaceholder": "np. Premie i dodatki",
     "companyDescriptionLabel": "Opis firmy",
     "companyDescriptionPlaceholder": "Krótko przedstaw firmę kandydatom.",
@@ -1891,6 +1895,8 @@
     "workTimeFull": "Pełny etat",
     "workTimePart": "Część etatu",
     "workTimeBoth": "Pełny lub część etatu",
+    "benefitCodesLegend": "Świadczenia",
+    "benefitCodesHint": "Zaznacz to, co oferujesz. Kandydaci mogą filtrować oferty po tych świadczeniach. Bony żywieniowe i zwrot dojazdu liczą się też z pól „Koszty i dodatki”.",
     "workModeLabel": "Tryb pracy",
     "workModeHint": "„W pełni zdalna” oznacza pracę wykonywaną zdalnie przez cały czas. Jeśli trzeba czasem przyjść na miejsce, wybierz „Hybrydowa”.",
     "workMode": {
@@ -4298,6 +4304,20 @@
     "remindDue": "Czas na kontakt",
     "openSource": "Otwórz ogłoszenie",
     "listLabel": "Wpisy w dzienniku aplikacji"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Bony żywieniowe (maaltijdcheques)",
+    "eco_vouchers": "Ekobony (ecocheques)",
+    "commute_allowance": "Zwrot kosztów dojazdu",
+    "bike_allowance": "Dodatek rowerowy",
+    "company_car": "Samochód służbowy",
+    "mobility_budget": "Budżet mobilności",
+    "hospital_insurance": "Ubezpieczenie szpitalne",
+    "group_insurance": "Ubezpieczenie grupowe (emerytalne)",
+    "year_end_bonus": "Premia na koniec roku (13. pensja)",
+    "extra_leave": "Dodatkowe dni wolne",
+    "training": "Szkolenia na koszt pracodawcy",
+    "phone_laptop": "Telefon lub laptop służbowy"
   },
   "countryNames": {
     "BE": "Belgia",

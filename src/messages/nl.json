@@ -577,7 +577,9 @@
       "skillsMandatory": "Vereiste vaardigheden",
       "skillsOptional": "Gewenste vaardigheden",
       "certificates": "Attesten en certificaten"
-    }
+    },
+    "benefitsTitle": "Extralegale voordelen",
+    "benefitsOther": "Andere voordelen"
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1471,7 +1473,9 @@
     "radiusNote": "We meten de afstand in vogelvlucht vanaf een gemeente uit onze lijst. Vacatures zonder herkende gemeente worden bij deze filter niet getoond. Vacatures voor thuiswerk worden bij elke straal getoond.",
     "radiusChip": "Binnen {km} km van {place}",
     "nearUnknown": "We herkennen de gemeente „{place}” niet. Vul de naam van een Belgische gemeente of stad in, bijvoorbeeld Gent of Luik.",
-    "salaryCurrencyNote": "Bedragen in een andere munt dan de euro rekenen we niet om — die vacatures blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon."
+    "salaryCurrencyNote": "Bedragen in een andere munt dan de euro rekenen we niet om — die vacatures blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon.",
+    "benefits": "Extralegale voordelen",
+    "benefitsNote": "We tonen vacatures met elk aangevinkt voordeel. Vacatures waarin de werkgever geen voordelen heeft vermeld, worden niet meegeteld."
   },
   "notifications": {
     "title": "Meldingen",
@@ -1776,7 +1780,7 @@
     "noLanguageRequired": "Werk zonder taalkennis",
     "conditionsLabel": "Arbeidsvoorwaarden",
     "conditionsPlaceholder": "bijv. Contract van onbepaalde duur",
-    "benefitsLabel": "Voordelen",
+    "benefitsLabel": "Andere voordelen en details",
     "benefitsPlaceholder": "bijv. Premies en toeslagen",
     "companyDescriptionLabel": "Bedrijfsomschrijving",
     "companyDescriptionPlaceholder": "Stel het bedrijf kort voor aan kandidaten.",
@@ -1891,6 +1895,8 @@
     "workTimeFull": "Voltijds",
     "workTimePart": "Deeltijds",
     "workTimeBoth": "Voltijds of deeltijds",
+    "benefitCodesLegend": "Extralegale voordelen",
+    "benefitCodesHint": "Vink aan wat je aanbiedt. Kandidaten kunnen vacatures op deze voordelen filteren. Maaltijdcheques en vergoeding woon-werkverkeer tellen ook mee vanuit „Kosten en extra’s”.",
     "workModeLabel": "Werkregime",
     "workModeHint": "„Volledig thuiswerk” betekent dat het werk altijd op afstand gebeurt. Moet je soms ter plaatse komen, kies dan „Hybride”.",
     "workMode": {
@@ -4298,6 +4304,20 @@
     "remindDue": "Tijd voor contact",
     "openSource": "Vacature openen",
     "listLabel": "Items in het sollicitatielogboek"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Maaltijdcheques",
+    "eco_vouchers": "Ecocheques",
+    "commute_allowance": "Vergoeding woon-werkverkeer",
+    "bike_allowance": "Fietsvergoeding",
+    "company_car": "Bedrijfswagen",
+    "mobility_budget": "Mobiliteitsbudget",
+    "hospital_insurance": "Hospitalisatieverzekering",
+    "group_insurance": "Groepsverzekering",
+    "year_end_bonus": "Eindejaarspremie (13de maand)",
+    "extra_leave": "Extra verlofdagen",
+    "training": "Opleidingen op kosten van de werkgever",
+    "phone_laptop": "Gsm of laptop van het werk"
   },
   "countryNames": {
     "BE": "België",

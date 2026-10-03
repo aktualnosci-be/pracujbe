@@ -186,7 +186,7 @@ describe('0194: zapisane wyszukiwanie i chipy', () => {
 
   const MESSAGES = { pl, en, fr, nl } as const;
   function translators(locale: keyof typeof MESSAGES): FilterSummaryTranslators {
-    const make = (namespace: 'filters' | 'categories' | 'contractTypes' | 'languageNames') => {
+    const make = (namespace: 'filters' | 'categories' | 'contractTypes' | 'languageNames' | 'jobBenefits') => {
       const t = createTranslator({ locale, messages: MESSAGES[locale], namespace });
       return (key: string, values?: Record<string, string | number>) =>
         (t as unknown as (k: string, v?: Record<string, string | number>) => string)(key, values);
@@ -196,6 +196,7 @@ describe('0194: zapisane wyszukiwanie i chipy', () => {
       categories: make('categories'),
       contractTypes: make('contractTypes'),
       languageNames: make('languageNames'),
+      benefits: make('jobBenefits'),
     };
   }
 

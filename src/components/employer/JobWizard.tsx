@@ -113,6 +113,7 @@ import {
 } from '@/lib/job-costs';
 import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 import { isWorkTime, type WorkTime } from '@/lib/job-filter-options';
+import { JOB_BENEFIT_CODES, normalizeBenefitCodes, type JobBenefitCode } from '@/lib/job-benefits';
 import {
   isWorkMode,
   normalizeApplicantCountries,
@@ -221,6 +222,8 @@ interface FormValues {
   screeningQuestions: ScreeningQuestionDraft[];
   // krok 8 — warunki i benefity
   conditions: string[];
+  /** #826 (0229): świadczenia z katalogu (brak = nie podano). */
+  benefitCodes: JobBenefitCode[];
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
@@ -282,6 +285,7 @@ const DEFAULT_VALUES: FormValues = {
   noLanguageRequired: false,
   screeningQuestions: [],
   conditions: [],
+  benefitCodes: [],
   benefits: [],
   accommodation: false,
   transport: false,
@@ -314,6 +318,7 @@ const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates', 'screeningQuestions'],
   8: [
     'conditions',
+    'benefitCodes',
     'benefits',
     'accommodationKind',
     'accommodationCost',
@@ -440,6 +445,7 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
       const cost = provided ? toOptionalAmount(v.accommodationCost) : undefined;
       return {
         conditions: v.conditions,
+        benefitCodes: v.benefitCodes,
         benefits: v.benefits,
         accommodation: false,
         transport: false,
@@ -511,7 +517,10 @@ export interface JobWizardInitialValues
     | 'accommodationDeducted'
     | 'accommodationRegistration'
     | 'accommodationAfterContract'
+    | 'benefitCodes'
   > {
+  /** #826 (0229): surowe kody z bazy — nieznane pomijane. */
+  benefitCodes?: string[];
   accommodationKind?: string;
   accommodationCostPeriod?: string;
   accommodationDeducted?: boolean | null;
@@ -650,9 +659,11 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     accommodationDeducted,
     accommodationRegistration,
     accommodationAfterContract,
+    benefitCodes,
     ...rest
   } = raw;
   const narrowed: Partial<FormValues> = { ...rest };
+  if (benefitCodes) narrowed.benefitCodes = normalizeBenefitCodes(benefitCodes);
   // 0169: koszty i dodatki. Stara oferta (sama flaga, etykieta „Zapewniamy zakwaterowanie /
   // transport”) otwiera się jako zakwaterowanie zapewnione / dowóz — bez szczegółów.
   if (isOneOf(ACCOMMODATION_KINDS, accommodationKind)) narrowed.accommodationKind = accommodationKind;
@@ -733,6 +744,7 @@ export function JobWizard({
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
   const tLang = useTranslations('languageNames');
+  const tBenefits = useTranslations('jobBenefits');
   const tCountry = useTranslations('countryNames');
   const tShift = useTranslations('filters.shiftPatternValues');
   const locale = useLocale();
@@ -2125,6 +2137,39 @@ export function JobWizard({
                 />
                 <FieldError name="conditions" />
               </div>
+              {/* #826 (0229): świadczenia z katalogu — porównywalne i filtrowalne dla kandydatów. */}
+              <fieldset
+                id={domId('benefitCodes')}
+                className={`${FORM_FIELD} ${FORM_WIDE} min-w-0`}
+                aria-describedby={`${domId('benefitCodes')}-hint`}
+                data-testid="job-benefit-codes"
+              >
+                <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('benefitCodesLegend')}</legend>
+                <p id={`${domId('benefitCodes')}-hint`} className="text-[13px] text-muted-foreground">
+                  {t('benefitCodesHint')}
+                </p>
+                <div className="grid gap-x-4 sm:grid-cols-2">
+                  {JOB_BENEFIT_CODES.map((code) => (
+                    <CheckboxField
+                      key={code}
+                      id={`${domId('benefitCodes')}-${code}`}
+                      label={tBenefits(code)}
+                      checked={values.benefitCodes.includes(code)}
+                      onChange={(checked) =>
+                        setValue(
+                          'benefitCodes',
+                          normalizeBenefitCodes(
+                            checked
+                              ? [...values.benefitCodes, code]
+                              : values.benefitCodes.filter((c) => c !== code),
+                          ),
+                          { shouldDirty: true },
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </fieldset>
               <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
                 <Label htmlFor={domId('benefits')} className={FORM_LABEL_TEXT}>{t('benefitsLabel')}</Label>
                 <ChipInput
@@ -2398,6 +2443,12 @@ export function JobWizard({
                   <PreviewList
                     label={t('requirementsMandatoryLabel')}
                     items={values.requirementsMandatory}
+                  />
+                ) : null}
+                {values.benefitCodes.length > 0 ? (
+                  <PreviewList
+                    label={t('benefitCodesLegend')}
+                    items={values.benefitCodes.map((code) => tBenefits(code))}
                   />
                 ) : null}
                 {values.benefits.length > 0 ? (

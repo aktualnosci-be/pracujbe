@@ -14,6 +14,7 @@
  */
 
 import type { JobCosts } from '@/lib/job-costs';
+import { effectiveBenefitCodes, type JobBenefitCode } from '@/lib/job-benefits';
 import type {
   CategoryKey,
   ContractType,
@@ -573,6 +574,8 @@ interface DemoJobRaw {
   transport: boolean;
   /** 0169: przykładowe „Koszty i dodatki” (dane fikcyjne, jak cała oferta demo). */
   costs?: JobCosts;
+  /** 0229 (#826): przykładowe świadczenia z katalogu (dane fikcyjne). */
+  benefitCodes?: JobBenefitCode[];
   startDate?: string;
   languageKeys: LangKey[];
   responsibilityKeys: RespKey[];
@@ -607,6 +610,7 @@ const RAW_JOBS: DemoJobRaw[] = [
   {
     id: '1002', occKey: 'bricklayer', companyId: 'c2', locationKey: 'brussels', category: 'construction', contractType: 'permanent',
     salaryMin: 2600, salaryMax: 3200, postedDaysAgo: 3, accommodation: false, immediate: true, noLanguageRequired: false, transport: false,
+    benefitCodes: ['meal_vouchers', 'eco_vouchers', 'hospital_insurance', 'year_end_bonus'],
     languageKeys: ['fr'], responsibilityKeys: ['masonry', 'readPlans', 'site'], mandatoryKeys: ['experience', 'physical', 'vcaSafety'],
     optionalKeys: ['frenchBonus', 'ownCar'], conditionKeys: ['longTerm', 'travel', 'ppe'], highlightKeys: ['permanent', 'immediate', 'travel'],
     workingHoursKey: 'fulltime', shiftsKey: 'day', contextKeys: ['stable', 'team'],
@@ -615,6 +619,7 @@ const RAW_JOBS: DemoJobRaw[] = [
   {
     id: '1003', occKey: 'truckDriver', companyId: 'c3', locationKey: 'ghent', category: 'transport', contractType: 'permanent',
     salaryMin: 2800, salaryMax: 3400, postedDaysAgo: 5, accommodation: false, immediate: false, noLanguageRequired: false, transport: false,
+    benefitCodes: ['eco_vouchers', 'group_insurance', 'training'],
     languageKeys: ['nl'], responsibilityKeys: ['drive', 'vehicleCheck', 'loadUnload'], mandatoryKeys: ['licenseCE', 'reliable', 'workPermit'],
     optionalKeys: ['experienceBonus', 'langBonus'], conditionKeys: ['holiday', 'bonus', 'travel'], highlightKeys: ['permanent', 'bonus', 'travel'],
     workingHoursKey: 'fulltime40', shiftsKey: 'earlyLate', contextKeys: ['stable', 'growth'],
@@ -880,6 +885,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
     ...(raw.costs ? { costs: raw.costs } : {}),
+    ...demoBenefits(raw),
     ...demoQualifications(raw, locale),
     applyChannel: demoApplyChannel(raw.id),
     startDate: raw.startDate,
@@ -887,6 +893,16 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     contentLocale: content,
     availableLocales: [...available],
   };
+}
+
+/** Świadczenia demo jak `get_public_job_benefits` (kody + pochodne z kosztów 0169). */
+function demoBenefits(raw: DemoJobRaw): { benefits?: { codes: JobBenefitCode[]; other: string[] } } {
+  const codes = effectiveBenefitCodes({
+    codes: raw.benefitCodes ?? [],
+    transportReimbursed: raw.costs?.transportReimbursed ?? false,
+    mealVoucherDaily: raw.costs?.mealVoucherDaily ?? null,
+  });
+  return codes.length > 0 ? { benefits: { codes, other: [] } } : {};
 }
 
 /* ---------------------------------------------------------------------------
