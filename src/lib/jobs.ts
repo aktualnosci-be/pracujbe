@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { parseWorkLocationRows } from '@/lib/job-work-locations';
 import { benefitsMatch, parseJobBenefitsRow, type JobBenefitCode, type JobBenefits } from '@/lib/job-benefits';
 import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
@@ -217,6 +218,11 @@ export interface JobDetail extends JobListItem {
   screeningQuestions?: ScreeningQuestion[];
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
+  /**
+   * #850 (0230): dodatkowe miejsca pracy (bez miasta głównego `city`); brak = oferta z jednym
+   * miejscem albo odczyt nieudany.
+   */
+  workLocations?: string[];
   /**
    * Świadczenia (#826, 0229 — `get_public_job_benefits`): kody efektywne z katalogu (z bonami
    * i zwrotem dojazdu z „Kosztów i dodatków”) + tekstowe „inne”. Brak = odczyt nieudany albo
@@ -679,6 +685,14 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // #850 (0230): dodatkowe miejsca pracy — odczyt pomocniczy; awaria = samo miasto główne.
+  let workLocations: string[] = [];
+  try {
+    const { getPublicJobWorkLocations } = await import('@/lib/db/public-jobs');
+    workLocations = parseWorkLocationRows(await getPublicJobWorkLocations(pool, job.id));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobWorkLocations' });
+  }
   // 0227 (#858): grafik pracy — odczyt pomocniczy; awaria = sam opis tekstowy godzin/zmian.
   let shiftPatterns: ShiftPattern[] = [];
   try {
@@ -709,6 +723,7 @@ async function getJobBySlugFromDb(
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(workLocations.length > 0 ? { workLocations } : {}),
     ...(shiftPatterns.length > 0 ? { shiftPatterns } : {}),
     ...(benefits && (benefits.codes.length > 0 || benefits.other.length > 0) ? { benefits } : {}),
     ...(qualifications ? { qualifications } : {}),

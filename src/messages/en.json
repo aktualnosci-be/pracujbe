@@ -508,6 +508,8 @@
       "accommodationCostRequired": "Enter the accommodation cost.",
       "accommodationCostMandatory": "With accommodation provided, enter the cost — enter 0 if it is free.",
       "accommodationDeductedRequired": "Choose whether the accommodation cost is deducted from wages.",
+      "workLocationInvalid": "The place name must be 2 to 80 characters long.",
+      "workLocationsTooMany": "You can add up to 10 additional work locations.",
       "remoteCountriesRequired": "Choose at least one country for fully remote work."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
@@ -578,6 +580,8 @@
       "skillsOptional": "Preferred skills",
       "certificates": "Certificates and licences"
     },
+    "workLocationsTitle": "Work locations",
+    "workLocationsNote": "The work takes place in these locations.",
     "benefitsTitle": "Benefits",
     "benefitsOther": "Other benefits"
   },
@@ -1895,6 +1899,10 @@
     "workTimeFull": "Full-time",
     "workTimePart": "Part-time",
     "workTimeBoth": "Full-time or part-time",
+    "extraLocationsLabel": "Additional work locations",
+    "extraLocationsPlaceholder": "e.g. Hasselt",
+    "extraLocationsHint": "Work in several places? Add them here (up to {max}). Searching by city will also find this job by these names.",
+    "extraLocationsLocked": "The list of additional work locations can only be changed in a draft.",
     "benefitCodesLegend": "Benefits",
     "benefitCodesHint": "Tick what you offer. Candidates can filter jobs by these benefits. Meal vouchers and commuting allowance also count from “Costs and extras”.",
     "workModeLabel": "Work arrangement",

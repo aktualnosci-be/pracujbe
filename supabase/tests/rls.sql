@@ -27635,6 +27635,145 @@ select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uu
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- JWL850. Dodatkowe miejsca pracy oferty (#850, 0230): zapis tylko przez RPC w szkicu,
+--   odczyt publiczny tylko dla oferty publicznej, wyszukiwanie miasta po dodatkowym miejscu,
+--   kopia szkicu, dowiązanie nowego aliasu. Kontrole ujemne: definicja search_city_candidates
+--   z 0183 (rollback) nie znajduje oferty; polityka USING (true) odsłania listę obcej firmie.
+-- ============================================================================
+\echo '--- JWL850 dodatkowe miejsca pracy oferty ---'
+reset role; reset app.current_uid;
+begin;
+\set JWO 'd8500000-0000-0000-0000-000000000011'
+\set JWR 'd8500000-0000-0000-0000-000000000012'
+\set JWM 'd8500000-0000-0000-0000-000000000013'
+\set JWX 'd8500000-0000-0000-0000-000000000014'
+\set JWCA 'd8500000-0000-0000-0000-0000000000a1'
+\set JWCB 'd8500000-0000-0000-0000-0000000000b1'
+\set JWD 'd8500000-0000-0000-0000-0000000000a2'
+\set JWA 'd8500000-0000-0000-0000-0000000000a3'
+\set JWK 'd8500000-0000-0000-0000-0000000000c1'
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  (:'JWO', 'jw-o@test.be', 'JW O', '{"role":"employer","first_name":"Jw","last_name":"O","locale":"nl"}'),
+  (:'JWR', 'jw-r@test.be', 'JW R', '{"role":"employer","first_name":"Jw","last_name":"R","locale":"nl"}'),
+  (:'JWM', 'jw-m@test.be', 'JW M', '{"role":"employer","first_name":"Jw","last_name":"M","locale":"nl"}'),
+  (:'JWX', 'jw-x@test.be', 'JW X', '{"role":"employer","first_name":"Jw","last_name":"X","locale":"fr"}');
+insert into public.companies(id, name, status) values
+  (:'JWCA', 'JW Firma A', 'verified'), (:'JWCB', 'JW Firma B', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'JWCA', :'JWO', 'owner', true), (:'JWCA', :'JWR', 'recruiter', true),
+  (:'JWCA', :'JWM', 'member', true), (:'JWCB', :'JWX', 'owner', true);
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'JWD', :'JWCA', 'jw-draft', 'JW szkic sprzątanie', 'cleaning', 'permanent', 'Genk', 'Limburg', 'draft', 'pl'),
+  (:'JWA', :'JWCA', 'jw-active', 'JW mobilna ekipa', 'cleaning', 'permanent', 'Genk', 'Limburg', 'active', 'pl');
+
+-- Zapis przez RPC: normalizacja, deduplikacja, miasto główne pominięte.
+set local role authenticated; set local app.current_uid = :'JWR'; select pg_temp.assert_client_role();
+select public.set_job_work_locations(:'JWD'::uuid, array['Hasselt', '  hasselt ', 'GENK', 'Mol   Jwtestowo']) as jw_n \gset
+reset role;
+select pg_temp.assert(:'jw_n'::int = 2, 'JWL850-1 dwa miejsca (duplikat i miasto główne pominięte)');
+select pg_temp.assert(
+  (select string_agg(name, '|' order by position) from public.job_work_locations where job_id = :'JWD') = 'Hasselt|Mol Jwtestowo'
+  and (select location_id is not null from public.job_work_locations where job_id = :'JWD' and position = 1)
+  and (select location_id is null from public.job_work_locations where job_id = :'JWD' and position = 2),
+  'JWL850-2 kolejność, normalizacja spacji, miejscowość ze słownika tylko dla znanej nazwy');
+
+-- Odmowy.
+set local role authenticated; set local app.current_uid = :'JWM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWD', 'Hasselt'),
+  'PERMISSION_DENIED', 'JWL850-3 member nie zapisuje listy');
+reset role; set local role authenticated; set local app.current_uid = :'JWX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWD', 'Hasselt'),
+  'NOT_FOUND', 'JWL850-4 obca firma nie widzi oferty');
+select pg_temp.assert((select count(*) from public.job_work_locations where job_id = :'JWD') = 0,
+  'JWL850-4b obca firma nie czyta listy (RLS)');
+reset role; set local role authenticated; set local app.current_uid = :'JWR'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.job_work_locations where job_id = :'JWD') = 2,
+  'JWL850-4c członek firmy czyta listę');
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, %L::text[])', :'JWD',
+  '{a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11}'), 'VALIDATION_FAILED', 'JWL850-5 najwyżej 10 miejsc');
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWD', 'Has' || chr(1) || 'selt'),
+  'VALIDATION_FAILED', 'JWL850-5b znak sterujący odrzucony');
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWD', 'X'),
+  'VALIDATION_FAILED', 'JWL850-5c za krótka nazwa odrzucona');
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWA', 'Hasselt'),
+  'JOB_NOT_DRAFT', 'JWL850-6 opublikowanej oferty nie zmienia się tym RPC');
+select pg_temp.expect_error(format('insert into public.job_work_locations(job_id, position, name, name_key) values (%L, 1, %L, %L)',
+  :'JWD', 'Hasselt', 'hasselt'), 'permission denied', 'JWL850-7 bezpośredni INSERT klienta odrzucony');
+select pg_temp.expect_error(format('delete from public.job_work_locations where job_id = %L', :'JWD'),
+  'permission denied', 'JWL850-7b bezpośredni DELETE klienta odrzucony');
+reset role;
+select pg_temp.assert((select count(*) from public.job_work_locations where job_id = :'JWD') = 2,
+  'JWL850-8 nieudane wywołania nie zmieniły listy');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWD', 'Hasselt'),
+  'permission denied', 'JWL850-8b anon nie woła zapisu');
+reset role;
+
+-- Oferta aktywna z dodatkowymi miejscami (wiersze wstawione jak przez opublikowany szkic).
+insert into public.job_work_locations(job_id, position, name, name_key)
+  values (:'JWA', 1, 'Hasselt', 'x'), (:'JWA', 2, 'Mol Jwtestowo', 'x2'), (:'JWA', 3, 'genk', 'x3');
+select pg_temp.assert((select name_key from public.job_work_locations where job_id = :'JWA' and position = 1) = 'hasselt',
+  'JWL850-9 klucz ustala trigger, nie zapisujący');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select string_agg(name, '|' order by position) from public.get_public_job_work_locations(:'JWA')) = 'Hasselt|Mol Jwtestowo',
+  'JWL850-10 lista publiczna bez miasta głównego');
+select pg_temp.assert((select count(*) from public.get_public_job_work_locations(:'JWD')) = 0,
+  'JWL850-10b szkic nie ma listy publicznej');
+select pg_temp.assert(
+  exists (select 1 from public.get_public_jobs('pl', p_city => 'Hasselt', p_limit => 100) where id = :'JWA')
+  and (select count(*) from public.get_public_jobs_count('pl', p_city => 'Hasselt')) >= 1,
+  'JWL850-11 wyszukiwanie miasta znajduje ofertę po dodatkowym miejscu (słownik)');
+select pg_temp.assert(
+  exists (select 1 from public.get_public_jobs('pl', p_city => 'jwtestowo', p_limit => 100) where id = :'JWA'),
+  'JWL850-12 wyszukiwanie miasta po tekście dodatkowego miejsca spoza słownika');
+select pg_temp.assert(
+  not exists (select 1 from public.get_public_jobs('pl', p_city => 'Gandawa', p_limit => 100) where id = :'JWA'),
+  'JWL850-12b inne miasto nie zwraca oferty');
+reset role;
+update public.jobs set status = 'paused' where id = :'JWA';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_public_job_work_locations(:'JWA')) = 0
+  and not exists (select 1 from public.get_public_jobs('pl', p_city => 'Hasselt', p_limit => 100) where id = :'JWA'),
+  'JWL850-13 wstrzymana oferta bez listy i bez wyniku');
+reset role;
+update public.jobs set status = 'active' where id = :'JWA';
+
+-- Kopia szkicu przenosi listę.
+set local role authenticated; set local app.current_uid = :'JWR'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'JWA'::uuid, :'JWK'::uuid) as jw_copy \gset
+reset role;
+select pg_temp.assert(
+  (select string_agg(name, '|' order by position) from public.job_work_locations where job_id = :'jw_copy') = 'Hasselt|Mol Jwtestowo|genk',
+  'JWL850-14 „Kopiuj jako szkic” przenosi dodatkowe miejsca');
+
+-- Nowy alias dowiązuje wiersz bez miejscowości.
+insert into public.location_aliases(location_id, alias, alias_key)
+  select location_id, 'Mol Jwtestowo', 'mol jwtestowo' from public.location_aliases where alias_key = 'hasselt' limit 1;
+select pg_temp.assert((select location_id is not null from public.job_work_locations where job_id = :'JWD' and position = 2),
+  'JWL850-15 nowy alias dowiązuje miejsce pracy');
+
+-- Kontrola ujemna (a): polityka USING (true) odsłania listę obcej firmie.
+savepoint jwl_policy;
+drop policy job_work_locations_select_member on public.job_work_locations;
+create policy job_work_locations_select_member on public.job_work_locations for select to authenticated using (true);
+set local role authenticated; set local app.current_uid = :'JWX'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.job_work_locations where job_id = :'JWD') = 2,
+  'JWL850-N1 kontrola ujemna: bez polityki członka obca firma widzi listę');
+reset role;
+rollback to savepoint jwl_policy;
+
+-- Kontrola ujemna (b): definicja search_city_candidates z 0183 nie zna dodatkowych miejsc.
+\ir ../rollback/0230_job_work_locations.down.sql
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  not exists (select 1 from public.get_public_jobs('pl', p_city => 'jwtestowo', p_limit => 100) where id = :'JWA'),
+  'JWL850-N2 kontrola ujemna: bez 0230 wyszukiwanie po dodatkowym miejscu nie znajduje oferty');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0221)
 -- ============================================================================
 \echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'

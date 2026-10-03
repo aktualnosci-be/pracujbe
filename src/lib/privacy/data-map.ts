@@ -1135,6 +1135,12 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.job_skills': { activities: ['companies'], subjects: [], columns: {}, note: 'Treść ogłoszenia (dane firmy).' },
   'public.job_languages': { activities: ['companies'], subjects: [], columns: {}, note: 'Treść ogłoszenia (dane firmy).' },
   'public.job_certificates': { activities: ['companies'], subjects: [], columns: {}, note: 'Treść ogłoszenia (dane firmy).' },
+  'public.job_work_locations': {
+    activities: ['companies'],
+    subjects: [],
+    columns: {},
+    note: 'Dodatkowe miejsca pracy oferty (#850, 0230): nazwy miejscowości wpisane przez firmę i miejscowość ze słownika. Treść ogłoszenia (dane firmy).',
+  },
   'public.job_screening_questions': {
     activities: ['companies'],
     subjects: [],

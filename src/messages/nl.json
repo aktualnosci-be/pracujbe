@@ -508,6 +508,8 @@
       "accommodationCostRequired": "Vul de kosten van de huisvesting in.",
       "accommodationCostMandatory": "Vul bij voorziene huisvesting de kosten in — vul 0 in als de huisvesting gratis is.",
       "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon.",
+      "workLocationInvalid": "De plaatsnaam moet 2 tot 80 tekens lang zijn.",
+      "workLocationsTooMany": "Je kunt maximaal 10 extra werkplekken toevoegen.",
       "remoteCountriesRequired": "Kies minstens één land voor volledig thuiswerk."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
@@ -578,6 +580,8 @@
       "skillsOptional": "Gewenste vaardigheden",
       "certificates": "Attesten en certificaten"
     },
+    "workLocationsTitle": "Werkplekken",
+    "workLocationsNote": "Het werk vindt plaats op deze plaatsen.",
     "benefitsTitle": "Extralegale voordelen",
     "benefitsOther": "Andere voordelen"
   },
@@ -1895,6 +1899,10 @@
     "workTimeFull": "Voltijds",
     "workTimePart": "Deeltijds",
     "workTimeBoth": "Voltijds of deeltijds",
+    "extraLocationsLabel": "Extra werkplekken",
+    "extraLocationsPlaceholder": "bv. Hasselt",
+    "extraLocationsHint": "Werk op meerdere plaatsen? Voeg ze hier toe (maximaal {max}). Zoeken op plaats vindt deze vacature ook via deze namen.",
+    "extraLocationsLocked": "De lijst met extra werkplekken kan alleen in een concept worden gewijzigd.",
     "benefitCodesLegend": "Extralegale voordelen",
     "benefitCodesHint": "Vink aan wat je aanbiedt. Kandidaten kunnen vacatures op deze voordelen filteren. Maaltijdcheques en vergoeding woon-werkverkeer tellen ook mee vanuit „Kosten en extra’s”.",
     "workModeLabel": "Werkregime",

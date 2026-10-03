@@ -24,6 +24,11 @@ import {
   ACCOMMODATION_KINDS,
 } from '@/lib/job-costs';
 import { WORK_TIME_VALUES } from '@/lib/job-filter-options';
+import {
+  WORK_LOCATION_NAME_MAX,
+  WORK_LOCATION_NAME_MIN,
+  WORK_LOCATIONS_MAX,
+} from '@/lib/job-work-locations';
 import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
 import { APPLICANT_COUNTRIES, WORK_MODES } from '@/lib/job-work-mode';
 
@@ -132,6 +137,26 @@ const step3Base = z.object({
   address: z.string().trim().max(160, 'job.error.addressTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   /** Dawny boolean (#792): przy wybranym `workMode` liczony z trybu, bez trybu — bez zmian. */
   remote: z.boolean().default(false),
+  /**
+   * #850 (0230): dodatkowe miejsca pracy (miasto główne = `city`). Opcjonalne — brak pola =
+   * lista bez zmian (edycja opublikowanej oferty i starsi wołający nie wysyłają go).
+   */
+  extraLocations: z
+    .array(
+      z
+        .string()
+        .transform((v) => v.replace(/\s+/g, ' ').trim())
+        .pipe(
+          z
+            .string()
+            .min(WORK_LOCATION_NAME_MIN, 'job.error.workLocationInvalid')
+            .max(WORK_LOCATION_NAME_MAX, 'job.error.workLocationInvalid')
+            // eslint-disable-next-line no-control-regex -- znaki sterujące odrzuca też RPC 0230
+            .regex(/^[^\u0000-\u001f\u007f]*$/, 'job.error.workLocationInvalid'),
+        ),
+    )
+    .max(WORK_LOCATIONS_MAX, 'job.error.workLocationsTooMany')
+    .optional(),
   /** #792 (0228): tryb pracy; brak = oferta sprzed wyboru (tryb nieznany). */
   workMode: z.enum(WORK_MODES).optional(),
   /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej (JobPosting `applicantLocationRequirements`). */

@@ -508,6 +508,8 @@
       "accommodationCostRequired": "Indiquez le coût du logement.",
       "accommodationCostMandatory": "Pour un logement fourni, indiquez le coût — saisissez 0 s'il est gratuit.",
       "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire.",
+      "workLocationInvalid": "Le nom du lieu doit comporter de 2 à 80 caractères.",
+      "workLocationsTooMany": "Vous pouvez ajouter au maximum 10 lieux de travail supplémentaires.",
       "remoteCountriesRequired": "Choisissez au moins un pays pour le télétravail complet."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
@@ -578,6 +580,8 @@
       "skillsOptional": "Compétences appréciées",
       "certificates": "Certificats et habilitations"
     },
+    "workLocationsTitle": "Lieux de travail",
+    "workLocationsNote": "Le travail se déroule dans ces lieux.",
     "benefitsTitle": "Avantages extralégaux",
     "benefitsOther": "Autres avantages"
   },
@@ -1895,6 +1899,10 @@
     "workTimeFull": "Temps plein",
     "workTimePart": "Temps partiel",
     "workTimeBoth": "Temps plein ou partiel",
+    "extraLocationsLabel": "Lieux de travail supplémentaires",
+    "extraLocationsPlaceholder": "p. ex. Hasselt",
+    "extraLocationsHint": "Travail dans plusieurs lieux ? Ajoutez-les ici (au maximum {max}). La recherche par ville trouvera aussi cette offre via ces noms.",
+    "extraLocationsLocked": "La liste des lieux de travail supplémentaires ne peut être modifiée que dans un brouillon.",
     "benefitCodesLegend": "Avantages extralégaux",
     "benefitCodesHint": "Cochez ce que vous proposez. Les candidats peuvent filtrer les offres selon ces avantages. Les chèques-repas et le remboursement des déplacements comptent aussi depuis « Frais et avantages ».",
     "workModeLabel": "Mode de travail",

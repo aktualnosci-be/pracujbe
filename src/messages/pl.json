@@ -508,6 +508,8 @@
       "accommodationCostRequired": "Podaj koszt zakwaterowania.",
       "accommodationCostMandatory": "Przy zakwaterowaniu zapewnionym podaj koszt — wpisz 0, jeśli jest bezpłatne.",
       "accommodationDeductedRequired": "Wybierz, czy koszt zakwaterowania jest potrącany z wynagrodzenia.",
+      "workLocationInvalid": "Nazwa miejscowości musi mieć od 2 do 80 znaków.",
+      "workLocationsTooMany": "Możesz dodać najwyżej 10 dodatkowych miejsc pracy.",
       "remoteCountriesRequired": "Wybierz co najmniej jeden kraj dla pracy w pełni zdalnej."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
@@ -578,6 +580,8 @@
       "skillsOptional": "Mile widziane umiejętności",
       "certificates": "Certyfikaty i uprawnienia"
     },
+    "workLocationsTitle": "Miejsca pracy",
+    "workLocationsNote": "Praca odbywa się w tych miejscowościach.",
     "benefitsTitle": "Świadczenia",
     "benefitsOther": "Inne benefity"
   },
@@ -1895,6 +1899,10 @@
     "workTimeFull": "Pełny etat",
     "workTimePart": "Część etatu",
     "workTimeBoth": "Pełny lub część etatu",
+    "extraLocationsLabel": "Dodatkowe miejsca pracy",
+    "extraLocationsPlaceholder": "np. Hasselt",
+    "extraLocationsHint": "Praca w kilku miejscowościach? Dodaj je tutaj (najwyżej {max}). Wyszukiwanie po mieście znajdzie tę ofertę także po tych nazwach.",
+    "extraLocationsLocked": "Listę dodatkowych miejsc pracy można zmienić tylko w szkicu oferty.",
     "benefitCodesLegend": "Świadczenia",
     "benefitCodesHint": "Zaznacz to, co oferujesz. Kandydaci mogą filtrować oferty po tych świadczeniach. Bony żywieniowe i zwrot dojazdu liczą się też z pól „Koszty i dodatki”.",
     "workModeLabel": "Tryb pracy",
