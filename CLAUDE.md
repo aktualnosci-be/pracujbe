@@ -654,7 +654,10 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > pola = 0); tekst, liczba ujemna, ułamek, `NaN`/`Infinity`, tablica, obiekt czy `boolean` w tym
 > polu dają `unrecognized` (blokuje CI) zamiast dawnego `Number(value) || 0`, które cicho zamieniało
 > taką wartość w zero i mogło dać `clean` bez dowodu. Dowód: `tests/unit/sca-audit-outcome.test.ts`
-> (kontrole ujemne). **QA-01 (a11y w CI) —
+> (kontrole ujemne). **Wyjątki z terminem (decyzja właściciela 2026-10-03):** wynik liczony z porad
+> (`vulnerabilities`/`via`, zgodność z sumami metadanych), dane w `scripts/lib/sca-audit-exceptions.json`;
+> jedyny wpis `GHSA-vfj7-8cjw-p6xm` (`braces`, tylko narzędzia budowania/lintu) do 2026-11-02 — każda
+> inna porada high/critical i porada po terminie blokują (`docs/SECURITY_CHECKLIST.md` §14). **QA-01 (a11y w CI) —
 > ZROBIONE:** bramka axe-core (`@axe-core/playwright`) w `tests/e2e/a11y.spec.ts` (uruchamiana w
 > jobie `e2e`) blokuje przy naruszeniach WCAG 2.x A/AA critical/serious na home/liście ofert/
 > logowaniu/rejestracji; domknięte realne naruszenia kontrastu tokenami: `--muted-foreground`

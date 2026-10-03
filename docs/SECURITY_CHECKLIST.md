@@ -123,6 +123,19 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
       walidacja → INSERT idempotentny (patrz [`ARCHITECTURE.md`](./ARCHITECTURE.md) §4).
 - [ ] Operacje admina → wpis w `audit_logs`.
 
+## 14. Zależności (SCA)
+
+- [ ] Job `sca` (`scripts/sca-audit.sh`) zielony: brak podatności high/critical w
+      `npm audit --package-lock-only`.
+- [ ] Wyjątki tylko jako dane w `scripts/lib/sca-audit-exceptions.json` (porada GHSA + pakiet +
+      powód + termin `expiresOn`). Wynik liczony z porad (`vulnerabilities`/`via`): wpis jest
+      pomijany tylko, gdy wszystkie jego porady high/critical są objęte wyjątkiem; każda inna
+      porada high/critical blokuje, a po terminie wyjątek przestaje działać.
+- [ ] Obecny wyjątek: `GHSA-vfj7-8cjw-p6xm` (`braces`, do 2026-11-02, decyzja właściciela
+      2026-10-03) — brak poprawionej wersji, pakiet tylko w narzędziach budowania i lintu
+      (tailwindcss, tailwindcss-animate, @next/eslint-plugin-next). Przed terminem: aktualizacja
+      zależności albo nowa decyzja właściciela.
+
 ---
 
 ## Test bezpieczeństwa (E2E / integracyjne — do dopisania)

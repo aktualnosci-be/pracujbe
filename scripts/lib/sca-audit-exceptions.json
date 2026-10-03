@@ -1,0 +1,8 @@
+[
+  {
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "expiresOn": "2026-11-02",
+    "reason": "Brak poprawionej wersji braces (<=3.0.3, wyczerpanie stosu). Pakiet trafia wyłącznie do narzędzi budowania i lintu (tailwindcss, tailwindcss-animate, @next/eslint-plugin-next przez micromatch/chokidar/fast-glob); nic w src/ ani scripts/ go nie importuje. Decyzja właściciela 2026-10-03; po terminie bramka znów blokuje."
+  }
+]

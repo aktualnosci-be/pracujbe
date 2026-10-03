@@ -153,3 +153,153 @@ describe('classifyAuditResult — JSON bez metadata.vulnerabilities (#607, dawny
     expect(result.status).toBe('unrecognized');
   });
 });
+
+/**
+ * Wyjątek dla porady GHSA-vfj7-8cjw-p6xm (braces, decyzja właściciela 2026-10-03). Wynik
+ * liczony z porad (`vulnerabilities`/`via`), nie z sum metadanych: wpis high/critical jest
+ * pomijany tylko, gdy WSZYSTKIE jego porady high/critical są objęte aktywnym wyjątkiem.
+ */
+describe('classifyAuditResult — wyjątek z terminem dla jednej porady', () => {
+  const BRACES_GHSA = 'GHSA-vfj7-8cjw-p6xm';
+  const OTHER_GHSA = 'GHSA-xxxx-xxxx-xxxx'.replace(/x/g, '2');
+  const exceptions = [
+    { advisory: BRACES_GHSA, package: 'braces', expiresOn: '2026-11-02', reason: 'Tylko narzędzia budowania.' },
+  ];
+  const before = new Date('2026-10-03T12:00:00Z');
+
+  function advisory(name: string, ghsa: string, severity = 'high') {
+    return {
+      source: 1,
+      name,
+      dependency: name,
+      title: 't',
+      url: `https://github.com/advisories/${ghsa}`,
+      severity,
+      range: '<=3.0.3',
+    };
+  }
+
+  /** Kształt zgodny z realnym `npm audit --json` dla drzewa braces na main (8 wpisów high). */
+  function bracesTree(extra: Record<string, unknown> = {}) {
+    const vulnerabilities: Record<string, unknown> = {
+      braces: { name: 'braces', severity: 'high', via: [advisory('braces', BRACES_GHSA)] },
+      micromatch: { name: 'micromatch', severity: 'high', via: ['braces'] },
+      chokidar: { name: 'chokidar', severity: 'high', via: ['braces'] },
+      'fast-glob': { name: 'fast-glob', severity: 'high', via: ['micromatch'] },
+      tailwindcss: { name: 'tailwindcss', severity: 'high', via: ['chokidar', 'fast-glob', 'micromatch'] },
+      'tailwindcss-animate': { name: 'tailwindcss-animate', severity: 'high', via: ['tailwindcss'] },
+      ...extra,
+    };
+    const blocking = Object.values(vulnerabilities).filter((v) =>
+      ['high', 'critical'].includes((v as { severity: string }).severity),
+    );
+    const critical = blocking.filter((v) => (v as { severity: string }).severity === 'critical').length;
+    return JSON.stringify({
+      vulnerabilities,
+      metadata: { vulnerabilities: { high: blocking.length - critical, critical } },
+    });
+  }
+
+  it('sama porada objęta wyjątkiem → clean (z listą pominiętych porad)', () => {
+    const result = classifyAuditResult({ stdout: bracesTree(), stderr: '' }, { exceptions, now: before });
+    expect(result).toEqual({ status: 'clean', high: 0, critical: 0, excepted: [BRACES_GHSA] });
+  });
+
+  it('wyjątek obowiązuje do końca dnia terminu włącznie', () => {
+    const result = classifyAuditResult(
+      { stdout: bracesTree(), stderr: '' },
+      { exceptions, now: new Date('2026-11-02T23:59:00Z') },
+    );
+    expect(result.status).toBe('clean');
+  });
+
+  it('wyjątek + inna porada high → BLOKUJE', () => {
+    const stdout = bracesTree({
+      lodash: { name: 'lodash', severity: 'high', via: [advisory('lodash', OTHER_GHSA)] },
+    });
+    const result = classifyAuditResult({ stdout, stderr: '' }, { exceptions, now: before });
+    expect(result).toMatchObject({ status: 'vulnerable', high: 1, critical: 0 });
+  });
+
+  it('pakiet zależny od braces i od innej porady high → BLOKUJE (wyjątek nie ukrywa drugiej przyczyny)', () => {
+    const vulnerabilities = JSON.parse(bracesTree()).vulnerabilities;
+    vulnerabilities.micromatch.via = ['braces', advisory('micromatch', OTHER_GHSA)];
+    const stdout = JSON.stringify({ vulnerabilities, metadata: { vulnerabilities: { high: 6, critical: 0 } } });
+    const result = classifyAuditResult({ stdout, stderr: '' }, { exceptions, now: before });
+    expect(result.status).toBe('vulnerable');
+    // micromatch, fast-glob i tailwindcss(+animate) dziedziczą drugą poradę.
+    expect(result).toMatchObject({ high: 4 });
+  });
+
+  it('wyjątek po terminie → BLOKUJE', () => {
+    const result = classifyAuditResult(
+      { stdout: bracesTree(), stderr: '' },
+      { exceptions, now: new Date('2026-11-03T00:00:00Z') },
+    );
+    expect(result).toMatchObject({ status: 'vulnerable', high: 6 });
+  });
+
+  it('ten sam pakiet, inna porada → BLOKUJE', () => {
+    const vulnerabilities = JSON.parse(bracesTree()).vulnerabilities;
+    vulnerabilities.braces.via = [advisory('braces', OTHER_GHSA)];
+    const stdout = JSON.stringify({ vulnerabilities, metadata: { vulnerabilities: { high: 6, critical: 0 } } });
+    const result = classifyAuditResult({ stdout, stderr: '' }, { exceptions, now: before });
+    expect(result).toMatchObject({ status: 'vulnerable', high: 6 });
+  });
+
+  it('ta sama porada, inny pakiet → BLOKUJE', () => {
+    const vulnerabilities = JSON.parse(bracesTree()).vulnerabilities;
+    vulnerabilities.braces.via = [advisory('not-braces', BRACES_GHSA)];
+    const stdout = JSON.stringify({ vulnerabilities, metadata: { vulnerabilities: { high: 6, critical: 0 } } });
+    const result = classifyAuditResult({ stdout, stderr: '' }, { exceptions, now: before });
+    expect(result.status).toBe('vulnerable');
+  });
+
+  it('kontrola ujemna: bez wyjątku to samo drzewo BLOKUJE', () => {
+    expect(classifyAuditResult({ stdout: bracesTree(), stderr: '' }, { now: before })).toMatchObject({
+      status: 'vulnerable',
+      high: 6,
+    });
+    expect(classifyAuditResult({ stdout: bracesTree(), stderr: '' }, { exceptions: [], now: before }).status).toBe(
+      'vulnerable',
+    );
+  });
+
+  it.each([
+    ['bez powodu', { advisory: BRACES_GHSA, package: 'braces', expiresOn: '2026-11-02', reason: '' }],
+    ['zły format terminu', { advisory: BRACES_GHSA, package: 'braces', expiresOn: '2.11.2026', reason: 'x' }],
+    ['bez pakietu', { advisory: BRACES_GHSA, expiresOn: '2026-11-02', reason: 'x' }],
+  ])('niepoprawny wpis wyjątku (%s) niczego nie zwalnia — BLOKUJE', (_label, entry) => {
+    const result = classifyAuditResult({ stdout: bracesTree(), stderr: '' }, { exceptions: [entry], now: before });
+    expect(result.status).toBe('vulnerable');
+  });
+
+  it('sumy metadanych niezgodne z mapą porad → unrecognized (BLOKUJE)', () => {
+    const parsed = JSON.parse(bracesTree());
+    parsed.metadata.vulnerabilities.high = 9;
+    const result = classifyAuditResult({ stdout: JSON.stringify(parsed), stderr: '' }, { exceptions, now: before });
+    expect(result.status).toBe('unrecognized');
+  });
+
+  it.each([
+    ['wpis bez via', { name: 'x', severity: 'high' }],
+    ['via wskazuje nieistniejący pakiet', { name: 'x', severity: 'high', via: ['ghost'] }],
+    ['via z pustą listą', { name: 'x', severity: 'high', via: [] }],
+    ['nieznane severity', { name: 'x', severity: 'urgent', via: ['braces'] }],
+  ])('struktura spoza kontraktu (%s) → unrecognized (BLOKUJE)', (_label, entry) => {
+    const vulnerabilities = { ...JSON.parse(bracesTree()).vulnerabilities, x: entry };
+    const stdout = JSON.stringify({ vulnerabilities, metadata: { vulnerabilities: { high: 7, critical: 0 } } });
+    const result = classifyAuditResult({ stdout, stderr: '' }, { exceptions, now: before });
+    expect(result.status).toBe('unrecognized');
+  });
+
+  it('plik wyjątków w repo: dokładnie jedna porada braces z terminem 2026-11-02', async () => {
+    const { readFileSync } = await import('node:fs');
+    const data = JSON.parse(readFileSync('scripts/lib/sca-audit-exceptions.json', 'utf8'));
+    expect(data).toHaveLength(1);
+    expect(data[0]).toMatchObject({ advisory: BRACES_GHSA, package: 'braces', expiresOn: '2026-11-02' });
+    expect(classifyAuditResult({ stdout: bracesTree(), stderr: '' }, { exceptions: data, now: before }).status).toBe(
+      'clean',
+    );
+  });
+});

@@ -24,6 +24,11 @@
 # Retry tylko dla `recognized_transient` (sieć/infrastruktura może się same naprawić
 # w kilka sekund); `unrecognized` nie jest ponawiane — nic nie wskazuje, że kolejna
 # próba coś wyjaśni, a ponawianie pustego wyniku zjadałoby tylko minuty CI.
+#
+# Wyjątki (decyzja właściciela 2026-10-03): `scripts/lib/sca-audit-exceptions.json` —
+# wpis = porada GHSA + pakiet + powód + termin. Wynik liczony z porad w `vulnerabilities`/
+# `via`: wpis high/critical pomijany tylko, gdy WSZYSTKIE jego porady high/critical są
+# objęte aktywnym wyjątkiem; po terminie porada znów blokuje.
 # =============================================================================
 set -uo pipefail
 
@@ -59,6 +64,10 @@ done
 
 case "$status" in
   clean)
+    excepted="$(printf '%s' "$outcome_json" | node -e 'process.stdin.on("data",d=>process.stdout.write((JSON.parse(d).excepted||[]).join(", ")))')"
+    if [ -n "$excepted" ]; then
+      echo "::warning::Pominięte porady objęte wyjątkiem z terminem (scripts/lib/sca-audit-exceptions.json): ${excepted}."
+    fi
     echo "SCA OK — brak podatności high/critical."
     exit 0
     ;;
