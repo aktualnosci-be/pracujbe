@@ -1,4 +1,4 @@
--- Rollback 0982_job_work_locations.sql (#850): usuwa dodatkowe miejsca pracy ofert,
+-- Rollback 0230_job_work_locations.sql (#850): usuwa dodatkowe miejsca pracy ofert,
 -- RPC i triggery; `search_city_candidates` wraca do definicji z 0183.
 drop trigger if exists trg_job_duplications_copy_work_locations on public.job_duplications;
 drop function if exists public.job_duplications_copy_work_locations();

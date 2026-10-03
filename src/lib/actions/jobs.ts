@@ -548,7 +548,7 @@ export async function updateJobDraft(
         p_content: jsonArg(content),
         p_expected_updated_at: versionForSave,
       });
-      // #850 (0982): dodatkowe miejsca pracy — w TEJ SAMEJ transakcji co krok 3 (błąd cofa
+      // #850 (0230): dodatkowe miejsca pracy — w TEJ SAMEJ transakcji co krok 3 (błąd cofa
       // cały krok). Brak pola = lista bez zmian (np. wołający sprzed #850).
       const extraLocations = step === 3 ? (parsed as JobStep3).extraLocations : undefined;
       if (extraLocations) {

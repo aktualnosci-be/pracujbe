@@ -609,7 +609,7 @@ export interface JobDraftValues {
   region: string;
   address: string;
   remote: boolean;
-  /** #850 (0982): dodatkowe miejsca pracy (kolejność z bazy; miasto główne = `city`). */
+  /** #850 (0230): dodatkowe miejsca pracy (kolejność z bazy; miasto główne = `city`). */
   extraLocations: string[];
   /** #792 (0228): `jobs.work_mode`; pusty = tryb nieznany (oferta sprzed wyboru). */
   workMode: string;
@@ -863,7 +863,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
             WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
-        // #850 (0982): job_work_locations_select_member — członek firmy oferty. Wczytywane, bo
+        // #850 (0230): job_work_locations_select_member — członek firmy oferty. Wczytywane, bo
         // krok 3 zapisuje listę replace-all.
         workLocations: await queryRows(tx, 'employer.job-draft-work-locations',
           'SELECT name FROM public.job_work_locations WHERE job_id = $1 ORDER BY position', [jobId]),

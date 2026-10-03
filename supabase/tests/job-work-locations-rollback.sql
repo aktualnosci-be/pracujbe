@@ -1,6 +1,6 @@
 -- =============================================================================
--- JWL850-R — rollback migracji 0982 (dodatkowe miejsca pracy oferty, #850). Uruchamiany przez
--- scripts/test-rls.sh po rls.sql; rollback w transakcji cofanej, baza zostaje po 0982.
+-- JWL850-R — rollback migracji 0230 (dodatkowe miejsca pracy oferty, #850). Uruchamiany przez
+-- scripts/test-rls.sh po rls.sql; rollback w transakcji cofanej, baza zostaje po 0230.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -14,10 +14,10 @@ select pg_temp.assert(
   to_regclass('public.job_work_locations') is not null
   and to_regprocedure('public.set_job_work_locations(uuid, text[])') is not null
   and position('job_work_locations' in pg_get_functiondef('public.search_city_candidates(text)'::regprocedure)) > 0,
-  'JWL850-R0 baza w stanie po 0982');
+  'JWL850-R0 baza w stanie po 0230');
 
 begin;
-\ir ../rollback/0982_job_work_locations.down.sql
+\ir ../rollback/0230_job_work_locations.down.sql
 select pg_temp.assert(
   to_regclass('public.job_work_locations') is null
   and to_regprocedure('public.set_job_work_locations(uuid, text[])') is null
@@ -34,5 +34,5 @@ select pg_temp.assert(:'jwr_rows'::int >= 0, 'JWL850-R2 lista ofert z miastem dz
 rollback;
 
 select pg_temp.assert(to_regclass('public.job_work_locations') is not null,
-  'JWL850-R3 po teście baza wraca do stanu po 0982');
-\echo '--- JWL850-R rollback 0982 OK ---'
+  'JWL850-R3 po teście baza wraca do stanu po 0230');
+\echo '--- JWL850-R rollback 0230 OK ---'

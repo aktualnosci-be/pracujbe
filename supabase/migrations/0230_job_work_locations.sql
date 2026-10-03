@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0982_job_work_locations.sql — dodatkowe miejsca pracy jednej oferty (#850, etap 1).
+-- 0230_job_work_locations.sql — dodatkowe miejsca pracy jednej oferty (#850, etap 1).
 -- Numer tymczasowy (ostateczny nada integrator).
 --
 -- Problem (#850): oferta ma jedną lokalizację strukturalną (`jobs.city` + `jobs.location_id`).
@@ -29,7 +29,7 @@
 -- Etap 2 (osobny PR, po #1270/#1275): sidebarowy filtr `p_locations` i facet miasta po
 -- dodatkowych miejscach, edycja listy w opublikowanej ofercie (`update_published_job`), matching.
 --
--- Rollback: supabase/rollback/0982_job_work_locations.down.sql
+-- Rollback: supabase/rollback/0230_job_work_locations.down.sql
 -- (test: supabase/tests/job-work-locations-rollback.sql w scripts/test-rls.sh).
 -- =============================================================================
 
@@ -46,7 +46,7 @@ create table public.job_work_locations (
   unique (job_id, name_key)
 );
 comment on table public.job_work_locations is
-  'Dodatkowe miejsca pracy oferty (#850, 0982). Miasto główne = jobs.city. Zapis tylko przez '
+  'Dodatkowe miejsca pracy oferty (#850, 0230). Miasto główne = jobs.city. Zapis tylko przez '
   'set_job_work_locations (szkic, recruiter+) i kopię szkicu; odczyt publiczny przez '
   'get_public_job_work_locations.';
 create index idx_job_work_locations_location on public.job_work_locations(location_id)

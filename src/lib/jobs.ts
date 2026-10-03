@@ -219,7 +219,7 @@ export interface JobDetail extends JobListItem {
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
   /**
-   * #850 (0982): dodatkowe miejsca pracy (bez miasta głównego `city`); brak = oferta z jednym
+   * #850 (0230): dodatkowe miejsca pracy (bez miasta głównego `city`); brak = oferta z jednym
    * miejscem albo odczyt nieudany.
    */
   workLocations?: string[];
@@ -685,7 +685,7 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
-  // #850 (0982): dodatkowe miejsca pracy — odczyt pomocniczy; awaria = samo miasto główne.
+  // #850 (0230): dodatkowe miejsca pracy — odczyt pomocniczy; awaria = samo miasto główne.
   let workLocations: string[] = [];
   try {
     const { getPublicJobWorkLocations } = await import('@/lib/db/public-jobs');

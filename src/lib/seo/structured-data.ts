@@ -189,7 +189,7 @@ function telecommuteFields(job: JobDetail): Record<string, unknown> | undefined 
 }
 
 /**
- * `jobLocation`: miasto główne (z regionem) + dodatkowe miejsca pracy (#850, 0982) — schema.org
+ * `jobLocation`: miasto główne (z regionem) + dodatkowe miejsca pracy (#850, 0230) — schema.org
  * dopuszcza listę miejsc. Dodatkowe miejsca bez regionu (kreator go dla nich nie zbiera).
  * Jedno miejsce = obiekt (jak przed #850).
  */

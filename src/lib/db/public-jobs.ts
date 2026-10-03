@@ -543,7 +543,7 @@ export async function getPublicJobCosts(
 }
 
 /**
- * Dodatkowe miejsca pracy oferty publicznej (#850, 0982). RPC pod rolą anon zwraca wiersze
+ * Dodatkowe miejsca pracy oferty publicznej (#850, 0230). RPC pod rolą anon zwraca wiersze
  * tylko dla oferty publicznej (`job_is_public`), bez wpisu równego miastu głównemu.
  */
 export async function getPublicJobWorkLocations(

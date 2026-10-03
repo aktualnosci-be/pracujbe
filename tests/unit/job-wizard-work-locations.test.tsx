@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JobWizard, type JobWizardInitialValues } from "@/components/employer/JobWizard";
 
 /**
- * #850 (0982): krok 3 kreatora — „Dodatkowe miejsca pracy”. Szkic: lista trafia do zapisu kroku 3
+ * #850 (0230): krok 3 kreatora — „Dodatkowe miejsca pracy”. Szkic: lista trafia do zapisu kroku 3
  * (`extraLocations`). Edycja opublikowanej oferty: lista tylko do podglądu (RPC zmienia ją w szkicu).
  */
 

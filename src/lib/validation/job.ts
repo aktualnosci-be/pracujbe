@@ -138,7 +138,7 @@ const step3Base = z.object({
   /** Dawny boolean (#792): przy wybranym `workMode` liczony z trybu, bez trybu — bez zmian. */
   remote: z.boolean().default(false),
   /**
-   * #850 (0982): dodatkowe miejsca pracy (miasto główne = `city`). Opcjonalne — brak pola =
+   * #850 (0230): dodatkowe miejsca pracy (miasto główne = `city`). Opcjonalne — brak pola =
    * lista bez zmian (edycja opublikowanej oferty i starsi wołający nie wysyłają go).
    */
   extraLocations: z
@@ -151,7 +151,7 @@ const step3Base = z.object({
             .string()
             .min(WORK_LOCATION_NAME_MIN, 'job.error.workLocationInvalid')
             .max(WORK_LOCATION_NAME_MAX, 'job.error.workLocationInvalid')
-            // eslint-disable-next-line no-control-regex -- znaki sterujące odrzuca też RPC 0982
+            // eslint-disable-next-line no-control-regex -- znaki sterujące odrzuca też RPC 0230
             .regex(/^[^\u0000-\u001f\u007f]*$/, 'job.error.workLocationInvalid'),
         ),
     )

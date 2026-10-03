@@ -1451,7 +1451,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0173) nowe pytania nie są zapisywane, a zapisane nie są pokazywane. |
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
 | `public.job_translations` | Treść ogłoszenia (dane firmy). |
-| `public.job_work_locations` | Dodatkowe miejsca pracy oferty (#850, 0982): nazwy miejscowości wpisane przez firmę i miejscowość ze słownika. Treść ogłoszenia (dane firmy). |
+| `public.job_work_locations` | Dodatkowe miejsca pracy oferty (#850, 0230): nazwy miejscowości wpisane przez firmę i miejscowość ze słownika. Treść ogłoszenia (dane firmy). |
 | `public.joint_committees` | Słownik/konfiguracja (komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169) — bez danych osobowych. |
 | `public.language_aliases` | Słownik/konfiguracja (nazwy języków PL/NL/FR/EN (0168)) — bez danych osobowych. |
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |

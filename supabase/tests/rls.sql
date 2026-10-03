@@ -27635,7 +27635,7 @@ select pg_temp.assert(to_regprocedure('public.translation_entity_exists(text, uu
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- JWL850. Dodatkowe miejsca pracy oferty (#850, 0982): zapis tylko przez RPC w szkicu,
+-- JWL850. Dodatkowe miejsca pracy oferty (#850, 0230): zapis tylko przez RPC w szkicu,
 --   odczyt publiczny tylko dla oferty publicznej, wyszukiwanie miasta po dodatkowym miejscu,
 --   kopia szkicu, dowiązanie nowego aliasu. Kontrole ujemne: definicja search_city_candidates
 --   z 0183 (rollback) nie znajduje oferty; polityka USING (true) odsłania listę obcej firmie.
@@ -27764,11 +27764,11 @@ reset role;
 rollback to savepoint jwl_policy;
 
 -- Kontrola ujemna (b): definicja search_city_candidates z 0183 nie zna dodatkowych miejsc.
-\ir ../rollback/0982_job_work_locations.down.sql
+\ir ../rollback/0230_job_work_locations.down.sql
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   not exists (select 1 from public.get_public_jobs('pl', p_city => 'jwtestowo', p_limit => 100) where id = :'JWA'),
-  'JWL850-N2 kontrola ujemna: bez 0982 wyszukiwanie po dodatkowym miejscu nie znajduje oferty');
+  'JWL850-N2 kontrola ujemna: bez 0230 wyszukiwanie po dodatkowym miejscu nie znajduje oferty');
 reset role;
 rollback;
 reset role; reset app.current_uid;

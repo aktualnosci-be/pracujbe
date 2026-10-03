@@ -196,7 +196,7 @@ interface FormValues {
   address: string;
   /** Dawny boolean (#792): przy wybranym trybie liczony z trybu, bez trybu — wartość z bazy. */
   remote: boolean;
-  /** #850 (0982): dodatkowe miejsca pracy (miasto główne = `city`). */
+  /** #850 (0230): dodatkowe miejsca pracy (miasto główne = `city`). */
   extraLocations: string[];
   /** #792 (0228): tryb pracy; '' = oferta sprzed wyboru (tryb nieznany). */
   workMode: '' | WorkMode;

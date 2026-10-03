@@ -1,7 +1,7 @@
 import { cityKey } from '@/lib/matching/belgian-cities';
 
 /**
- * Dodatkowe miejsca pracy oferty (#850, migracja 0982). Lustro reguł RPC
+ * Dodatkowe miejsca pracy oferty (#850, migracja 0230). Lustro reguł RPC
  * `set_job_work_locations`: najwyżej 10 pozycji, każda 2–80 znaków po złożeniu spacji, bez
  * znaków sterujących; duplikaty (po kluczu `city_key`) i wpis równy miastu głównemu są pomijane.
  * Miasto główne zostaje w `jobs.city` — lista to miejsca DODATKOWE.

@@ -1139,7 +1139,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['companies'],
     subjects: [],
     columns: {},
-    note: 'Dodatkowe miejsca pracy oferty (#850, 0982): nazwy miejscowości wpisane przez firmę i miejscowość ze słownika. Treść ogłoszenia (dane firmy).',
+    note: 'Dodatkowe miejsca pracy oferty (#850, 0230): nazwy miejscowości wpisane przez firmę i miejscowość ze słownika. Treść ogłoszenia (dane firmy).',
   },
   'public.job_screening_questions': {
     activities: ['companies'],

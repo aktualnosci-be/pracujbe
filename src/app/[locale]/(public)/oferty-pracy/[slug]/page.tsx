@@ -722,7 +722,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
             {job.workLocations && job.workLocations.length > 0 ? (
               <Section title={t('workLocationsTitle')}>
-                {/* #850 (0982): miasto główne + dodatkowe miejsca pracy (nazwy z kreatora). */}
+                {/* #850 (0230): miasto główne + dodatkowe miejsca pracy (nazwy z kreatora). */}
                 <p className="mb-3 text-sm text-muted-foreground">{t('workLocationsNote')}</p>
                 <ul className="flex flex-wrap gap-2" data-testid="job-work-locations">
                   {[job.city, ...job.workLocations].map((name) => (

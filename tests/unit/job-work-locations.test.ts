@@ -17,7 +17,7 @@ import type { JobDetail } from '@/lib/jobs';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * #850 (0982): dodatkowe miejsca pracy oferty — lustro reguł RPC, zapis w transakcji kroku 3,
+ * #850 (0230): dodatkowe miejsca pracy oferty — lustro reguł RPC, zapis w transakcji kroku 3,
  * JobPosting z listą miejsc. Zachowanie w bazie: `rls.sql` sekcja JWL850 (z kontrolami ujemnymi).
  */
 
