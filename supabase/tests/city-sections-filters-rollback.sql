@@ -29,8 +29,8 @@ select pg_temp.assert(
 -- facety i listę ofert z nowymi parametrami, więc najpierw jej rollback, potem 0183.
 -- Odroczone triggery (tłumaczenia, zaufanie treści) po wstawieniu ofert blokują ALTER TABLE.
 set constraints all immediate;
--- 0976 redefiniuje te same funkcje (nowy parametr p_benefits) — najpierw jego rollback.
-\ir ../rollback/0976_job_benefits.down.sql
+-- 0229 redefiniuje te same funkcje (nowy parametr p_benefits) — najpierw jego rollback.
+\ir ../rollback/0229_job_benefits.down.sql
 -- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
 \ir ../rollback/0228_job_work_mode.down.sql
 -- 0227 (grafik pracy, numer tymczasowy) redefiniuje te same funkcje z nowym parametrem — najpierw jej rollback.

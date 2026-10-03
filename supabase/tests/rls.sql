@@ -25668,7 +25668,7 @@ select pg_temp.assert(
 reset role;
 
 -- ============================================================================
--- BN976. Strukturalne świadczenia oferty (#826, migracja 0976 — numer tymczasowy).
+-- BN976. Strukturalne świadczenia oferty (#826, migracja 0229 — numer tymczasowy).
 --   `jobs.benefit_codes` (katalog `job_benefit_catalog()`), świadczenia efektywne
 --   (`job_effective_benefits`: kody + bony żywieniowe z kwoty + zwrot dojazdu z 0169), filtr
 --   `p_benefits` (oferta ma KAŻDE wybrane) w liście, liczniku, facetach i kopii dla alertów,
@@ -26735,10 +26735,10 @@ select pg_temp.assert(
 
 -- Definicje z 0194 (rollback 0213) w savepoincie: te same odciski + kontrola ujemna planu.
 savepoint pf1215_old;
--- 0976 (świadczenia) i 0227 (grafik pracy, numery tymczasowe) dodają parametry do tych funkcji —
+-- 0229 (świadczenia) i 0227 (grafik pracy, numery tymczasowe) dodają parametry do tych funkcji —
 -- najpierw ich rollbacki, od najnowszej (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
 set constraints all immediate;
-\ir ../rollback/0976_job_benefits.down.sql
+\ir ../rollback/0229_job_benefits.down.sql
 -- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
 \ir ../rollback/0228_job_work_mode.down.sql
 \ir ../rollback/0227_job_shift_patterns.down.sql
@@ -26859,10 +26859,10 @@ select pg_temp.assert(not has_function_privilege('anon', 'public.search_keyword_
   'KQ866-7 funkcje pomocnicze bez EXECUTE dla ról klienta');
 
 savepoint kq866_old;
--- 0976 (świadczenia) i 0227 (grafik pracy, numery tymczasowe) dodają parametry do tych funkcji —
+-- 0229 (świadczenia) i 0227 (grafik pracy, numery tymczasowe) dodają parametry do tych funkcji —
 -- najpierw ich rollbacki, od najnowszej (ALTER TABLE jobs wymaga braku odroczonych triggerów z fikstury).
 set constraints all immediate;
-\ir ../rollback/0976_job_benefits.down.sql
+\ir ../rollback/0229_job_benefits.down.sql
 -- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
 \ir ../rollback/0228_job_work_mode.down.sql
 \ir ../rollback/0227_job_shift_patterns.down.sql
@@ -28143,9 +28143,9 @@ select pg_temp.assert((select work_mode = 'remote' and remote_applicant_countrie
   'WD-N2 kontrola ujemna: bez CHECK praca zdalna bez kraju przechodzi (WD2b wykrywa regresję)');
 rollback;
 begin;
--- 0976 (świadczenia) redefiniuje save_job_draft/update_published_job na 0228 — najpierw jej rollback.
+-- 0229 (świadczenia) redefiniuje save_job_draft/update_published_job na 0228 — najpierw jej rollback.
 set constraints all immediate;
-\ir ../rollback/0976_job_benefits.down.sql
+\ir ../rollback/0229_job_benefits.down.sql
 \ir ../rollback/0228_job_work_mode.down.sql
 set local role authenticated; set local app.current_uid = :'WDE'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'WDJC',

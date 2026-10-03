@@ -52,7 +52,7 @@ echo ">> #1140 (0171): świeża baza = tryb ogłoszeniowy (CL1128-0)"
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 
-echo ">> rollback 0976 (świadczenia oferty, w transakcji cofanej)"
+echo ">> rollback 0229 (świadczenia oferty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-benefits-rollback.sql"
 
 echo ">> rollback 0228 (tryb pracy oferty, w transakcji cofanej)"

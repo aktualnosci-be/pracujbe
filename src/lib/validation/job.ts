@@ -277,7 +277,7 @@ const euroAmount = (min: number, max: number, message: string) =>
 const step8Base = z.object({
   conditions: z.array(textLine).max(20, 'job.error.conditionsTooMany').default([]),
   benefits: z.array(textLine).max(20, 'job.error.benefitsTooMany').default([]),
-  // 0976 (#826): świadczenia z katalogu (kody = `job_benefit_catalog()`); brak = nie podano.
+  // 0229 (#826): świadczenia z katalogu (kody = `job_benefit_catalog()`); brak = nie podano.
   benefitCodes: z.array(z.enum(JOB_BENEFIT_CODES)).max(JOB_BENEFIT_CODES.length).default([]),
   accommodation: z.boolean().default(false),
   transport: z.boolean().default(false),

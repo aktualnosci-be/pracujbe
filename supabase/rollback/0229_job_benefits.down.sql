@@ -1,94 +1,42 @@
 -- =============================================================================
--- 0976_job_benefits.sql — strukturalne świadczenia oferty (#826).
--- NUMER TYMCZASOWY — ostateczny nada integrator.
+-- Rollback 0229 — strukturalne świadczenia oferty (#826).
+-- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
+-- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
+-- (supabase/tests/job-benefits-rollback.sql wykonuje go w transakcji i cofa).
 --
--- Rozszerza „Koszty i dodatki” (0169) zamiast je dublować:
---   * `jobs.benefit_codes text[]` — kategorie świadczeń zaznaczone przez pracodawcę ze stałego
---     katalogu (kody danych; etykiety PL/NL/FR/EN w src/messages, lustro kodów
---     src/lib/job-benefits.ts — zgodność pilnuje tests/unit/job-benefits.test.ts). Brak kodu =
---     „nie podano”, nie „nie oferuje”. Starych ofert NIE klasyfikujemy (bez zgadywania z tekstu).
---     Tekstowe `job_translations.benefits` zostaje jako „inne świadczenia / szczegóły”.
---   * Bony żywieniowe i zwrot kosztów dojazdu mają już strukturalne pola z 0169
---     (`meal_voucher_daily`, `transport_reimbursed`) — `job_effective_benefits(…)` łączy je
---     z zaznaczonymi kodami (jedno źródło dla filtra i szczegółu), więc oferta z kwotą bonów
---     pasuje do filtra „bony żywieniowe” bez drugiej deklaracji.
---   * Filtr `p_benefits text[]` (oferta ma KAŻDE wybrane świadczenie) w `get_public_jobs`,
---     `get_public_jobs_count`, `get_public_job_filter_facets` (baza wymiarów) i kopii dla alertów
---     `saved_search_jobs_after` (blok 1:1 — test saved-search-keyset-sync). Klucz kanoniczny
---     zapisanego wyszukiwania `benefits` (`saved_search_canonical_filters`, `saved_search_keyset_page`).
---     Nowy parametr jest OSTATNI (po `p_shift_patterns` z 0227) i ma wartość domyślną; sygnatury
---     z 0227 są usuwane (bez przeciążeń). Definicje funkcji = stan 0227 (grafik pracy) + świadczenia.
---   * Zapis: `save_job_draft` i `update_published_job` (stan 0228 — tryb pracy) — klucz
---     `benefit_codes` (`job_benefit_codes_from_jsonb`: tablica znanych kodów, deduplikacja,
---     porządek katalogu); migawka audytu edycji (stan 0228) + `benefit_codes`; kopia szkicu
---     przez trigger na `job_duplications` (jak 0169/0194).
---   * Odczyt: `get_public_job_benefits(p_job_id, p_locale)` — tylko oferta publiczna
---     (`job_is_public`), kody efektywne + tekstowe „inne” z tego samego tłumaczenia, które
---     wybiera `get_public_job` (`get_public_job` bez zmian — jak `get_public_job_costs`).
---   Portal nie przelicza świadczeń na kwoty netto ani nie porównuje ich z wynagrodzeniem.
---
--- Rollback: supabase/rollback/0976_job_benefits.down.sql (dowód: supabase/tests/job-benefits-rollback.sql).
+-- Przywraca: get_public_jobs, get_public_jobs_count, get_public_job_filter_facets,
+-- saved_search_jobs_after, saved_search_canonical_filters, saved_search_keyset_page,
+-- DOKŁADNIE w stanie 0227 (grafik pracy zostaje); save_job_draft, update_published_job
+-- i job_edit_audit_snapshot DOKŁADNIE w stanie 0228 (tryb pracy zostaje).
+-- Uruchamiać PRZED rollbackiem 0228 i 0227.
+-- Usuwa kolumnę jobs.benefit_codes (ZAZNACZONE ŚWIADCZENIA PRZEPADAJĄ; tekstowe benefity
+-- w job_translations zostają) i funkcje pomocnicze. Zapisane wyszukiwania z kluczem `benefits`
+-- trzeba przed rollbackiem usunąć albo oczyścić — stara kanonizacja go nie zna.
+-- Aplikacja wysyła nowy parametr RPC — przed rollbackiem wycofać wersję aplikacji.
 -- =============================================================================
 
--- --- 1. Kolumna i katalog -------------------------------------------------------------------------
-create or replace function public.job_benefit_catalog()
-returns text[] language sql immutable parallel safe set search_path = public, pg_temp as $$
-  select array['meal_vouchers', 'eco_vouchers', 'commute_allowance', 'bike_allowance', 'company_car', 'mobility_budget', 'hospital_insurance', 'group_insurance', 'year_end_bonus', 'extra_leave', 'training', 'phone_laptop']::text[];
-$$;
-revoke all on function public.job_benefit_catalog() from public;
-grant execute on function public.job_benefit_catalog() to anon, authenticated, service_role;
+drop trigger if exists trg_job_duplications_copy_benefits on public.job_duplications;
+drop function if exists public.job_duplications_copy_benefits();
+drop function if exists public.get_public_job_benefits(uuid, text);
 
-alter table public.jobs
-  add column if not exists benefit_codes text[] not null default '{}'::text[],
-  add constraint jobs_benefit_codes_known
-    check (benefit_codes <@ public.job_benefit_catalog()
-           and cardinality(benefit_codes) <= cardinality(public.job_benefit_catalog())
-           and array_position(benefit_codes, null) is null);
-comment on column public.jobs.benefit_codes is
-  '0976 (#826): kategorie świadczeń zaznaczone przez pracodawcę (kody z job_benefit_catalog()); pusta = nie podano.';
-
--- Świadczenia efektywne: zaznaczone kody + bony żywieniowe (kwota z 0169) + zwrot dojazdu (0169).
--- Porządek katalogu, bez powtórzeń. Lustro TS: `effectiveBenefitCodes` (src/lib/job-benefits.ts).
-create or replace function public.job_effective_benefits(
-  p_codes text[], p_transport_reimbursed boolean, p_meal_voucher_daily numeric
-) returns text[] language sql immutable parallel safe set search_path = public, pg_temp as $$
-  select coalesce(array_agg(c order by o), '{}'::text[])
-  from unnest(public.job_benefit_catalog()) with ordinality as k(c, o)
-  where c = any(coalesce(p_codes, '{}'::text[]))
-     or (c = 'meal_vouchers' and p_meal_voucher_daily is not null)
-     or (c = 'commute_allowance' and coalesce(p_transport_reimbursed, false));
-$$;
-revoke all on function public.job_effective_benefits(text[], boolean, numeric) from public;
-grant execute on function public.job_effective_benefits(text[], boolean, numeric) to anon, authenticated, service_role;
-
-create index if not exists idx_jobs_effective_benefits_active on public.jobs
-  using gin (public.job_effective_benefits(benefit_codes, transport_reimbursed, meal_voucher_daily))
-  where status = 'active' and deleted_at is null;
-
--- Wejście kreatora: tablica JSON znanych kodów → text[] w porządku katalogu (null/brak = pusta).
-create or replace function public.job_benefit_codes_from_jsonb(p_value jsonb)
-returns text[] language plpgsql immutable set search_path = public, pg_temp as $$
-declare v_out text[];
-begin
-  if p_value is null or jsonb_typeof(p_value) = 'null' then return '{}'::text[]; end if;
-  if jsonb_typeof(p_value) <> 'array'
-     or exists (select 1 from jsonb_array_elements(p_value) e where jsonb_typeof(e) <> 'string')
-     or exists (select 1 from jsonb_array_elements_text(p_value) e
-                where not e = any(public.job_benefit_catalog())) then
-    raise exception 'VALIDATION_FAILED: nieznane świadczenie' using errcode = '22023';
-  end if;
-  select coalesce(array_agg(c order by o), '{}'::text[]) into v_out
-    from unnest(public.job_benefit_catalog()) with ordinality as k(c, o)
-    where p_value ? c;
-  return v_out;
-end $$;
-revoke all on function public.job_benefit_codes_from_jsonb(jsonb) from public;
-grant execute on function public.job_benefit_codes_from_jsonb(jsonb) to authenticated, service_role;
-
--- --- 2. get_public_jobs i licznik (stan 0227) + świadczenia ------------------------------------------------
 drop function if exists public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[]);
+drop function if exists public.get_public_jobs_count(
+  text, text, text, text[], text[], text[], integer, integer,
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[]);
+drop function if exists public.get_public_job_filter_facets(
+  text, text, text, text[], text[], text[], integer, integer,
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[]);
+drop function if exists public.saved_search_jobs_after(
+  text, text, text, text[], text[], text[], integer, integer,
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[]);
+
+-- --- Definicje ze stanu 0227 (skopiowane 1:1 z supabase/migrations/0227_job_shift_patterns.sql)
+-- --- 2. get_public_jobs i get_public_jobs_count (stan 0214) + p_shift_patterns ------------------
+drop function if exists public.get_public_jobs(
+  text, text, text, text[], text[], text[], integer, integer,
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer);
 create or replace function public.get_public_jobs(
   p_locale         text        default 'pl',
   p_keyword        text        default null,
@@ -114,9 +62,7 @@ create or replace function public.get_public_jobs(
   p_near           text        default null,
   p_radius_km      integer     default null,
   -- 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich)
-  p_shift_patterns text[]      default null,
-  -- 0976 (#826): świadczenia (oferta ma każde wybrane)
-  p_benefits       text[]      default null
+  p_shift_patterns text[]      default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -213,11 +159,6 @@ begin
       and (coalesce(btrim(p_near), '') = ''
            or j.remote is true
            or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
-      -- 0976 (#826): świadczenia — oferta ma KAŻDE wybrane (deklaracja pracodawcy, z bonami
-      -- żywieniowymi i zwrotem dojazdu z pól „Koszty i dodatki” 0169); brak deklaracji nie pasuje.
-      and (coalesce(cardinality(p_benefits), 0) = 0
-           or public.job_effective_benefits(j.benefit_codes, j.transport_reimbursed, j.meal_voucher_daily)
-              @> p_benefits)
     order by
       (case when p_sort = 'salary' then public.job_salary_sort_key(
         j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_unit) end) desc nulls last,
@@ -241,16 +182,16 @@ end;
 $$;
 revoke all on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[]
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]
 ) from public;
 grant execute on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[], text[]
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean, text, text, text, text, integer, text[]
 ) to anon, authenticated;
 
 drop function if exists public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer);
 create or replace function public.get_public_jobs_count(
   p_locale         text      default 'pl',
   p_keyword        text      default null,
@@ -273,9 +214,7 @@ create or replace function public.get_public_jobs_count(
   p_near           text        default null,
   p_radius_km      integer     default null,
   -- 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich)
-  p_shift_patterns text[]      default null,
-  -- 0976 (#826): świadczenia (oferta ma każde wybrane)
-  p_benefits       text[]      default null
+  p_shift_patterns text[]      default null
 ) returns bigint language plpgsql stable security definer
 set search_path = public, pg_temp
 -- 0213 (#1215): plan dla konkretnych wartości parametrów (bez planu generycznego); bez JIT —
@@ -347,27 +286,23 @@ begin
     and (coalesce(btrim(p_near), '') = ''
          or j.remote is true
          or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
-    -- 0976 (#826): świadczenia — oferta ma KAŻDE wybrane (deklaracja pracodawcy, z bonami
-    -- żywieniowymi i zwrotem dojazdu z pól „Koszty i dodatki” 0169); brak deklaracji nie pasuje.
-    and (coalesce(cardinality(p_benefits), 0) = 0
-         or public.job_effective_benefits(j.benefit_codes, j.transport_reimbursed, j.meal_voucher_daily)
-            @> p_benefits)
   );
 end;
 $$;
 revoke all on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[]
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]
 ) from public;
 grant execute on function public.get_public_jobs_count(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[], text[]
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]
 ) to anon, authenticated;
 
--- --- 3. Facety (stan 0227) + świadczenia (zawężają bazę wszystkich wymiarów)
+
+-- --- 3. Facety (stan 0214) + p_shift_patterns (zawęża bazę wszystkich wymiarów) -------------------
 drop function if exists public.get_public_job_filter_facets(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer);
 create or replace function public.get_public_job_filter_facets(
   p_locale text default 'pl', p_keyword text default null, p_city text default null,
   p_categories text[] default null, p_locations text[] default null,
@@ -381,9 +316,7 @@ create or replace function public.get_public_job_filter_facets(
   p_work_time text default null, p_near text default null,
   p_radius_km integer default null,
   -- 0227 (#858): typy grafiku pracy
-  p_shift_patterns text[] default null,
-  -- 0976 (#826): świadczenia
-  p_benefits text[] default null
+  p_shift_patterns text[] default null
 ) returns table (dimension text, key text, total bigint)
 language plpgsql stable security definer
 set search_path = public, pg_temp
@@ -464,11 +397,6 @@ begin
       and (coalesce(btrim(p_near), '') = ''
            or j.remote is true
            or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
-      -- 0976 (#826): świadczenia — oferta ma KAŻDE wybrane (deklaracja pracodawcy, z bonami
-      -- żywieniowymi i zwrotem dojazdu z pól „Koszty i dodatki” 0169); brak deklaracji nie pasuje.
-      and (coalesce(cardinality(p_benefits), 0) = 0
-           or public.job_effective_benefits(j.benefit_codes, j.transport_reimbursed, j.meal_voucher_daily)
-              @> p_benefits)
       and (p_since is null or j.published_at>=p_since)
   ), selected as (select * from input)
   select 'total','all',count(*) from base b cross join selected s where
@@ -539,13 +467,13 @@ begin
     (coalesce(p_no_language,false)=false or b.no_language_required) and not b.is_agency;
 end;
 $$;
-revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[]) from public;
-grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[],text[]) to anon, authenticated;
+revoke all on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[]) from public;
+grant execute on function public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer,text[]) to anon, authenticated;
 
 -- --- 4. Kopia filtrów dla alertów (test saved-search-keyset-sync: blok = get_public_jobs) -----
 drop function if exists public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]);
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer);
 create or replace function public.saved_search_jobs_after(
   p_locale              text,
   p_keyword             text,
@@ -569,8 +497,7 @@ create or replace function public.saved_search_jobs_after(
   p_work_time           text    default null,
   p_near                text    default null,
   p_radius_km           integer default null,
-  p_shift_patterns      text[]  default null,
-  p_benefits            text[]  default null
+  p_shift_patterns      text[]  default null
 )
 returns table (id uuid, published_at timestamptz)
 language plpgsql stable security definer
@@ -645,11 +572,6 @@ begin
     and (coalesce(btrim(p_near), '') = ''
          or j.remote is true
          or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
-    -- 0976 (#826): świadczenia — oferta ma KAŻDE wybrane (deklaracja pracodawcy, z bonami
-    -- żywieniowymi i zwrotem dojazdu z pól „Koszty i dodatki” 0169); brak deklaracji nie pasuje.
-    and (coalesce(cardinality(p_benefits), 0) = 0
-         or public.job_effective_benefits(j.benefit_codes, j.transport_reimbursed, j.meal_voucher_daily)
-            @> p_benefits)
   -- END get_public_jobs filters
     and j.published_at is not null
     and (p_after_published_at is null
@@ -660,14 +582,15 @@ end;
 $$;
 revoke all on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[]
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]
 ) from public, anon, authenticated;
 grant execute on function public.saved_search_jobs_after(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[], text[]
+  boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer, boolean, text, text, text, text, integer, text[]
 ) to service_role;
 
--- --- 5. Zapisane wyszukiwania: klucz kanoniczny `benefits` (stan 0227) ---------------------------
+
+-- --- 5. Zapisane wyszukiwania: klucz kanoniczny `shiftPatterns` (stan 0194) ------------------
 create or replace function public.saved_search_canonical_filters(p_filters jsonb, p_locale text)
 returns jsonb language plpgsql stable set search_path = public, pg_temp as $$
 declare
@@ -686,8 +609,7 @@ begin
                     'salaryMin', 'salaryMax', 'salaryUnit', 'accommodation', 'immediate',
                     'noLanguage', 'language', 'languageLevel', 'workTime', 'near', 'radiusKm',
                     -- 0227 (#858)
-                    'shiftPatterns',
-                    'benefits')
+                    'shiftPatterns')
   ) then
     raise exception 'VALIDATION_FAILED: nieznany filtr' using errcode = '22023';
   end if;
@@ -829,14 +751,6 @@ begin
     end if;
     v_out := v_out || jsonb_build_object('shiftPatterns', to_jsonb(v_arr));
   end if;
-  -- 0976 (#826): świadczenia — znane kody, porządek katalogu (ten sam zbiór = ten sam zapis).
-  v_arr := public.saved_search_text_array(p_filters -> 'benefits', 50);
-  if v_arr is not null then
-    if not v_arr <@ public.job_benefit_catalog() then
-      raise exception 'VALIDATION_FAILED: nieznane świadczenie' using errcode = '22023';
-    end if;
-    v_out := v_out || jsonb_build_object('benefits', to_jsonb(public.job_benefit_codes_from_jsonb(to_jsonb(v_arr))));
-  end if;
 
   if v_out = '{}'::jsonb then
     raise exception 'VALIDATION_FAILED: wymagany co najmniej jeden filtr' using errcode = '22023';
@@ -890,9 +804,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     p_near               => p_filters ->> 'near',
     p_radius_km          => (p_filters ->> 'radiusKm')::integer,
     -- 0227 (#858)
-    p_shift_patterns     => (select array_agg(x) from jsonb_array_elements_text(p_filters -> 'shiftPatterns') x),
-    -- 0976 (#826): świadczenia
-    p_benefits           => (select array_agg(x) from jsonb_array_elements_text(p_filters -> 'benefits') x)
+    p_shift_patterns     => (select array_agg(x) from jsonb_array_elements_text(p_filters -> 'shiftPatterns') x)
   ) k;
 $$;
 revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
@@ -900,7 +812,7 @@ revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz,
 grant execute on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
   to service_role;
 
--- --- 6. Kreator: save_job_draft (stan 0228) + benefit_codes -------------------------------------
+-- --- 6. Kreator: save_job_draft — definicja 0228 (stan 0227 + tryb pracy) -----------------------------------
 create or replace function public.save_job_draft(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -936,9 +848,7 @@ begin
                     -- 0227, #858: typy grafiku pracy
                     'shift_patterns',
                     -- 0228, #792: tryb pracy i kraje kandydata przy pracy w 100% zdalnej
-                    'work_mode', 'remote_applicant_countries',
-                    -- 0976, #826: świadczenia z katalogu
-                    'benefit_codes')
+                    'work_mode', 'remote_applicant_countries')
     limit 1;
   if v_bad is null then
     select k into v_bad from jsonb_object_keys(tr) k
@@ -1025,8 +935,7 @@ begin
                                      when j ? 'work_mode' and coalesce(j->>'work_mode', '') <> 'remote' then '{}'::text[]
                                      when j ? 'remote_applicant_countries'
                                        then public.job_country_codes(j->'remote_applicant_countries')
-                                     else remote_applicant_countries end,
-      benefit_codes            = case when j ? 'benefit_codes' then public.job_benefit_codes_from_jsonb(j->'benefit_codes') else benefit_codes end
+                                     else remote_applicant_countries end
     where id = p_job_id;
   end if;
 
@@ -1109,7 +1018,7 @@ end $$;
 revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
 grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 7. update_published_job (stan 0228) + benefit_codes ------------------------------------------
+-- --- 7. update_published_job — definicja 0228 (stan 0227 + tryb pracy) --------------------------------------
 create or replace function public.update_published_job(
   p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -1202,8 +1111,6 @@ begin
     remote_applicant_countries = case when coalesce(j->>'work_mode', '') = 'remote'
                                       then public.job_country_codes(j->'remote_applicant_countries')
                                       else '{}'::text[] end,
-    -- 0976 (#826): świadczenia z katalogu (brak klucza = brak deklaracji).
-    benefit_codes            = public.job_benefit_codes_from_jsonb(j->'benefit_codes'),
     updated_at               = now()
   where id = p_job_id;
   delete from public.job_operation_context
@@ -1287,7 +1194,7 @@ end $$;
 revoke all on function public.update_published_job(uuid, jsonb, timestamptz) from public;
 grant execute on function public.update_published_job(uuid, jsonb, timestamptz) to authenticated;
 
--- --- 8. Migawka audytu edycji (stan 0228) + benefit_codes ---------------------------------------
+-- --- job_edit_audit_snapshot — definicja 0228
 create or replace function public.job_edit_audit_snapshot(j public.jobs)
 returns jsonb language sql stable set search_path = public, pg_temp as $$
   select jsonb_build_object(
@@ -1301,46 +1208,14 @@ returns jsonb language sql stable set search_path = public, pg_temp as $$
     'accommodation_deducted', j.accommodation_deducted,
     -- 0228 (#792): tryb pracy i kraje kandydata.
     'work_mode', j.work_mode, 'remote_applicant_countries', to_jsonb(j.remote_applicant_countries),
-    -- 0976 (#826): świadczenia z katalogu.
-    'benefit_codes', to_jsonb(j.benefit_codes),
     -- Ten sam zakres co powiadomienie kandydata (0144/0169).
     'terms', public.job_material_terms(j))
 $$;
 revoke all on function public.job_edit_audit_snapshot(public.jobs) from public, anon, authenticated;
 
--- --- 9. Kopia oferty jako szkic (0148): świadczenia przenosi trigger (jak 0169/0194) -------------
-create or replace function public.job_duplications_copy_benefits()
-returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
-begin
-  update public.jobs d set benefit_codes = s.benefit_codes
-  from public.jobs s
-  where s.id = new.source_job_id and d.id = new.new_job_id and d.status = 'draft';
-  return null;
-end $$;
-revoke all on function public.job_duplications_copy_benefits() from public;
-
-drop trigger if exists trg_job_duplications_copy_benefits on public.job_duplications;
-create trigger trg_job_duplications_copy_benefits
-  after insert on public.job_duplications
-  for each row execute function public.job_duplications_copy_benefits();
-
--- --- 10. Odczyt sekcji „Świadczenia” oferty publicznej -----------------------------------------------
--- Kody efektywne + tekstowe „inne” z tego samego tłumaczenia, które pokazuje `get_public_job`
--- (ta sama kolejność wyboru: język strony → język oferty → en).
-create or replace function public.get_public_job_benefits(p_job_id uuid, p_locale text default 'pl')
-returns table (codes text[], other text[])
-language sql stable security definer set search_path = public, pg_temp as $$
-  select public.job_effective_benefits(j.benefit_codes, j.transport_reimbursed, j.meal_voucher_daily),
-         coalesce(t.benefits, '{}'::text[])
-    from public.jobs j
-    left join lateral (
-      select jt.benefits
-      from public.job_translations jt
-      where jt.job_id = j.id
-      order by (jt.locale = p_locale) desc, (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
-      limit 1
-    ) t on true
-    where j.id = p_job_id and j.deleted_at is null and public.job_is_public(p_job_id);
-$$;
-revoke all on function public.get_public_job_benefits(uuid, text) from public;
-grant execute on function public.get_public_job_benefits(uuid, text) to anon, authenticated, service_role;
+drop index if exists public.idx_jobs_effective_benefits_active;
+alter table public.jobs drop constraint if exists jobs_benefit_codes_known;
+alter table public.jobs drop column if exists benefit_codes;
+drop function if exists public.job_benefit_codes_from_jsonb(jsonb);
+drop function if exists public.job_effective_benefits(text[], boolean, numeric);
+drop function if exists public.job_benefit_catalog();

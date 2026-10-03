@@ -2073,7 +2073,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Dowód: `rls.sql` CB10 (kontrola ujemna CB10n bez strażnika), unit `job-costs`,
   `update-published-job`, E2E `job-costs`. **Otwarte (właściciel):** filtry listy po nowych
   polach, tabela stawek komisji.
-- [x] Strukturalne świadczenia oferty (#826, migracja `0976` — numer tymczasowy; rozszerza 0169):
+- [x] Strukturalne świadczenia oferty (#826, migracja `0229` — numer tymczasowy; rozszerza 0169):
   `jobs.benefit_codes` = kody ze stałego katalogu `job_benefit_catalog()` (lustro
   `src/lib/job-benefits.ts`, etykiety `jobBenefits.*` w 4 językach): bony żywieniowe, ekobony,
   zwrot dojazdu, dodatek rowerowy, samochód służbowy, budżet mobilności, ubezpieczenie szpitalne
@@ -2085,9 +2085,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczyt pomocniczy). Filtr `p_benefits` (oferta ma KAŻDE wybrane) w liście, liczniku, bazie
   facetów i kopii dla alertów; URL `benefits=` (CSV, bez JS powtórzony klucz), chipy, klucz
   kanoniczny zapisanego wyszukiwania `benefits`. Dowód: `rls.sql` sekcja BN976 (kontrole ujemne:
-  bez warunku, bez pochodnych 0169, kopia alertów, bez CHECK), rollback `0976_…down.sql`
+  bez warunku, bez pochodnych 0169, kopia alertów, bez CHECK), rollback `0229_…down.sql`
   (`job-benefits-rollback.sql`; przywraca dokładnie definicje list z 0227 oraz `save_job_draft`/
-  `update_published_job`/`job_edit_audit_snapshot` z 0228 — w testach rollbacku 0976 przed 0228,
+  `update_published_job`/`job_edit_audit_snapshot` z 0228 — w testach rollbacku 0229 przed 0228,
   0227, 0214/0213/0194), unit `job-benefits`. Definicje = stan 0227 (grafik pracy, #858) i 0228
   (tryb pracy, #792) + świadczenia: `p_benefits` po `p_shift_patterns`, sygnatury 0227 usuwane (bez przeciążeń).
   **Otwarte:** liczniki facetów per świadczenie, `jobBenefits` w JobPosting, kwoty/częstotliwość

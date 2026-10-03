@@ -1,5 +1,5 @@
 /**
- * Strukturalne świadczenia oferty (#826, migracja 0976 — numer tymczasowy). Moduł czysty, bez
+ * Strukturalne świadczenia oferty (#826, migracja 0229 — numer tymczasowy). Moduł czysty, bez
  * Zoda (importują go klienckie panele filtrów i kreator, #390). Lustro bazy:
  *   * `JOB_BENEFIT_CODES` = `job_benefit_catalog()` (ta sama kolejność — porządek wyświetlania),
  *   * `effectiveBenefitCodes` = `job_effective_benefits(codes, transport_reimbursed, meal_voucher_daily)`:
@@ -36,7 +36,7 @@ export function normalizeBenefitCodes(values: readonly unknown[] | null | undefi
   return JOB_BENEFIT_CODES.filter((code) => set.has(code));
 }
 
-/** Lustro `job_effective_benefits` (0976). */
+/** Lustro `job_effective_benefits` (0229). */
 export function effectiveBenefitCodes(input: {
   codes?: readonly JobBenefitCode[] | null;
   transportReimbursed?: boolean | null;

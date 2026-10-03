@@ -103,7 +103,7 @@ export interface SidebarFilters {
   near: string;
   /** #824: promień w km (URL `radius`), znaczący tylko z miejscowością. */
   radiusKm: RadiusKm;
-  /** #826 (0976): świadczenia (URL `benefits`, CSV kodów) — oferta ma KAŻDE wybrane. */
+  /** #826 (0229): świadczenia (URL `benefits`, CSV kodów) — oferta ma KAŻDE wybrane. */
   benefits: JobBenefitCode[];
   date: DateValue;
 }
@@ -333,7 +333,7 @@ export function parseSidebarFilters(
   f.shiftPatterns = parseShiftPatternsParam(sp[SHIFT_PATTERN_PARAM]);
   f.near = (sp['near'] ?? '').trim().slice(0, NEAR_MAX_LENGTH).trim();
   f.radiusKm = f.near ? parseRadiusKm(sp['radius']) : DEFAULT_RADIUS_KM;
-  // 0976 (#826): znane kody bez powtórzeń, w porządku katalogu (ten sam adres = ten sam zbiór).
+  // 0229 (#826): znane kody bez powtórzeń, w porządku katalogu (ten sam adres = ten sam zbiór).
   f.benefits = normalizeBenefitCodes(splitParam(sp['benefits']));
 
   const date = sp['date'];
@@ -537,7 +537,7 @@ export function sidebarFiltersToParams(
 }
 
 /**
- * Filtry 0194 i świadczenia (0976) jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
+ * Filtry 0194 i świadczenia (0229) jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
  * `p_near`, `p_radius_km`). Jak słowo kluczowe zawężają BAZĘ wszystkich wymiarów facetów
  * (SQL: warunek w `base`), więc dane demo filtruje nimi `getJobs`, nie `matchesSidebar`.
  */

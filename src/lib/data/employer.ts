@@ -630,7 +630,7 @@ export interface JobDraftValues {
   noLanguageRequired: boolean;
   conditions: string[];
   benefits: string[];
-  /** #826 (0976): `jobs.benefit_codes` (kody katalogu); brak = nie podano. */
+  /** #826 (0229): `jobs.benefit_codes` (kody katalogu); brak = nie podano. */
   benefitCodes?: string[];
   accommodation: boolean;
   transport: boolean;

@@ -1,5 +1,5 @@
 -- =============================================================================
--- BN976-R — rollback migracji 0976 (strukturalne świadczenia oferty, #826). Uruchamiany przez
+-- BN976-R — rollback migracji 0229 (strukturalne świadczenia oferty, #826). Uruchamiany przez
 -- scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji
 -- i jest cofany.
 -- =============================================================================
@@ -18,7 +18,7 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
                         published_at,benefit_codes,work_time,shift_patterns) values
   ('b9760000-0000-4000-8000-00000000f001','b9760000-0000-4000-8000-00000000f000','bn976r-a','Rollback BN976R','warehouse','permanent','Gent','Flandria','active','pl', now(), array['eco_vouchers'], 'part_time', array['night']),
   ('b9760000-0000-4000-8000-00000000f002','b9760000-0000-4000-8000-00000000f000','bn976r-b','Rollback BN976R','warehouse','permanent','Gent','Flandria','active','pl', now(), '{}', null, null);
--- Przed rollbackiem: filtr 0976 działa.
+-- Przed rollbackiem: filtr 0229 działa.
 select pg_temp.assert(
   public.get_public_jobs_count('pl', 'bn976r', p_benefits => array['eco_vouchers']) = 1
   and public.get_public_jobs_count('pl', 'bn976r', p_shift_patterns => array['night'], p_benefits => array['eco_vouchers']) = 1
@@ -27,7 +27,7 @@ select pg_temp.assert(
   'BN976-R0 stan przed rollbackiem');
 
 set constraints all immediate;
-\ir ../rollback/0976_job_benefits.down.sql
+\ir ../rollback/0229_job_benefits.down.sql
 
 -- Po rollbacku: sygnatury i zachowanie DOKŁADNIE stanu 0227 (grafik pracy i filtry 0194 działają).
 select pg_temp.assert(
@@ -67,4 +67,4 @@ select pg_temp.assert(
   and exists (select 1 from information_schema.columns
               where table_schema = 'public' and table_name = 'jobs' and column_name = 'benefit_codes'),
   'BN976-R2 rollback testu cofnięty');
-\echo 'BN976-R rollback 0976: PASS'
+\echo 'BN976-R rollback 0229: PASS'

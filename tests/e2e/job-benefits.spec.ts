@@ -4,7 +4,7 @@ import { AxeBuilder } from './fixtures/axe';
 import { LOCALES, messages } from './fixtures/messages';
 
 /**
- * Strukturalne świadczenia oferty (#826, migracja 0976 — numer tymczasowy): filtr listy bez
+ * Strukturalne świadczenia oferty (#826, migracja 0229 — numer tymczasowy): filtr listy bez
  * JavaScriptu (powtórzony klucz `benefits` → CSV w adresie), chipy z usuwaniem jednego
  * świadczenia, sekcja „Świadczenia” na szczególe oferty. Dane demo (bez bazy).
  */

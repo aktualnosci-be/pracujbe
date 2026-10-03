@@ -27,8 +27,8 @@ select pg_temp.assert(
 
 -- Odroczone triggery kolejki tłumaczeń (0146) z insertów fikstury — przed ALTER TABLE.
 set constraints all immediate;
--- 0976 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
-\ir ../rollback/0976_job_benefits.down.sql
+-- 0229 (świadczenia, numer tymczasowy) dodaje parametr do tych funkcji — najpierw jej rollback.
+\ir ../rollback/0229_job_benefits.down.sql
 -- 0228 (tryb pracy) redefiniuje save_job_draft/update_published_job na 0227 — rollback przed 0227.
 \ir ../rollback/0228_job_work_mode.down.sql
 \ir ../rollback/0227_job_shift_patterns.down.sql

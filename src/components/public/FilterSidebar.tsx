@@ -736,7 +736,7 @@ export function FilterFields({
         />
       </section>
 
-      {/* Świadczenia (#826, 0976) — oferta ma każde wybrane; bez liczników (zawężają bazę). */}
+      {/* Świadczenia (#826, 0229) — oferta ma każde wybrane; bez liczników (zawężają bazę). */}
       <section>
         <fieldset aria-describedby={`${idPrefix}-benefits-note`}>
           <legend className="mb-[14px] break-words text-[15px] font-bold text-foreground">

@@ -88,7 +88,7 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.near?.trim() ? (params.radiusKm ?? null) : null,
     // 0227 (#858): typy grafiku pracy (oferta z którymkolwiek z nich).
     params.shiftPatterns?.length ? params.shiftPatterns : null,
-    // 0976 (#826): świadczenia (oferta ma każde wybrane); pusta lista = bez filtra.
+    // 0229 (#826): świadczenia (oferta ma każde wybrane); pusta lista = bez filtra.
     params.benefits?.length ? params.benefits : null,
   ];
 }
@@ -560,7 +560,7 @@ export async function getPublicJobShiftPatterns(
 }
 
 /**
- * Świadczenia oferty publicznej (#826, 0976): kody efektywne i tekstowe „inne” z tłumaczenia
+ * Świadczenia oferty publicznej (#826, 0229): kody efektywne i tekstowe „inne” z tłumaczenia
  * wybieranego jak w `get_public_job`. Brak wiersza = oferta niepubliczna.
  */
 export async function getPublicJobBenefits(

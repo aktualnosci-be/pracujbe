@@ -218,7 +218,7 @@ export interface JobDetail extends JobListItem {
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
   /**
-   * Świadczenia (#826, 0976 — `get_public_job_benefits`): kody efektywne z katalogu (z bonami
+   * Świadczenia (#826, 0229 — `get_public_job_benefits`): kody efektywne z katalogu (z bonami
    * i zwrotem dojazdu z „Kosztów i dodatków”) + tekstowe „inne”. Brak = odczyt nieudany albo
    * nic nie podano — strona nie pokazuje sekcji.
    */
@@ -293,7 +293,7 @@ export interface GetJobsParams {
   near?: string;
   /** #824: promień w km (z `near`). */
   radiusKm?: RadiusKm;
-  /** #826 (0976): świadczenia — oferta ma KAŻDE wybrane (kody katalogu). */
+  /** #826 (0229): świadczenia — oferta ma KAŻDE wybrane (kody katalogu). */
   benefits?: JobBenefitCode[];
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
@@ -688,7 +688,7 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobShiftPatterns' });
   }
-  // 0976 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
+  // 0229 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
   let benefits: JobBenefits | undefined;
   try {
     const { getPublicJobBenefits } = await import('@/lib/db/public-jobs');

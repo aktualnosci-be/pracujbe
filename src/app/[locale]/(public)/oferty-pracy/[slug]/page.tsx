@@ -720,7 +720,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               </Section>
             ) : null}
 
-            {/* #826 (0976): świadczenia — kody z katalogu w języku strony, „inne” w języku treści. */}
+            {/* #826 (0229): świadczenia — kody z katalogu w języku strony, „inne” w języku treści. */}
             {job.benefits && (job.benefits.codes.length > 0 || job.benefits.other.length > 0) ? (
               <Section title={t('benefitsTitle')}>
                 <div data-testid="job-benefits">

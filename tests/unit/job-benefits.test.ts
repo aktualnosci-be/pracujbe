@@ -31,7 +31,7 @@ import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
 /**
- * Strukturalne świadczenia oferty (#826, migracja 0976 — numer tymczasowy). Lustro TS bazy:
+ * Strukturalne świadczenia oferty (#826, migracja 0229 — numer tymczasowy). Lustro TS bazy:
  * katalog kodów, świadczenia efektywne (z bonami i zwrotem dojazdu z 0169), filtr „każde
  * wybrane”, adres URL, zapisane wyszukiwanie, zapis kroku 8 kreatora. Kontrole ujemne
  * pokazują, że każdy element naprawdę zawęża albo odrzuca.

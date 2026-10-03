@@ -66,7 +66,7 @@ const filtersSchema = z
     radiusKm: z.union(RADIUS_KM_OPTIONS.map((km) => z.literal(km)) as unknown as [
       z.ZodLiteral<RadiusKm>, z.ZodLiteral<RadiusKm>, ...z.ZodLiteral<RadiusKm>[]
     ]).optional(),
-    // 0976 (#826): świadczenia — te same kody co baza (`job_benefit_catalog()`).
+    // 0229 (#826): świadczenia — te same kody co baza (`job_benefit_catalog()`).
     benefits: z.array(z.enum(JOB_BENEFIT_CODES)).min(1).max(JOB_BENEFIT_CODES.length).optional(),
   })
   .strict()

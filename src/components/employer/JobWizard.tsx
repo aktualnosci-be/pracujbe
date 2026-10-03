@@ -222,7 +222,7 @@ interface FormValues {
   screeningQuestions: ScreeningQuestionDraft[];
   // krok 8 — warunki i benefity
   conditions: string[];
-  /** #826 (0976): świadczenia z katalogu (brak = nie podano). */
+  /** #826 (0229): świadczenia z katalogu (brak = nie podano). */
   benefitCodes: JobBenefitCode[];
   benefits: string[];
   accommodation: boolean;
@@ -519,7 +519,7 @@ export interface JobWizardInitialValues
     | 'accommodationAfterContract'
     | 'benefitCodes'
   > {
-  /** #826 (0976): surowe kody z bazy — nieznane pomijane. */
+  /** #826 (0229): surowe kody z bazy — nieznane pomijane. */
   benefitCodes?: string[];
   accommodationKind?: string;
   accommodationCostPeriod?: string;
@@ -2137,7 +2137,7 @@ export function JobWizard({
                 />
                 <FieldError name="conditions" />
               </div>
-              {/* #826 (0976): świadczenia z katalogu — porównywalne i filtrowalne dla kandydatów. */}
+              {/* #826 (0229): świadczenia z katalogu — porównywalne i filtrowalne dla kandydatów. */}
               <fieldset
                 id={domId('benefitCodes')}
                 className={`${FORM_FIELD} ${FORM_WIDE} min-w-0`}

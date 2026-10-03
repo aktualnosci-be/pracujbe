@@ -159,7 +159,7 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     expect(job?.accommodation).toBe(true);
     expect(job).not.toHaveProperty('costs');
   });
-  it('#826 (0976): detal niesie świadczenia z get_public_job_benefits (nieznane kody pomijane)', async () => {
+  it('#826 (0229): detal niesie świadczenia z get_public_job_benefits (nieznane kody pomijane)', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
     adapters.translations.mockResolvedValue([]);

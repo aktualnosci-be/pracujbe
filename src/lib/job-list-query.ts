@@ -68,7 +68,7 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
     ...(sidebar.directOnly ? { directOnly: true } : {}),
     // 0194: język + poziom (#786), wymiar pracy (#811), promień (#824) — zapisywane też
     // w wyszukiwaniu (klucze `language`, `languageLevel`, `workTime`, `near`, `radiusKm`);
-    // 0976 (#826): świadczenia (klucz `benefits`).
+    // 0229 (#826): świadczenia (klucz `benefits`).
     ...refinementQueryParams(sidebar),
     ...(since ? { since } : {}),
   };
@@ -106,7 +106,7 @@ export interface SavedSearchFilters {
   near?: string;
   /** #824: promień w km (zawsze z `near`). */
   radiusKm?: RadiusKm;
-  /** #826 (0976): świadczenia (kody katalogu, porządek katalogu). */
+  /** #826 (0229): świadczenia (kody katalogu, porządek katalogu). */
   benefits?: JobBenefitCode[];
 }
 

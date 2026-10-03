@@ -574,7 +574,7 @@ interface DemoJobRaw {
   transport: boolean;
   /** 0169: przykładowe „Koszty i dodatki” (dane fikcyjne, jak cała oferta demo). */
   costs?: JobCosts;
-  /** 0976 (#826): przykładowe świadczenia z katalogu (dane fikcyjne). */
+  /** 0229 (#826): przykładowe świadczenia z katalogu (dane fikcyjne). */
   benefitCodes?: JobBenefitCode[];
   startDate?: string;
   languageKeys: LangKey[];

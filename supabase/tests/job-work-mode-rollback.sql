@@ -19,9 +19,9 @@ select pg_temp.assert(
   'WD792-R0 stan wyjściowy: migracja 0228 zastosowana, są oferty z trybem');
 
 begin;
--- 0976 (świadczenia, numer tymczasowy) redefiniuje te funkcje na 0228 — najpierw jej rollback.
+-- 0229 (świadczenia, numer tymczasowy) redefiniuje te funkcje na 0228 — najpierw jej rollback.
 set constraints all immediate;
-\ir ../rollback/0976_job_benefits.down.sql
+\ir ../rollback/0229_job_benefits.down.sql
 \ir ../rollback/0228_job_work_mode.down.sql
 select pg_temp.assert(
   not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'jobs'
