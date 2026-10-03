@@ -37,6 +37,12 @@ import {
   type RadiusKm,
   type WorkTimeFilter,
 } from '@/lib/job-filter-options';
+import { normalizeBenefitCodes, type JobBenefitCode } from '@/lib/job-benefits';
+import {
+  parseShiftPatternsParam,
+  SHIFT_PATTERN_PARAM,
+  type ShiftPattern,
+} from '@/lib/job-shift-patterns';
 
 /**
  * Widełki suwaka wynagrodzenia (brutto/mies., EUR). `SALARY_MAX_BOUND` oznacza „i więcej”.
@@ -91,10 +97,14 @@ export interface SidebarFilters {
   languageLevel: LanguageFilterLevel | null;
   /** #811 (0194): wymiar pracy (URL `workTime`); oferta z oboma wariantami pasuje do obu. */
   workTime: WorkTimeFilter | null;
+  /** #858 (0227): typy grafiku pracy (URL `shift`, CSV) — oferta z którymkolwiek z nich. */
+  shiftPatterns: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (URL `near`); pusty = bez filtra. */
   near: string;
   /** #824: promień w km (URL `radius`), znaczący tylko z miejscowością. */
   radiusKm: RadiusKm;
+  /** #826 (0229): świadczenia (URL `benefits`, CSV kodów) — oferta ma KAŻDE wybrane. */
+  benefits: JobBenefitCode[];
   date: DateValue;
 }
 
@@ -167,8 +177,10 @@ export function emptySidebarFilters(): SidebarFilters {
     language: null,
     languageLevel: null,
     workTime: null,
+    shiftPatterns: [],
     near: '',
     radiusKm: DEFAULT_RADIUS_KM,
+    benefits: [],
     date: 'any',
   };
 }
@@ -318,8 +330,11 @@ export function parseSidebarFilters(
   f.languageLevel = f.language && isLanguageFilterLevel(level) ? level : null;
   const workTime = sp['workTime'];
   f.workTime = isWorkTimeFilter(workTime) ? workTime : null;
+  f.shiftPatterns = parseShiftPatternsParam(sp[SHIFT_PATTERN_PARAM]);
   f.near = (sp['near'] ?? '').trim().slice(0, NEAR_MAX_LENGTH).trim();
   f.radiusKm = f.near ? parseRadiusKm(sp['radius']) : DEFAULT_RADIUS_KM;
+  // 0229 (#826): znane kody bez powtórzeń, w porządku katalogu (ten sam adres = ten sam zbiór).
+  f.benefits = normalizeBenefitCodes(splitParam(sp['benefits']));
 
   const date = sp['date'];
   f.date = (DATE_VALUES as readonly string[]).includes(date ?? '')
@@ -511,16 +526,18 @@ export function sidebarFiltersToParams(
     if (f.languageLevel) params['langLevel'] = f.languageLevel;
   }
   if (f.workTime) params['workTime'] = f.workTime;
+  if (f.shiftPatterns.length) params[SHIFT_PATTERN_PARAM] = f.shiftPatterns.join(',');
   if (f.near) {
     params['near'] = f.near;
     params['radius'] = String(f.radiusKm);
   }
+  if (f.benefits.length) params['benefits'] = f.benefits.join(',');
   if (f.date !== 'any') params['date'] = f.date;
   return params;
 }
 
 /**
- * Filtry 0194 jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
+ * Filtry 0194 i świadczenia (0229) jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
  * `p_near`, `p_radius_km`). Jak słowo kluczowe zawężają BAZĘ wszystkich wymiarów facetów
  * (SQL: warunek w `base`), więc dane demo filtruje nimi `getJobs`, nie `matchesSidebar`.
  */
@@ -528,14 +545,18 @@ export function refinementQueryParams(f: SidebarFilters): {
   language?: LanguageCode;
   languageLevel?: LanguageFilterLevel;
   workTime?: WorkTimeFilter;
+  shiftPatterns?: ShiftPattern[];
   near?: string;
   radiusKm?: RadiusKm;
+  benefits?: JobBenefitCode[];
 } {
   return {
     ...(f.language ? { language: f.language } : {}),
     ...(f.language && f.languageLevel ? { languageLevel: f.languageLevel } : {}),
     ...(f.workTime ? { workTime: f.workTime } : {}),
+    ...(f.shiftPatterns.length ? { shiftPatterns: f.shiftPatterns } : {}),
     ...(f.near ? { near: f.near, radiusKm: f.radiusKm } : {}),
+    ...(f.benefits.length ? { benefits: [...f.benefits] } : {}),
   };
 }
 
@@ -552,7 +573,9 @@ export function countActiveSidebar(f: SidebarFilters): number {
     (f.directOnly ? 1 : 0) +
     (f.language ? 1 : 0) +
     (f.workTime ? 1 : 0) +
+    f.shiftPatterns.length +
     (f.near ? 1 : 0) +
+    f.benefits.length +
     (f.date !== 'any' ? 1 : 0)
   );
 }

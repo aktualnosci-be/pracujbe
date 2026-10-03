@@ -8,6 +8,7 @@ import { localeSchema } from '@/lib/validation/auth';
 import { refineScreeningPrimaryLocale, screeningQuestionsSchema } from '@/lib/validation/screening';
 import { isPlausibleCalendarDate, NO_NUL_REGEX } from '@/lib/validation/text';
 import { JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
+import { SHIFT_PATTERNS } from '@/lib/job-shift-patterns';
 import {
   APPLY_EMAIL_MAX_LENGTH,
   APPLY_URL_MAX_LENGTH,
@@ -28,6 +29,8 @@ import {
   WORK_LOCATION_NAME_MIN,
   WORK_LOCATIONS_MAX,
 } from '@/lib/job-work-locations';
+import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
+import { APPLICANT_COUNTRIES, WORK_MODES } from '@/lib/job-work-mode';
 
 /**
  * Walidacja kreatora oferty pracy — dziewięć kroków + pełny jobSchema.
@@ -103,6 +106,8 @@ const step2Base = z.object({
   shifts: z.string().trim().max(120, 'job.error.shiftsTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   /** #811 (0194): wymiar pracy (filtr listy); brak = pracodawca nie podaje. */
   workTime: z.enum(WORK_TIME_VALUES).optional(),
+  /** #858 (0227): typy grafiku pracy (filtr listy); pusta lista = pracodawca nie podaje. */
+  shiftPatterns: z.array(z.enum(SHIFT_PATTERNS)).max(SHIFT_PATTERNS.length).optional(),
   startImmediately: z.boolean().default(false),
   startDate: z
     .string()
@@ -130,6 +135,7 @@ const step3Base = z.object({
     .max(80, 'job.error.regionTooLong')
     .regex(NO_NUL_REGEX, TEXT_INVALID),
   address: z.string().trim().max(160, 'job.error.addressTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
+  /** Dawny boolean (#792): przy wybranym `workMode` liczony z trybu, bez trybu — bez zmian. */
   remote: z.boolean().default(false),
   /**
    * #850 (0982): dodatkowe miejsca pracy (miasto główne = `city`). Opcjonalne — brak pola =
@@ -151,8 +157,25 @@ const step3Base = z.object({
     )
     .max(WORK_LOCATIONS_MAX, 'job.error.workLocationsTooMany')
     .optional(),
+  /** #792 (0228): tryb pracy; brak = oferta sprzed wyboru (tryb nieznany). */
+  workMode: z.enum(WORK_MODES).optional(),
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej (JobPosting `applicantLocationRequirements`). */
+  remoteApplicantCountries: z.array(z.enum(APPLICANT_COUNTRIES)).max(APPLICANT_COUNTRIES.length).default([]),
 });
-export const step3Schema = step3Base;
+/** #792: praca w 100% zdalna wymaga co najmniej jednego kraju kandydata (lustro CHECK z 0228). */
+function refineRemoteCountries(
+  data: { workMode?: string; remoteApplicantCountries?: readonly string[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.workMode === 'remote' && (data.remoteApplicantCountries ?? []).length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['remoteApplicantCountries'],
+      message: 'job.error.remoteCountriesRequired',
+    });
+  }
+}
+export const step3Schema = step3Base.superRefine(refineRemoteCountries);
 
 /** Krok 4 — wynagrodzenie (salaryMax >= salaryMin). */
 const step4Base = z.object({
@@ -279,6 +302,8 @@ const euroAmount = (min: number, max: number, message: string) =>
 const step8Base = z.object({
   conditions: z.array(textLine).max(20, 'job.error.conditionsTooMany').default([]),
   benefits: z.array(textLine).max(20, 'job.error.benefitsTooMany').default([]),
+  // 0229 (#826): świadczenia z katalogu (kody = `job_benefit_catalog()`); brak = nie podano.
+  benefitCodes: z.array(z.enum(JOB_BENEFIT_CODES)).max(JOB_BENEFIT_CODES.length).default([]),
   accommodation: z.boolean().default(false),
   transport: z.boolean().default(false),
   accommodationKind: z.enum(ACCOMMODATION_KINDS).optional(),
@@ -450,6 +475,7 @@ export const jobSchema = step1Base
     message: 'job.error.salaryRangeInvalid',
   })
   .superRefine(refineNoLanguageConflict)
+  .superRefine(refineRemoteCountries)
   .superRefine(refineJobCosts)
   .superRefine(refineAccommodationPublishTerms)
   .superRefine(refineApplyChannel);

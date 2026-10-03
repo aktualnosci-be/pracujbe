@@ -114,6 +114,16 @@ import {
 } from '@/lib/job-costs';
 import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 import { isWorkTime, type WorkTime } from '@/lib/job-filter-options';
+import { JOB_BENEFIT_CODES, normalizeBenefitCodes, type JobBenefitCode } from '@/lib/job-benefits';
+import {
+  isWorkMode,
+  normalizeApplicantCountries,
+  APPLICANT_COUNTRIES,
+  WORK_MODES,
+  type ApplicantCountry,
+  type WorkMode,
+} from '@/lib/job-work-mode';
+import { normalizeShiftPatterns, SHIFT_PATTERNS, type ShiftPattern } from '@/lib/job-shift-patterns';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -176,15 +186,22 @@ interface FormValues {
   shifts: string;
   /** #811 (0194): wymiar pracy ('' = nie podano). */
   workTime: '' | WorkTime;
+  /** #858 (0227): typy grafiku pracy (pusta lista = nie podano). */
+  shiftPatterns: ShiftPattern[];
   startImmediately: boolean;
   startDate: string;
   // krok 3 — lokalizacja
   city: string;
   region: string;
   address: string;
+  /** Dawny boolean (#792): przy wybranym trybie liczony z trybu, bez trybu — wartość z bazy. */
   remote: boolean;
   /** #850 (0982): dodatkowe miejsca pracy (miasto główne = `city`). */
   extraLocations: string[];
+  /** #792 (0228): tryb pracy; '' = oferta sprzed wyboru (tryb nieznany). */
+  workMode: '' | WorkMode;
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej. */
+  remoteApplicantCountries: ApplicantCountry[];
   // krok 4 — wynagrodzenie
   salaryMin: string;
   salaryMax: string;
@@ -208,6 +225,8 @@ interface FormValues {
   screeningQuestions: ScreeningQuestionDraft[];
   // krok 8 — warunki i benefity
   conditions: string[];
+  /** #826 (0229): świadczenia z katalogu (brak = nie podano). */
+  benefitCodes: JobBenefitCode[];
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
@@ -243,6 +262,7 @@ const DEFAULT_VALUES: FormValues = {
   workingHours: '',
   shifts: '',
   workTime: '',
+  shiftPatterns: [],
   startImmediately: false,
   startDate: '',
   city: '',
@@ -250,6 +270,8 @@ const DEFAULT_VALUES: FormValues = {
   address: '',
   remote: false,
   extraLocations: [],
+  workMode: 'onsite',
+  remoteApplicantCountries: [],
   salaryMin: '',
   salaryMax: '',
   currency: 'EUR',
@@ -267,6 +289,7 @@ const DEFAULT_VALUES: FormValues = {
   noLanguageRequired: false,
   screeningQuestions: [],
   conditions: [],
+  benefitCodes: [],
   benefits: [],
   accommodation: false,
   transport: false,
@@ -291,14 +314,15 @@ const DEFAULT_VALUES: FormValues = {
 /** Pola należące do kroku (kolejność = kolejność przewijania do pierwszego błędu). */
 const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   1: ['title', 'contentLocale', 'category', 'occupation'],
-  2: ['contractType', 'workingHours', 'workTime', 'shifts', 'startDate'],
-  3: ['city', 'region', 'address', 'extraLocations'],
+  2: ['contractType', 'workingHours', 'workTime', 'shiftPatterns', 'shifts', 'startDate'],
+  3: ['city', 'region', 'address', 'extraLocations', 'workMode', 'remoteApplicantCountries'],
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
   5: ['description', 'responsibilities'],
   6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
   7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates', 'screeningQuestions'],
   8: [
     'conditions',
+    'benefitCodes',
     'benefits',
     'accommodationKind',
     'accommodationCost',
@@ -381,6 +405,7 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         workingHours: v.workingHours,
         shifts: toOptionalText(v.shifts),
         workTime: v.workTime || undefined,
+        shiftPatterns: v.shiftPatterns,
         startImmediately: v.startImmediately,
         startDate: toOptionalText(v.startDate),
       };
@@ -391,6 +416,8 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         address: toOptionalText(v.address),
         remote: v.remote,
         extraLocations: v.extraLocations,
+        workMode: v.workMode || undefined,
+        remoteApplicantCountries: v.workMode === 'remote' ? v.remoteApplicantCountries : [],
       };
     case 4:
       return {
@@ -425,6 +452,7 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
       const cost = provided ? toOptionalAmount(v.accommodationCost) : undefined;
       return {
         conditions: v.conditions,
+        benefitCodes: v.benefitCodes,
         benefits: v.benefits,
         accommodation: false,
         transport: false,
@@ -486,6 +514,9 @@ export interface JobWizardInitialValues
     | 'currency'
     | 'salaryPeriod'
     | 'workTime'
+    | 'workMode'
+    | 'remoteApplicantCountries'
+    | 'shiftPatterns'
     | 'languages'
     | 'screeningQuestions'
     | 'accommodationKind'
@@ -493,7 +524,10 @@ export interface JobWizardInitialValues
     | 'accommodationDeducted'
     | 'accommodationRegistration'
     | 'accommodationAfterContract'
+    | 'benefitCodes'
   > {
+  /** #826 (0229): surowe kody z bazy — nieznane pomijane. */
+  benefitCodes?: string[];
   accommodationKind?: string;
   accommodationCostPeriod?: string;
   accommodationDeducted?: boolean | null;
@@ -504,6 +538,9 @@ export interface JobWizardInitialValues
   currency?: string;
   salaryPeriod?: string;
   workTime?: string;
+  workMode?: string;
+  remoteApplicantCountries?: string[];
+  shiftPatterns?: string[];
   languages?: { language: string; level: string }[];
   screeningQuestions?: { type: string; required: boolean; prompt: ScreeningQuestionDraft['prompt']; options: ScreeningQuestionDraft['options'] }[];
 }
@@ -583,7 +620,8 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
   city: { step: 3, label: 'cityLabel' },
   region: { step: 3, label: 'regionLabel' },
   address: { step: 3, label: 'addressLabel' },
-  remote: { step: 3, label: 'remote' },
+  remote: { step: 3, label: 'workModeLabel' },
+  workMode: { step: 3, label: 'workModeLabel' },
   salaryMin: { step: 4, label: 'salaryMinLabel' },
   salaryMax: { step: 4, label: 'salaryMaxLabel' },
   currency: { step: 4, label: 'currencyLabel' },
@@ -618,6 +656,9 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     currency,
     salaryPeriod,
     workTime,
+    workMode,
+    remoteApplicantCountries,
+    shiftPatterns,
     languages,
     screeningQuestions,
     accommodationKind,
@@ -625,9 +666,11 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     accommodationDeducted,
     accommodationRegistration,
     accommodationAfterContract,
+    benefitCodes,
     ...rest
   } = raw;
   const narrowed: Partial<FormValues> = { ...rest };
+  if (benefitCodes) narrowed.benefitCodes = normalizeBenefitCodes(benefitCodes);
   // 0169: koszty i dodatki. Stara oferta (sama flaga, etykieta „Zapewniamy zakwaterowanie /
   // transport”) otwiera się jako zakwaterowanie zapewnione / dowóz — bez szczegółów.
   if (isOneOf(ACCOMMODATION_KINDS, accommodationKind)) narrowed.accommodationKind = accommodationKind;
@@ -656,6 +699,14 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
   }
   if (currency === 'EUR' || currency === 'PLN') narrowed.currency = currency;
   if (isWorkTime(workTime)) narrowed.workTime = workTime;
+  // #792: zapisany tryb; brak trybu w bazie = tryb nieznany ('') — bez zgadywania z dawnego
+  // `remote`. Import AI („praca zdalna” bez potwierdzenia 100%) też otwiera tryb nieznany.
+  if (isWorkMode(workMode)) narrowed.workMode = workMode;
+  else if (workMode !== undefined || rest.remote === true) narrowed.workMode = '';
+  if (remoteApplicantCountries) {
+    narrowed.remoteApplicantCountries = normalizeApplicantCountries(remoteApplicantCountries);
+  }
+  if (shiftPatterns) narrowed.shiftPatterns = normalizeShiftPatterns(shiftPatterns);
   if (salaryPeriod && (SALARY_PERIODS as readonly string[]).includes(salaryPeriod)) {
     narrowed.salaryPeriod = salaryPeriod as SalaryPeriod;
   }
@@ -700,6 +751,9 @@ export function JobWizard({
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
   const tLang = useTranslations('languageNames');
+  const tBenefits = useTranslations('jobBenefits');
+  const tCountry = useTranslations('countryNames');
+  const tShift = useTranslations('filters.shiftPatternValues');
   const locale = useLocale();
   const router = useRouter();
   // #1048: język wskazany przez stronę (szkic) albo język panelu — startowa wartość pola
@@ -1552,6 +1606,38 @@ export function JobWizard({
                   </Select>
                   <p id="job-work-time-hint" className="text-sm text-muted-foreground">{t('workTimeHint')}</p>
                 </div>
+                {/* #858 (0227): grafik pracy — filtr listy ofert; opis zmian niżej zostaje uzupełnieniem. */}
+                <fieldset
+                  id={domId('shiftPatterns')}
+                  className={FORM_FIELD}
+                  aria-describedby="job-shift-patterns-hint"
+                >
+                  <legend className={FORM_LABEL_TEXT}>{t('shiftPatternsLabel')}</legend>
+                  <div className="grid gap-x-4 sm:grid-cols-2">
+                    {SHIFT_PATTERNS.map((pattern) => (
+                      <CheckboxField
+                        key={pattern}
+                        id={`${domId('shiftPatterns')}-${pattern}`}
+                        label={tShift(pattern)}
+                        checked={values.shiftPatterns.includes(pattern)}
+                        onChange={(c) =>
+                          setValue(
+                            'shiftPatterns',
+                            normalizeShiftPatterns(
+                              c
+                                ? [...values.shiftPatterns, pattern]
+                                : values.shiftPatterns.filter((p) => p !== pattern),
+                            ),
+                            { shouldDirty: true },
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                  <p id="job-shift-patterns-hint" className="text-sm text-muted-foreground">
+                    {t('shiftPatternsHint')}
+                  </p>
+                </fieldset>
                 <div className={FORM_FIELD}>
                   <Label htmlFor={domId('shifts')} className={FORM_LABEL_TEXT}>{t('shiftsLabel')}</Label>
                   <Input
@@ -1673,12 +1759,56 @@ export function JobWizard({
                   )}
                   <FieldError name="extraLocations" />
                 </div>
-              <CheckboxField
-                id={domId('remote')}
-                label={t('remote')}
-                checked={values.remote}
-                onChange={(c) => setValue('remote', c, { shouldDirty: true })}
-              />
+              {/* #792 (0228): tryb pracy zamiast niejednoznacznego „Praca zdalna” — tylko „w pełni
+                  zdalna” z krajami kandydata daje w JobPosting `jobLocationType: TELECOMMUTE`. */}
+              {renderCostSelect({
+                field: 'workMode',
+                label: t('workModeLabel'),
+                value: values.workMode,
+                // Tryb nieznany (oferta sprzed wyboru) można zostawić bez zmian; nowa oferta wybiera.
+                allowUnset: values.workMode === '',
+                options: WORK_MODES.map((m) => ({ value: m, label: t(`workMode.${m}`) })),
+                onChange: (v) => {
+                  setValue('workMode', isWorkMode(v) ? v : '', { shouldDirty: true });
+                  if (v !== 'remote') setValue('remoteApplicantCountries', [], { shouldDirty: true });
+                  clearErrors('remoteApplicantCountries');
+                },
+              })}
+              <p className={`${FORM_HINT} ${FORM_WIDE}`}>{t('workModeHint')}</p>
+              {values.workMode === 'remote' ? (
+                <fieldset
+                  id={domId('remoteApplicantCountries')}
+                  className={`${FORM_WIDE} min-w-0`}
+                  aria-describedby={[`${domId('remoteApplicantCountries')}-hint`, errorDescription('remoteApplicantCountries')]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-invalid={errors.remoteApplicantCountries ? true : undefined}
+                >
+                  <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('remoteCountriesLegend')}</legend>
+                  <p id={`${domId('remoteApplicantCountries')}-hint`} className={FORM_HINT}>
+                    {t('remoteCountriesHint')}
+                  </p>
+                  <div className="grid min-w-0 grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {APPLICANT_COUNTRIES.map((code) => (
+                      <CheckboxField
+                        key={code}
+                        id={`${domId('remoteApplicantCountries')}-${code}`}
+                        label={tCountry(code)}
+                        checked={values.remoteApplicantCountries.includes(code)}
+                        onChange={(c) => {
+                          const current = getValues('remoteApplicantCountries');
+                          const next: ApplicantCountry[] = c
+                            ? normalizeApplicantCountries([...current, code])
+                            : current.filter((x) => x !== code);
+                          setValue('remoteApplicantCountries', next, { shouldDirty: true });
+                          if (next.length > 0) clearErrors('remoteApplicantCountries');
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <FieldError name="remoteApplicantCountries" />
+                </fieldset>
+              ) : null}
             </div>
           ) : null}
 
@@ -2050,6 +2180,39 @@ export function JobWizard({
                 />
                 <FieldError name="conditions" />
               </div>
+              {/* #826 (0229): świadczenia z katalogu — porównywalne i filtrowalne dla kandydatów. */}
+              <fieldset
+                id={domId('benefitCodes')}
+                className={`${FORM_FIELD} ${FORM_WIDE} min-w-0`}
+                aria-describedby={`${domId('benefitCodes')}-hint`}
+                data-testid="job-benefit-codes"
+              >
+                <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('benefitCodesLegend')}</legend>
+                <p id={`${domId('benefitCodes')}-hint`} className="text-[13px] text-muted-foreground">
+                  {t('benefitCodesHint')}
+                </p>
+                <div className="grid gap-x-4 sm:grid-cols-2">
+                  {JOB_BENEFIT_CODES.map((code) => (
+                    <CheckboxField
+                      key={code}
+                      id={`${domId('benefitCodes')}-${code}`}
+                      label={tBenefits(code)}
+                      checked={values.benefitCodes.includes(code)}
+                      onChange={(checked) =>
+                        setValue(
+                          'benefitCodes',
+                          normalizeBenefitCodes(
+                            checked
+                              ? [...values.benefitCodes, code]
+                              : values.benefitCodes.filter((c) => c !== code),
+                          ),
+                          { shouldDirty: true },
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </fieldset>
               <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
                 <Label htmlFor={domId('benefits')} className={FORM_LABEL_TEXT}>{t('benefitsLabel')}</Label>
                 <ChipInput
@@ -2330,6 +2493,12 @@ export function JobWizard({
                   <PreviewList
                     label={t('requirementsMandatoryLabel')}
                     items={values.requirementsMandatory}
+                  />
+                ) : null}
+                {values.benefitCodes.length > 0 ? (
+                  <PreviewList
+                    label={t('benefitCodesLegend')}
+                    items={values.benefitCodes.map((code) => tBenefits(code))}
                   />
                 ) : null}
                 {values.benefits.length > 0 ? (

@@ -25,6 +25,7 @@ import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
 import { parseWorkLocationRows } from '@/lib/job-work-locations';
+import { benefitsMatch, parseJobBenefitsRow, type JobBenefitCode, type JobBenefits } from '@/lib/job-benefits';
 import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
@@ -41,6 +42,7 @@ import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import { resolveLanguageCode, type LanguageCode } from '@/lib/languages';
 import { belgianCityCoordinates } from '@/lib/matching/belgian-cities';
+import { isWorkMode, normalizeApplicantCountries } from '@/lib/job-work-mode';
 import {
   isWorkTime,
   jobWithinRadius,
@@ -50,6 +52,11 @@ import {
   type WorkTime,
   type WorkTimeFilter,
 } from '@/lib/job-filter-options';
+import {
+  normalizeShiftPatterns,
+  shiftPatternsMatch,
+  type ShiftPattern,
+} from '@/lib/job-shift-patterns';
 
 export type ContractType =
   | 'permanent'
@@ -156,7 +163,7 @@ export interface JobListItem {
    */
   isAgency?: true;
   /**
-   * Praca zdalna (`jobs.remote`, pole kreatora „Praca zdalna”) — tylko zestaw demonstracyjny
+   * Praca zdalna (`jobs.remote`; od 0228 liczona z trybu pracy `work_mode = 'remote'`) — tylko zestaw demonstracyjny
    * niesie to pole na liście (lustro filtra promienia 0194: zdalna pasuje do każdego promienia).
    */
   remote?: boolean;
@@ -217,6 +224,12 @@ export interface JobDetail extends JobListItem {
    */
   workLocations?: string[];
   /**
+   * Świadczenia (#826, 0229 — `get_public_job_benefits`): kody efektywne z katalogu (z bonami
+   * i zwrotem dojazdu z „Kosztów i dodatków”) + tekstowe „inne”. Brak = odczyt nieudany albo
+   * nic nie podano — strona nie pokazuje sekcji.
+   */
+  benefits?: JobBenefits;
+  /**
    * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
    * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
    */
@@ -235,7 +248,7 @@ export interface JobDetail extends JobListItem {
    * #792: POTWIERDZONY tryb pracy. `remote` = 100% zdalnie (tylko wtedy JSON-LD może dostać
    * `jobLocationType: TELECOMMUTE`). Brak pola = tryb nieznany: dawny boolean `jobs.remote` NIE
    * gwarantuje pełnej zdalności i nie jest tu mapowany. Źródło (trójstanowy wybór w kreatorze +
-   * odczyt w `get_public_job`) wymaga migracji — do czasu jej wdrożenia pole nie jest ustawiane.
+   * odczyt w `get_public_job`): migracja 0228.
    */
   workMode?: 'onsite' | 'hybrid' | 'remote';
   /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
@@ -245,6 +258,11 @@ export interface JobDetail extends JobListItem {
    * nie podano (nie zgadujemy z opisu godzin).
    */
   workTime?: WorkTime;
+  /**
+   * #858 (0227): typy grafiku pracy zadeklarowane przez pracodawcę (`jobs.shift_patterns`,
+   * osobny odczyt `get_public_job_shift_patterns`); brak = nie podano albo odczyt nieudany.
+   */
+  shiftPatterns?: ShiftPattern[];
 }
 
 export interface GetJobsParams {
@@ -275,10 +293,14 @@ export interface GetJobsParams {
   languageLevel?: LanguageFilterLevel;
   /** #811 (0194): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
   workTime?: WorkTimeFilter;
+  /** #858 (0227): typy grafiku — oferta z którymkolwiek z nich (bez deklaracji nie pasuje). */
+  shiftPatterns?: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
   near?: string;
   /** #824: promień w km (z `near`). */
   radiusKm?: RadiusKm;
+  /** #826 (0229): świadczenia — oferta ma KAŻDE wybrane (kody katalogu). */
+  benefits?: JobBenefitCode[];
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -431,6 +453,14 @@ function getJobsFromDemo(
   if (params.workTime) {
     const wanted = params.workTime;
     jobs = jobs.filter((job) => workTimeMatches(job.workTime, wanted));
+  }
+  if (params.shiftPatterns?.length) {
+    const wanted = params.shiftPatterns;
+    jobs = jobs.filter((job) => shiftPatternsMatch(job.shiftPatterns, wanted));
+  }
+  if (params.benefits?.length) {
+    const wanted = params.benefits;
+    jobs = jobs.filter((job) => benefitsMatch(job.benefits?.codes ?? [], wanted));
   }
   if (params.near?.trim()) {
     const center = belgianCityCoordinates(params.near.trim());
@@ -586,6 +616,12 @@ function rowToJobDetail(row: unknown): JobDetail {
       return applyChannel ? { applyChannel } : {};
     })(),
     ...(isWorkTime(r['work_time']) ? { workTime: r['work_time'] } : {}),
+    // #792 (0228): tryb pracy i kraje kandydata (null = tryb nieznany — JSON-LD bez TELECOMMUTE).
+    ...(isWorkMode(r['work_mode']) ? { workMode: r['work_mode'] } : {}),
+    ...(() => {
+      const countries = normalizeApplicantCountries(asStringArray(r['remote_applicant_countries']));
+      return countries.length > 0 ? { remoteApplicantCountries: countries } : {};
+    })(),
   };
 }
 
@@ -657,6 +693,23 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobWorkLocations' });
   }
+  // 0227 (#858): grafik pracy — odczyt pomocniczy; awaria = sam opis tekstowy godzin/zmian.
+  let shiftPatterns: ShiftPattern[] = [];
+  try {
+    const { getPublicJobShiftPatterns } = await import('@/lib/db/public-jobs');
+    const raw = await getPublicJobShiftPatterns(pool, job.id);
+    shiftPatterns = normalizeShiftPatterns(Array.isArray(raw) ? raw : []);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobShiftPatterns' });
+  }
+  // 0229 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
+  let benefits: JobBenefits | undefined;
+  try {
+    const { getPublicJobBenefits } = await import('@/lib/db/public-jobs');
+    benefits = parseJobBenefitsRow(await getPublicJobBenefits(pool, job.id, locale));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobBenefits' });
+  }
   // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
   let qualifications: JobQualifications | undefined;
   try {
@@ -671,6 +724,8 @@ async function getJobBySlugFromDb(
     ...job,
     ...(costs ? { costs } : {}),
     ...(workLocations.length > 0 ? { workLocations } : {}),
+    ...(shiftPatterns.length > 0 ? { shiftPatterns } : {}),
+    ...(benefits && (benefits.codes.length > 0 || benefits.other.length > 0) ? { benefits } : {}),
     ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),

@@ -36,6 +36,7 @@ import {
 import { canRecruit } from '@/lib/team/permissions';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { captureError } from '@/lib/error-report';
+import { normalizeShiftPatterns } from '@/lib/job-shift-patterns';
 import {
   parseScreeningAnswers,
   parseScreeningQuestions,
@@ -600,6 +601,8 @@ export interface JobDraftValues {
   shifts: string;
   /** #811 (0194): `jobs.work_time`; pusty = brak deklaracji. */
   workTime: string;
+  /** #858 (0227): `jobs.shift_patterns`; pusta lista = brak deklaracji. */
+  shiftPatterns: string[];
   startImmediately: boolean;
   startDate: string;
   city: string;
@@ -608,6 +611,10 @@ export interface JobDraftValues {
   remote: boolean;
   /** #850 (0982): dodatkowe miejsca pracy (kolejność z bazy; miasto główne = `city`). */
   extraLocations: string[];
+  /** #792 (0228): `jobs.work_mode`; pusty = tryb nieznany (oferta sprzed wyboru). */
+  workMode: string;
+  /** #792 (0228): kraje kandydata przy pracy w 100% zdalnej. */
+  remoteApplicantCountries: string[];
   salaryMin: string;
   salaryMax: string;
   currency: string;
@@ -625,6 +632,8 @@ export interface JobDraftValues {
   noLanguageRequired: boolean;
   conditions: string[];
   benefits: string[];
+  /** #826 (0229): `jobs.benefit_codes` (kody katalogu); brak = nie podano. */
+  benefitCodes?: string[];
   accommodation: boolean;
   transport: boolean;
   /** 0169: koszty i dodatki — surowe wartości z bazy ('' / null = nie podano). */
@@ -759,6 +768,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       workingHours: '38 h / tydzień',
       shifts: '',
       workTime: 'full_time',
+      shiftPatterns: ['day'],
       startImmediately: true,
       startDate: '',
       city: job.city,
@@ -766,6 +776,8 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       address: '',
       remote: false,
       extraLocations: [],
+      workMode: 'onsite',
+      remoteApplicantCountries: [],
       salaryMin: '16',
       salaryMax: '18',
       currency: 'EUR',
@@ -817,9 +829,11 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     const loaded = await withPortalTransaction(me, async (tx) => {
       const job = await queryOne(tx, 'employer.job-draft',
         `SELECT id, company_id, status, title, category, occupation, contract_type, working_hours,
-                shifts, work_time, start_immediately, start_date, city, region, address, remote, salary_min,
+                shifts, work_time, shift_patterns, start_immediately, start_date, city, region, address, remote,
+                work_mode, remote_applicant_countries, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
+                benefit_codes,
                 expires_at, updated_at, draft_step,
                 accommodation_kind, accommodation_cost::text AS accommodation_cost,
                 accommodation_cost_period, accommodation_deducted, accommodation_registration,
@@ -896,6 +910,9 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         workingHours: asString(job['working_hours']),
         shifts: asString(job['shifts']),
         workTime: asString(job['work_time']),
+        shiftPatterns: normalizeShiftPatterns(
+          Array.isArray(job['shift_patterns']) ? (job['shift_patterns'] as unknown[]) : [],
+        ),
         startImmediately: job['start_immediately'] === true,
         startDate: asString(job['start_date']),
         city: asString(job['city']),
@@ -903,6 +920,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         address: asString(job['address']),
         remote: job['remote'] === true,
         extraLocations: workLocations.map((r) => asString(asRecord(r)['name'])).filter(Boolean),
+        workMode: asString(job['work_mode']),
+        remoteApplicantCountries: asStringArray(job['remote_applicant_countries']),
         salaryMin: numToText(job['salary_min']),
         salaryMax: numToText(job['salary_max']),
         currency: asString(job['currency'], 'EUR'),
@@ -935,6 +954,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         noLanguageRequired: job['no_language_required'] === true,
         conditions: asStringArray(tr['conditions']),
         benefits: asStringArray(tr['benefits']),
+        benefitCodes: asStringArray(job['benefit_codes']),
         accommodation: job['accommodation'] === true,
         transport: job['transport'] === true,
         ...jobCostsInitial(job),

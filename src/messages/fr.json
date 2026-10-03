@@ -509,7 +509,8 @@
       "accommodationCostMandatory": "Pour un logement fourni, indiquez le coût — saisissez 0 s'il est gratuit.",
       "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire.",
       "workLocationInvalid": "Le nom du lieu doit comporter de 2 à 80 caractères.",
-      "workLocationsTooMany": "Vous pouvez ajouter au maximum 10 lieux de travail supplémentaires."
+      "workLocationsTooMany": "Vous pouvez ajouter au maximum 10 lieux de travail supplémentaires.",
+      "remoteCountriesRequired": "Choisissez au moins un pays pour le télétravail complet."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -567,6 +568,7 @@
     },
     "startImmediate": "Début immédiat",
     "workTimeLabel": "Temps de travail",
+    "shiftPatternsLabel": "Horaire de travail",
     "workTimeValues": {
       "full_time": "Temps plein",
       "part_time": "Temps partiel",
@@ -579,7 +581,9 @@
       "certificates": "Certificats et habilitations"
     },
     "workLocationsTitle": "Lieux de travail",
-    "workLocationsNote": "Le travail se déroule dans ces lieux."
+    "workLocationsNote": "Le travail se déroule dans ces lieux.",
+    "benefitsTitle": "Avantages extralégaux",
+    "benefitsOther": "Autres avantages"
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1455,6 +1459,17 @@
     "workTimeFull": "Temps plein",
     "workTimePart": "Temps partiel",
     "workTimeNote": "Uniquement les offres pour lesquelles l’employeur a indiqué le temps de travail.",
+    "shiftPatterns": "Horaire de travail",
+    "shiftPatternsNote": "Uniquement les offres pour lesquelles l'employeur a indiqué l'horaire. Une offre correspond si elle a l'un des types cochés.",
+    "shiftPatternValues": {
+      "day": "Travail de jour",
+      "two_shift": "Travail en deux équipes",
+      "three_shift": "Travail en trois équipes",
+      "night": "Travail de nuit",
+      "weekend": "Travail le week-end",
+      "split": "Horaire coupé",
+      "continuous": "Travail en continu"
+    },
     "distance": "Distance",
     "near": "Commune",
     "nearPlaceholder": "p. ex. Gand",
@@ -1462,7 +1477,9 @@
     "radiusNote": "La distance est mesurée à vol d’oiseau depuis une commune de notre liste. Les offres sans commune reconnue ne sont pas affichées avec ce filtre. Les offres en télétravail sont affichées quel que soit le rayon.",
     "radiusChip": "À {km} km maximum de {place}",
     "nearUnknown": "Nous n’avons pas reconnu la commune « {place} ». Indiquez le nom d’une commune ou d’une ville belge, par exemple Gand ou Liège.",
-    "salaryCurrencyNote": "Les montants dans une autre devise que l’euro ne sont pas convertis : ces offres restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire."
+    "salaryCurrencyNote": "Les montants dans une autre devise que l’euro ne sont pas convertis : ces offres restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire.",
+    "benefits": "Avantages extralégaux",
+    "benefitsNote": "Nous affichons les offres avec chaque avantage coché. Les offres dont l’employeur n’a indiqué aucun avantage ne sont pas prises en compte."
   },
   "notifications": {
     "title": "Notifications",
@@ -1732,7 +1749,6 @@
     "regionPlaceholder": "ex. Flandre",
     "addressLabel": "Adresse",
     "addressPlaceholder": "Rue et numéro (facultatif)",
-    "remote": "Télétravail",
     "salaryMinLabel": "Rémunération à partir de",
     "salaryMaxLabel": "Rémunération jusqu'à",
     "currencyLabel": "Devise",
@@ -1768,7 +1784,7 @@
     "noLanguageRequired": "Emploi sans connaissance linguistique",
     "conditionsLabel": "Conditions de travail",
     "conditionsPlaceholder": "ex. CDI",
-    "benefitsLabel": "Avantages",
+    "benefitsLabel": "Autres avantages et détails",
     "benefitsPlaceholder": "ex. Primes et indemnités",
     "companyDescriptionLabel": "Description de l'entreprise",
     "companyDescriptionPlaceholder": "Présentez brièvement l'entreprise aux candidats.",
@@ -1877,6 +1893,8 @@
     "languageLevelAria": "Niveau de langue : {level}",
     "workTimeLabel": "Temps de travail",
     "workTimeHint": "Permet aux candidats de trouver l’offre avec le filtre « temps plein / temps partiel ». La description des horaires reste un complément.",
+    "shiftPatternsLabel": "Horaire de travail",
+    "shiftPatternsHint": "Cochez tous les types qui conviennent — les candidats trouveront l'offre avec le filtre d'horaire. La description des équipes ci-dessous reste un complément.",
     "workTimeNone": "Non indiqué",
     "workTimeFull": "Temps plein",
     "workTimePart": "Temps partiel",
@@ -1884,7 +1902,18 @@
     "extraLocationsLabel": "Lieux de travail supplémentaires",
     "extraLocationsPlaceholder": "p. ex. Hasselt",
     "extraLocationsHint": "Travail dans plusieurs lieux ? Ajoutez-les ici (au maximum {max}). La recherche par ville trouvera aussi cette offre via ces noms.",
-    "extraLocationsLocked": "La liste des lieux de travail supplémentaires ne peut être modifiée que dans un brouillon."
+    "extraLocationsLocked": "La liste des lieux de travail supplémentaires ne peut être modifiée que dans un brouillon.",
+    "benefitCodesLegend": "Avantages extralégaux",
+    "benefitCodesHint": "Cochez ce que vous proposez. Les candidats peuvent filtrer les offres selon ces avantages. Les chèques-repas et le remboursement des déplacements comptent aussi depuis « Frais et avantages ».",
+    "workModeLabel": "Mode de travail",
+    "workModeHint": "« Télétravail complet » signifie que le travail se fait toujours à distance. S’il faut parfois venir sur place, choisissez « Hybride ».",
+    "workMode": {
+      "onsite": "Sur place",
+      "hybrid": "Hybride (en partie sur place)",
+      "remote": "Télétravail complet (100 %)"
+    },
+    "remoteCountriesLegend": "Depuis quels pays les candidats peuvent-ils travailler ?",
+    "remoteCountriesHint": "Choisissez au moins un pays. Le candidat doit habiter dans l’un d’eux."
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -2884,6 +2913,10 @@
     "campaignEditorErrorTooLong": "Trop long — {max} caractères maximum.",
     "campaignEditorErrorJobsCount": "Ajoutez de 1 à 3 offres.",
     "campaignEditorErrorInvalid": "Le contenu dans cette langue ne peut pas être affiché.",
+    "campaignEditorErrorJobUnavailable": "Cette offre n’est pas publique (inexistante, expirée, en pause ou entreprise non vérifiée).",
+    "campaignJobsUnavailableTitle": "Des offres de cette révision sont indisponibles",
+    "campaignJobsUnavailableText": "Ces offres ne sont pas publiques actuellement : {slugs}. La révision ne peut pas être activée et les e-mails qui les contiennent ne seront pas envoyés. Créez une nouvelle révision avec des offres à jour.",
+    "campaignJobsUnavailableActivate": "Non activée : offres non publiques ({slugs}).",
     "auditActionCampaignRevisionCreated": "Nouvelle révision de campagne",
     "entityEmailCampaign": "Campagne e-mail",
     "entityAgePolicy": "Seuil d'âge des candidats",
@@ -4279,6 +4312,54 @@
     "remindDue": "Il est temps de relancer",
     "openSource": "Ouvrir l'annonce",
     "listLabel": "Entrées du journal de candidatures"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Chèques-repas",
+    "eco_vouchers": "Éco-chèques",
+    "commute_allowance": "Remboursement des frais de déplacement",
+    "bike_allowance": "Indemnité vélo",
+    "company_car": "Voiture de société",
+    "mobility_budget": "Budget mobilité",
+    "hospital_insurance": "Assurance hospitalisation",
+    "group_insurance": "Assurance groupe",
+    "year_end_bonus": "Prime de fin d’année (13e mois)",
+    "extra_leave": "Jours de congé supplémentaires",
+    "training": "Formations payées par l’employeur",
+    "phone_laptop": "Téléphone ou ordinateur portable professionnel"
+  },
+  "countryNames": {
+    "BE": "Belgique",
+    "NL": "Pays-Bas",
+    "LU": "Luxembourg",
+    "FR": "France",
+    "DE": "Allemagne",
+    "PL": "Pologne",
+    "AT": "Autriche",
+    "BG": "Bulgarie",
+    "HR": "Croatie",
+    "CY": "Chypre",
+    "CZ": "Tchéquie",
+    "DK": "Danemark",
+    "EE": "Estonie",
+    "FI": "Finlande",
+    "GR": "Grèce",
+    "HU": "Hongrie",
+    "IE": "Irlande",
+    "IT": "Italie",
+    "LV": "Lettonie",
+    "LT": "Lituanie",
+    "MT": "Malte",
+    "PT": "Portugal",
+    "RO": "Roumanie",
+    "SK": "Slovaquie",
+    "SI": "Slovénie",
+    "ES": "Espagne",
+    "SE": "Suède",
+    "IS": "Islande",
+    "LI": "Liechtenstein",
+    "NO": "Norvège",
+    "CH": "Suisse",
+    "GB": "Royaume-Uni"
   },
   "push": {
     "savedSearchTitle": "Nouvelles offres de votre recherche enregistrée",

@@ -52,6 +52,18 @@ echo ">> #1140 (0171): świeża baza = tryb ogłoszeniowy (CL1128-0)"
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 
+echo ">> rollback 0982 (dodatkowe miejsca pracy oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-work-locations-rollback.sql"
+echo ">> rollback 0229 (świadczenia oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-benefits-rollback.sql"
+
+echo ">> rollback 0228 (tryb pracy oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-work-mode-rollback.sql"
+echo ">> rollback 0227 (grafik pracy oferty i filtr, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-shift-patterns-rollback.sql"
+echo ">> rollback 0226 (blokady: ostatni właściciel firmy, źródło kopii oferty; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-copy-locks-rollback.sql"
+
 echo ">> rollback 0221 (wiadomości serwisowe a opt-out in-app, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/notification-inapp-service-rollback.sql"
 
@@ -140,14 +152,18 @@ echo ">> rollback 0175 (konto i komunikacja w trybie ogłoszeniowym, w transakcj
 echo ">> rollback 0174 (tryb ogłoszeniowy: wiadomości i CV, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-messaging-cv-rollback.sql"
 
+echo ">> rollback 0223 (integralność kolejki tłumaczeń, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-queue-integrity-rollback.sql"
 echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-protected-terms-rollback.sql"
 
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
-echo ">> rollback 0982 (dodatkowe miejsca pracy oferty, w transakcji cofanej)"
-"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-work-locations-rollback.sql"
+echo ">> rollback 0225 (język receiptu zgody cookies, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/consent-receipt-locale-rollback.sql"
+echo ">> rollback 0224 (GC w partiach, oferty kampanii, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/gc-campaign-jobs-rollback.sql"
 
 echo ">> rollback 0218 (eksport kandydata: zgłoszenia treści i ostrzeżenia retencji, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/candidate-export-reports-rollback.sql"

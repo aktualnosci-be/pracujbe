@@ -6,6 +6,7 @@ import { Loader2, SlidersHorizontal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
+import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -36,6 +37,7 @@ import {
   RADIUS_KM_OPTIONS,
   WORK_TIME_FILTERS,
 } from '@/lib/job-filter-options';
+import { SHIFT_PATTERN_PARAM, SHIFT_PATTERNS } from '@/lib/job-shift-patterns';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
@@ -83,6 +85,7 @@ function NoScriptFilterForm({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tBenefits = useTranslations('jobBenefits');
   const tLanguageNames = useTranslations('languageNames');
   const languageOptions = LANGUAGE_FILTER_CODES.map((code) => ({ code, label: tLanguageNames(code) })).sort(
     (a, b) => a.label.localeCompare(b.label),
@@ -236,6 +239,27 @@ function NoScriptFilterForm({
         ))}
       </fieldset>
 
+      {/* Świadczenia (#826): powtórzony klucz `benefits` łączy `flattenSearchParams` (CSV). */}
+      <fieldset className="space-y-1" aria-describedby="nojs-benefits-note">
+        <legend className="mb-2 text-sm font-semibold text-foreground">
+          {t('benefits')}
+        </legend>
+        {JOB_BENEFIT_CODES.map((code) => (
+          <label key={code} className={optionClass}>
+            <input
+              type="checkbox"
+              name="benefits"
+              value={code}
+              defaultChecked={initial.benefits.includes(code)}
+            />
+            <span>{tBenefits(code)}</span>
+          </label>
+        ))}
+        <p id="nojs-benefits-note" className="text-xs text-muted-foreground">
+          {t('benefitsNote')}
+        </p>
+      </fieldset>
+
       <fieldset className="space-y-1">
         <legend className="mb-2 text-sm font-semibold text-foreground">
           {t('accommodation')}
@@ -337,6 +361,26 @@ function NoScriptFilterForm({
       <p id="nojs-worktime-note" className="text-xs text-muted-foreground">
         {t('workTimeNote')}
       </p>
+
+      {/* 0227 (#858): grafik pracy — bez JS ten sam parametr `shift` (powtórzony klucz łączy
+          `flattenSearchParams` w CSV). */}
+      <fieldset className="space-y-1" aria-describedby="nojs-shift-note">
+        <legend className="mb-2 text-sm font-semibold text-foreground">{t('shiftPatterns')}</legend>
+        {SHIFT_PATTERNS.map((pattern) => (
+          <label key={pattern} className={optionClass}>
+            <input
+              type="checkbox"
+              name={SHIFT_PATTERN_PARAM}
+              value={pattern}
+              defaultChecked={initial.shiftPatterns.includes(pattern)}
+            />
+            <span>{t(`shiftPatternValues.${pattern}`)}</span>
+          </label>
+        ))}
+        <p id="nojs-shift-note" className="text-xs text-muted-foreground">
+          {t('shiftPatternsNote')}
+        </p>
+      </fieldset>
 
       <fieldset className="space-y-3 border-t border-border pt-5">
         <legend className="text-sm font-semibold text-foreground">{t('requiredLanguage')}</legend>

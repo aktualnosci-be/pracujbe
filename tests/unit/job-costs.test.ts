@@ -196,7 +196,7 @@ describe('jobCostsPatch — zapis zgodny z CHECK-ami bazy', () => {
       accommodation: true, transport: true, accommodation_kind: 'provided', accommodation_cost: 120,
       accommodation_cost_period: 'week', accommodation_deducted: true, accommodation_registration: null,
       accommodation_after_contract: null, transport_shuttle: true, transport_reimbursed: false,
-      meal_voucher_daily: 8, joint_committee: '124',
+      meal_voucher_daily: 8, joint_committee: '124', benefit_codes: [],
     });
   });
 

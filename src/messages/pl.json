@@ -509,7 +509,8 @@
       "accommodationCostMandatory": "Przy zakwaterowaniu zapewnionym podaj koszt — wpisz 0, jeśli jest bezpłatne.",
       "accommodationDeductedRequired": "Wybierz, czy koszt zakwaterowania jest potrącany z wynagrodzenia.",
       "workLocationInvalid": "Nazwa miejscowości musi mieć od 2 do 80 znaków.",
-      "workLocationsTooMany": "Możesz dodać najwyżej 10 dodatkowych miejsc pracy."
+      "workLocationsTooMany": "Możesz dodać najwyżej 10 dodatkowych miejsc pracy.",
+      "remoteCountriesRequired": "Wybierz co najmniej jeden kraj dla pracy w pełni zdalnej."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
     "contentLanguageNames": {
@@ -567,6 +568,7 @@
     },
     "startImmediate": "Praca od zaraz",
     "workTimeLabel": "Wymiar pracy",
+    "shiftPatternsLabel": "Grafik pracy",
     "workTimeValues": {
       "full_time": "Pełny etat",
       "part_time": "Część etatu",
@@ -579,7 +581,9 @@
       "certificates": "Certyfikaty i uprawnienia"
     },
     "workLocationsTitle": "Miejsca pracy",
-    "workLocationsNote": "Praca odbywa się w tych miejscowościach."
+    "workLocationsNote": "Praca odbywa się w tych miejscowościach.",
+    "benefitsTitle": "Świadczenia",
+    "benefitsOther": "Inne benefity"
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1455,6 +1459,17 @@
     "workTimeFull": "Pełny etat",
     "workTimePart": "Część etatu",
     "workTimeNote": "Tylko oferty, w których pracodawca podał wymiar pracy.",
+    "shiftPatterns": "Grafik pracy",
+    "shiftPatternsNote": "Tylko oferty, w których pracodawca podał grafik pracy. Oferta pasuje, jeśli ma którykolwiek z zaznaczonych typów.",
+    "shiftPatternValues": {
+      "day": "Praca dzienna",
+      "two_shift": "System dwuzmianowy",
+      "three_shift": "System trzyzmianowy",
+      "night": "Praca nocna",
+      "weekend": "Praca w weekendy",
+      "split": "Grafik dzielony (przerwa w ciągu dnia)",
+      "continuous": "Praca w ruchu ciągłym"
+    },
     "distance": "Odległość",
     "near": "Miejscowość",
     "nearPlaceholder": "np. Gandawa",
@@ -1462,7 +1477,9 @@
     "radiusNote": "Liczymy odległość w linii prostej od miejscowości z naszej listy. Oferty bez rozpoznanej miejscowości nie są pokazywane przy tym filtrze. Oferty pracy zdalnej są pokazywane przy każdym promieniu.",
     "radiusChip": "Do {km} km od: {place}",
     "nearUnknown": "Nie rozpoznaliśmy miejscowości „{place}”. Wpisz nazwę belgijskiej gminy albo miasta, np. Gandawa lub Liège.",
-    "salaryCurrencyNote": "Kwot w innej walucie niż euro nie przeliczamy — takie oferty pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu."
+    "salaryCurrencyNote": "Kwot w innej walucie niż euro nie przeliczamy — takie oferty pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu.",
+    "benefits": "Świadczenia",
+    "benefitsNote": "Pokazujemy oferty z każdym zaznaczonym świadczeniem. Oferty, w których pracodawca nie podał świadczeń, nie są uwzględniane."
   },
   "notifications": {
     "title": "Powiadomienia",
@@ -1732,7 +1749,6 @@
     "regionPlaceholder": "np. Flandria",
     "addressLabel": "Adres",
     "addressPlaceholder": "Ulica i numer (opcjonalnie)",
-    "remote": "Praca zdalna",
     "salaryMinLabel": "Wynagrodzenie od",
     "salaryMaxLabel": "Wynagrodzenie do",
     "currencyLabel": "Waluta",
@@ -1768,7 +1784,7 @@
     "noLanguageRequired": "Praca bez znajomości języka",
     "conditionsLabel": "Warunki pracy",
     "conditionsPlaceholder": "np. Umowa na czas nieokreślony",
-    "benefitsLabel": "Benefity",
+    "benefitsLabel": "Inne benefity i szczegóły",
     "benefitsPlaceholder": "np. Premie i dodatki",
     "companyDescriptionLabel": "Opis firmy",
     "companyDescriptionPlaceholder": "Krótko przedstaw firmę kandydatom.",
@@ -1877,6 +1893,8 @@
     "languageLevelAria": "Poziom języka: {level}",
     "workTimeLabel": "Wymiar pracy",
     "workTimeHint": "Pozwala kandydatom znaleźć ofertę filtrem „pełny etat / część etatu”. Opis godzin zostaje uzupełnieniem.",
+    "shiftPatternsLabel": "Grafik pracy",
+    "shiftPatternsHint": "Zaznacz wszystkie pasujące typy — kandydaci znajdą ofertę filtrem grafiku. Opis zmian niżej zostaje uzupełnieniem.",
     "workTimeNone": "Nie podaję",
     "workTimeFull": "Pełny etat",
     "workTimePart": "Część etatu",
@@ -1884,7 +1902,18 @@
     "extraLocationsLabel": "Dodatkowe miejsca pracy",
     "extraLocationsPlaceholder": "np. Hasselt",
     "extraLocationsHint": "Praca w kilku miejscowościach? Dodaj je tutaj (najwyżej {max}). Wyszukiwanie po mieście znajdzie tę ofertę także po tych nazwach.",
-    "extraLocationsLocked": "Listę dodatkowych miejsc pracy można zmienić tylko w szkicu oferty."
+    "extraLocationsLocked": "Listę dodatkowych miejsc pracy można zmienić tylko w szkicu oferty.",
+    "benefitCodesLegend": "Świadczenia",
+    "benefitCodesHint": "Zaznacz to, co oferujesz. Kandydaci mogą filtrować oferty po tych świadczeniach. Bony żywieniowe i zwrot dojazdu liczą się też z pól „Koszty i dodatki”.",
+    "workModeLabel": "Tryb pracy",
+    "workModeHint": "„W pełni zdalna” oznacza pracę wykonywaną zdalnie przez cały czas. Jeśli trzeba czasem przyjść na miejsce, wybierz „Hybrydowa”.",
+    "workMode": {
+      "onsite": "Stacjonarna (na miejscu)",
+      "hybrid": "Hybrydowa (część czasu na miejscu)",
+      "remote": "W pełni zdalna (100%)"
+    },
+    "remoteCountriesLegend": "Z jakich krajów mogą pracować kandydaci?",
+    "remoteCountriesHint": "Zaznacz co najmniej jeden kraj. Kandydat musi mieszkać w jednym z nich."
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",
@@ -2884,6 +2913,10 @@
     "campaignEditorErrorTooLong": "Za długie — najwyżej {max} znaków.",
     "campaignEditorErrorJobsCount": "Dodaj od 1 do 3 ofert.",
     "campaignEditorErrorInvalid": "Treści w tym języku nie da się wyrenderować.",
+    "campaignEditorErrorJobUnavailable": "Nie ma takiej oferty publicznie (nie istnieje, wygasła, jest wstrzymana albo firma nie jest zweryfikowana).",
+    "campaignJobsUnavailableTitle": "Oferty w tej rewizji są niedostępne",
+    "campaignJobsUnavailableText": "Tych ofert nie ma teraz publicznie: {slugs}. Rewizji nie można aktywować, a listy z nimi nie zostaną wysłane. Utwórz nową rewizję z aktualnymi ofertami.",
+    "campaignJobsUnavailableActivate": "Nie aktywowano: oferty niedostępne publicznie ({slugs}).",
     "auditActionCampaignRevisionCreated": "Nowa rewizja kampanii",
     "entityEmailCampaign": "Kampania e-mail",
     "entityAgePolicy": "Próg wieku kandydatów",
@@ -4279,6 +4312,54 @@
     "remindDue": "Czas na kontakt",
     "openSource": "Otwórz ogłoszenie",
     "listLabel": "Wpisy w dzienniku aplikacji"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Bony żywieniowe (maaltijdcheques)",
+    "eco_vouchers": "Ekobony (ecocheques)",
+    "commute_allowance": "Zwrot kosztów dojazdu",
+    "bike_allowance": "Dodatek rowerowy",
+    "company_car": "Samochód służbowy",
+    "mobility_budget": "Budżet mobilności",
+    "hospital_insurance": "Ubezpieczenie szpitalne",
+    "group_insurance": "Ubezpieczenie grupowe (emerytalne)",
+    "year_end_bonus": "Premia na koniec roku (13. pensja)",
+    "extra_leave": "Dodatkowe dni wolne",
+    "training": "Szkolenia na koszt pracodawcy",
+    "phone_laptop": "Telefon lub laptop służbowy"
+  },
+  "countryNames": {
+    "BE": "Belgia",
+    "NL": "Holandia",
+    "LU": "Luksemburg",
+    "FR": "Francja",
+    "DE": "Niemcy",
+    "PL": "Polska",
+    "AT": "Austria",
+    "BG": "Bułgaria",
+    "HR": "Chorwacja",
+    "CY": "Cypr",
+    "CZ": "Czechy",
+    "DK": "Dania",
+    "EE": "Estonia",
+    "FI": "Finlandia",
+    "GR": "Grecja",
+    "HU": "Węgry",
+    "IE": "Irlandia",
+    "IT": "Włochy",
+    "LV": "Łotwa",
+    "LT": "Litwa",
+    "MT": "Malta",
+    "PT": "Portugalia",
+    "RO": "Rumunia",
+    "SK": "Słowacja",
+    "SI": "Słowenia",
+    "ES": "Hiszpania",
+    "SE": "Szwecja",
+    "IS": "Islandia",
+    "LI": "Liechtenstein",
+    "NO": "Norwegia",
+    "CH": "Szwajcaria",
+    "GB": "Wielka Brytania"
   },
   "push": {
     "savedSearchTitle": "Nowe oferty z zapisanego wyszukiwania",

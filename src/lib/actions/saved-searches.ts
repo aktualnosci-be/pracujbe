@@ -12,6 +12,7 @@ import { captureError } from '@/lib/error-report';
 import { codePointLength, hasNoNul, NO_CONTROL_CHARS_REGEX } from '@/lib/validation/text';
 import type { LanguageCode } from '@/lib/languages';
 import { SAVED_SEARCH_QUERY_MAX } from '@/lib/job-list-query';
+import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
 import {
   LANGUAGE_FILTER_CODES,
   LANGUAGE_FILTER_LEVELS,
@@ -19,6 +20,7 @@ import {
   WORK_TIME_FILTERS,
   type RadiusKm,
 } from '@/lib/job-filter-options';
+import { SHIFT_PATTERNS } from '@/lib/job-shift-patterns';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
@@ -58,10 +60,14 @@ const filtersSchema = z
     language: z.enum(LANGUAGE_FILTER_CODES as unknown as [LanguageCode, ...LanguageCode[]]).optional(),
     languageLevel: z.enum(LANGUAGE_FILTER_LEVELS).optional(),
     workTime: z.enum(WORK_TIME_FILTERS).optional(),
+    // 0227 (#858): typy grafiku pracy (lista jak `job_shift_pattern_values()` w bazie).
+    shiftPatterns: z.array(z.enum(SHIFT_PATTERNS)).min(1).max(SHIFT_PATTERNS.length).optional(),
     near: text100.optional(),
     radiusKm: z.union(RADIUS_KM_OPTIONS.map((km) => z.literal(km)) as unknown as [
       z.ZodLiteral<RadiusKm>, z.ZodLiteral<RadiusKm>, ...z.ZodLiteral<RadiusKm>[]
     ]).optional(),
+    // 0229 (#826): świadczenia — te same kody co baza (`job_benefit_catalog()`).
+    benefits: z.array(z.enum(JOB_BENEFIT_CODES)).min(1).max(JOB_BENEFIT_CODES.length).optional(),
   })
   .strict()
   .refine((f) => Object.keys(f).length > 0)

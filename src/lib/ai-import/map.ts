@@ -218,6 +218,9 @@ export function mapExtraction(raw: unknown): MappedImport {
   setText('region', r.region);
   setText('address', r.address);
   setBool('remote', r.remote);
+  // #792 (0228): ogłoszenie „zdalne” nie mówi, czy praca jest w 100% zdalna — tryb do wyboru
+  // przez pracodawcę (kreator pokazuje tryb nieznany, pole na liście „do sprawdzenia”).
+  if (r.remote === true) review.add('remote');
   setInt('salaryMin', r.salaryMin);
   setInt('salaryMax', r.salaryMax);
   if (r.currency) {
@@ -339,7 +342,15 @@ const STEP_DEFS: {
   {
     step: 3,
     schema: step3Schema,
-    build: (v) => ({ city: v.city, region: v.region, address: opt(v.address), remote: v.remote ?? false }),
+    build: (v) => ({
+      city: v.city,
+      region: v.region,
+      address: opt(v.address),
+      remote: v.remote ?? false,
+      // #792: bez wzmianki o pracy zdalnej = jak nowa oferta w kreatorze (na miejscu);
+      // „zdalna” = tryb nieznany do potwierdzenia (bez TELECOMMUTE).
+      workMode: v.remote === true ? undefined : ('onsite' as const),
+    }),
   },
   {
     step: 4,

@@ -65,8 +65,9 @@ export function subscribeConsent(listener: ConsentListener): () => void {
 export function updateConsent(
   categories: ConsentCategories,
   source: ConsentSource = 'cookie_banner',
+  locale?: string,
 ): ConsentRecord {
-  const record = saveConsent(categories, source);
+  const record = saveConsent(categories, source, locale);
   for (const listener of listeners) {
     listener(record);
   }

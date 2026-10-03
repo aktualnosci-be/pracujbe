@@ -13,6 +13,7 @@ const adapters = vi.hoisted(() => ({
   screening: vi.fn(async () => [] as unknown[]),
   costs: vi.fn(async () => null as Record<string, unknown> | null),
   qualifications: vi.fn(async () => ({ skills: [] as unknown[], certificates: [] as unknown[] })),
+  benefits: vi.fn(async () => null as Record<string, unknown> | null),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -27,6 +28,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobScreeningQuestions: adapters.screening,
   getPublicJobCosts: adapters.costs,
   getPublicJobQualifications: adapters.qualifications,
+  getPublicJobBenefits: adapters.benefits,
 }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -157,6 +159,26 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     expect(job?.accommodation).toBe(true);
     expect(job).not.toHaveProperty('costs');
   });
+  it('#826 (0229): detal niesie świadczenia z get_public_job_benefits (nieznane kody pomijane)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.benefits.mockResolvedValueOnce({ codes: ['eco_vouchers', 'free_beer'], other: ['Karta sportowa'] });
+
+    const job = await getJobBySlug('kierowca', 'nl');
+
+    expect(adapters.benefits).toHaveBeenCalledWith(adapters.pool, 'job-1', 'nl');
+    expect(job?.benefits).toEqual({ codes: ['eco_vouchers'], other: ['Karta sportowa'] });
+  });
+  it('#826: awaria odczytu świadczeń i pusty wynik = brak sekcji (oferta zostaje)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.benefits.mockRejectedValueOnce(new Error('permission denied'));
+    expect(await getJobBySlug('kierowca', 'pl')).not.toHaveProperty('benefits');
+    adapters.benefits.mockResolvedValueOnce({ codes: [], other: [] });
+    expect(await getJobBySlug('kierowca', 'pl')).not.toHaveProperty('benefits');
+  });
   it('#866: detal niesie umiejętności i certyfikaty (język strony), JobPosting skills/qualifications', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'spawacz', title: 'Spawacz', published_at: '2026-01-01T00:00:00Z' });
@@ -232,6 +254,29 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
       // Klucz w camelCase (inny kształt niż zwrot RPC) nie jest czytany — mapowanie bierze kolumny bazy.
       const camel = await jsonLd({ ...row, expires_at: undefined, expiresAt: row.expires_at });
       expect(camel).not.toHaveProperty('validThrough');
+    });
+
+    // #792 (0228): tryb pracy z get_public_job → JobPosting.
+    it('#792: praca w 100% zdalna z krajami = TELECOMMUTE bez fizycznego jobLocation', async () => {
+      const data = await jsonLd({ ...row, work_mode: 'remote', remote_applicant_countries: ['BE', 'NL'], remote: true });
+      expect(data.jobLocationType).toBe('TELECOMMUTE');
+      expect(data.applicantLocationRequirements).toEqual([
+        { '@type': 'Country', name: 'BE' },
+        { '@type': 'Country', name: 'NL' },
+      ]);
+      expect(data).not.toHaveProperty('jobLocation');
+    });
+
+    it.each([
+      ['stacjonarna', { work_mode: 'onsite', remote_applicant_countries: [] }],
+      ['hybrydowa', { work_mode: 'hybrid', remote_applicant_countries: [] }],
+      ['tryb nieznany (stara oferta z remote = true)', { work_mode: null, remote_applicant_countries: [], remote: true }],
+      ['nieznana wartość trybu', { work_mode: 'sometimes', remote_applicant_countries: ['BE'] }],
+    ])('#792 kontrola ujemna: %s — zwykłe jobLocation, bez TELECOMMUTE', async (_c, fields) => {
+      const data = await jsonLd({ ...row, city: 'Gent', region: 'Flandria', ...fields });
+      expect(data).not.toHaveProperty('jobLocationType');
+      expect(data).not.toHaveProperty('applicantLocationRequirements');
+      expect(data).toHaveProperty('jobLocation');
     });
   });
   it('#591: mapuje company_slug (link do profilu firmy), brak = CTA ukryte', async () => {

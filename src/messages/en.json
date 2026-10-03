@@ -509,7 +509,8 @@
       "accommodationCostMandatory": "With accommodation provided, enter the cost — enter 0 if it is free.",
       "accommodationDeductedRequired": "Choose whether the accommodation cost is deducted from wages.",
       "workLocationInvalid": "The place name must be 2 to 80 characters long.",
-      "workLocationsTooMany": "You can add up to 10 additional work locations."
+      "workLocationsTooMany": "You can add up to 10 additional work locations.",
+      "remoteCountriesRequired": "Choose at least one country for fully remote work."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -567,6 +568,7 @@
     },
     "startImmediate": "Immediate start",
     "workTimeLabel": "Working time",
+    "shiftPatternsLabel": "Work schedule",
     "workTimeValues": {
       "full_time": "Full-time",
       "part_time": "Part-time",
@@ -579,7 +581,9 @@
       "certificates": "Certificates and licences"
     },
     "workLocationsTitle": "Work locations",
-    "workLocationsNote": "The work takes place in these locations."
+    "workLocationsNote": "The work takes place in these locations.",
+    "benefitsTitle": "Benefits",
+    "benefitsOther": "Other benefits"
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1455,6 +1459,17 @@
     "workTimeFull": "Full-time",
     "workTimePart": "Part-time",
     "workTimeNote": "Only jobs where the employer stated the working time.",
+    "shiftPatterns": "Work schedule",
+    "shiftPatternsNote": "Only jobs where the employer has specified the work schedule. A job matches if it has any of the selected types.",
+    "shiftPatternValues": {
+      "day": "Day work",
+      "two_shift": "Two-shift system",
+      "three_shift": "Three-shift system",
+      "night": "Night work",
+      "weekend": "Weekend work",
+      "split": "Split shift",
+      "continuous": "Continuous operation"
+    },
     "distance": "Distance",
     "near": "Town",
     "nearPlaceholder": "e.g. Ghent",
@@ -1462,7 +1477,9 @@
     "radiusNote": "Distance is measured in a straight line from a town on our list. Jobs without a recognised town are not shown with this filter. Remote jobs are shown with every radius.",
     "radiusChip": "Within {km} km of {place}",
     "nearUnknown": "We did not recognise the town “{place}”. Enter the name of a Belgian municipality or city, for example Ghent or Liège.",
-    "salaryCurrencyNote": "Amounts in currencies other than the euro are not converted — those jobs stay visible with this filter and appear last when sorting by salary."
+    "salaryCurrencyNote": "Amounts in currencies other than the euro are not converted — those jobs stay visible with this filter and appear last when sorting by salary.",
+    "benefits": "Benefits",
+    "benefitsNote": "We show jobs with every selected benefit. Jobs where the employer did not list benefits are not included."
   },
   "notifications": {
     "title": "Notifications",
@@ -1732,7 +1749,6 @@
     "regionPlaceholder": "e.g. Flanders",
     "addressLabel": "Address",
     "addressPlaceholder": "Street and number (optional)",
-    "remote": "Remote work",
     "salaryMinLabel": "Pay from",
     "salaryMaxLabel": "Pay up to",
     "currencyLabel": "Currency",
@@ -1768,7 +1784,7 @@
     "noLanguageRequired": "Job without language skills",
     "conditionsLabel": "Working conditions",
     "conditionsPlaceholder": "e.g. Permanent contract",
-    "benefitsLabel": "Benefits",
+    "benefitsLabel": "Other benefits and details",
     "benefitsPlaceholder": "e.g. Bonuses and allowances",
     "companyDescriptionLabel": "Company description",
     "companyDescriptionPlaceholder": "Briefly introduce the company to candidates.",
@@ -1877,6 +1893,8 @@
     "languageLevelAria": "Language level: {level}",
     "workTimeLabel": "Working time",
     "workTimeHint": "Lets candidates find the job with the “full-time / part-time” filter. The description of hours remains as extra information.",
+    "shiftPatternsLabel": "Work schedule",
+    "shiftPatternsHint": "Tick every type that applies — candidates will find the job with the schedule filter. The shift description below remains an addition.",
     "workTimeNone": "Not stated",
     "workTimeFull": "Full-time",
     "workTimePart": "Part-time",
@@ -1884,7 +1902,18 @@
     "extraLocationsLabel": "Additional work locations",
     "extraLocationsPlaceholder": "e.g. Hasselt",
     "extraLocationsHint": "Work in several places? Add them here (up to {max}). Searching by city will also find this job by these names.",
-    "extraLocationsLocked": "The list of additional work locations can only be changed in a draft."
+    "extraLocationsLocked": "The list of additional work locations can only be changed in a draft.",
+    "benefitCodesLegend": "Benefits",
+    "benefitCodesHint": "Tick what you offer. Candidates can filter jobs by these benefits. Meal vouchers and commuting allowance also count from “Costs and extras”.",
+    "workModeLabel": "Work arrangement",
+    "workModeHint": "“Fully remote” means the work is always done remotely. If people sometimes need to come on site, choose “Hybrid”.",
+    "workMode": {
+      "onsite": "On site",
+      "hybrid": "Hybrid (partly on site)",
+      "remote": "Fully remote (100%)"
+    },
+    "remoteCountriesLegend": "From which countries can candidates work?",
+    "remoteCountriesHint": "Choose at least one country. The candidate must live in one of them."
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -2884,6 +2913,10 @@
     "campaignEditorErrorTooLong": "Too long — up to {max} characters.",
     "campaignEditorErrorJobsCount": "Add 1 to 3 jobs.",
     "campaignEditorErrorInvalid": "The content in this language cannot be rendered.",
+    "campaignEditorErrorJobUnavailable": "This job is not public (it does not exist, has expired, is paused or the company is not verified).",
+    "campaignJobsUnavailableTitle": "Jobs in this revision are unavailable",
+    "campaignJobsUnavailableText": "These jobs are not public right now: {slugs}. The revision cannot be activated and emails with these jobs will not be sent. Create a new revision with current jobs.",
+    "campaignJobsUnavailableActivate": "Not activated: jobs are not public ({slugs}).",
     "auditActionCampaignRevisionCreated": "New campaign revision",
     "entityEmailCampaign": "Email campaign",
     "entityAgePolicy": "Candidate age threshold",
@@ -4279,6 +4312,54 @@
     "remindDue": "Time to follow up",
     "openSource": "Open listing",
     "listLabel": "Application journal entries"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Meal vouchers",
+    "eco_vouchers": "Eco vouchers",
+    "commute_allowance": "Commuting allowance",
+    "bike_allowance": "Bike allowance",
+    "company_car": "Company car",
+    "mobility_budget": "Mobility budget",
+    "hospital_insurance": "Hospitalisation insurance",
+    "group_insurance": "Group insurance (pension)",
+    "year_end_bonus": "End-of-year bonus (13th month)",
+    "extra_leave": "Extra days off",
+    "training": "Training paid by the employer",
+    "phone_laptop": "Work phone or laptop"
+  },
+  "countryNames": {
+    "BE": "Belgium",
+    "NL": "Netherlands",
+    "LU": "Luxembourg",
+    "FR": "France",
+    "DE": "Germany",
+    "PL": "Poland",
+    "AT": "Austria",
+    "BG": "Bulgaria",
+    "HR": "Croatia",
+    "CY": "Cyprus",
+    "CZ": "Czechia",
+    "DK": "Denmark",
+    "EE": "Estonia",
+    "FI": "Finland",
+    "GR": "Greece",
+    "HU": "Hungary",
+    "IE": "Ireland",
+    "IT": "Italy",
+    "LV": "Latvia",
+    "LT": "Lithuania",
+    "MT": "Malta",
+    "PT": "Portugal",
+    "RO": "Romania",
+    "SK": "Slovakia",
+    "SI": "Slovenia",
+    "ES": "Spain",
+    "SE": "Sweden",
+    "IS": "Iceland",
+    "LI": "Liechtenstein",
+    "NO": "Norway",
+    "CH": "Switzerland",
+    "GB": "United Kingdom"
   },
   "push": {
     "savedSearchTitle": "New jobs from your saved search",

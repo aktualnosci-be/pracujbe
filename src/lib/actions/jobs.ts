@@ -36,6 +36,8 @@ import {
 } from '@/lib/screening/review';
 import { routing } from '@/i18n/routing';
 import { asciiSlugBase } from '@/lib/slug';
+import { workModePatch } from '@/lib/job-work-mode';
+import { normalizeShiftPatterns } from '@/lib/job-shift-patterns';
 import {
   step1Schema,
   step2Schema,
@@ -586,12 +588,15 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       shifts: nullIfEmpty(s2.shifts),
       // #811 (0194): wymiar pracy (brak = brak deklaracji).
       work_time: s2.workTime ?? null,
+      // #858 (0227): typy grafiku (pusta lista = brak deklaracji).
+      shift_patterns: normalizeShiftPatterns(s2.shiftPatterns),
       start_immediately: s2.startImmediately,
       start_date: s2.startDate ?? null,
       city: s3.city,
       region: s3.region,
       address: nullIfEmpty(s3.address),
-      remote: s3.remote,
+      // #792 (0228): tryb pracy + kraje kandydata (`remote` z trybu).
+      ...workModePatch(s3),
       salary_min: s4.salaryMin ?? null,
       salary_max: s4.salaryMax ?? null,
       currency: s4.currency,

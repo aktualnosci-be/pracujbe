@@ -52,11 +52,12 @@ export default async function CandidateSavedSearchesPage({
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tSearchAssist = await getTranslations({ locale, namespace: 'jobSearchAssist' });
   const tCommon = await getTranslations({ locale, namespace: 'common' });
-  const [tFilters, tCat, tContract, tLanguageNames, load, pause, followed] = await Promise.all([
+  const [tFilters, tCat, tContract, tLanguageNames, tBenefits, load, pause, followed] = await Promise.all([
     getTranslations({ locale, namespace: 'filters' }),
     getTranslations({ locale, namespace: 'categories' }),
     getTranslations({ locale, namespace: 'contractTypes' }),
     getTranslations({ locale, namespace: 'languageNames' }),
+    getTranslations({ locale, namespace: 'jobBenefits' }),
     loadMySavedSearches(),
     loadMyAlertsPause(),
     loadMyFollowedCompanies(),
@@ -66,6 +67,7 @@ export default async function CandidateSavedSearchesPage({
     categories: tCat,
     contractTypes: tContract,
     languageNames: tLanguageNames,
+    benefits: tBenefits,
   };
   const formatDate = createAppDateFormatter(locale, { withTime: true });
   // #810: zakres dat wznowienia (jutro..+366 dni, Europe/Brussels — jak walidacja w bazie).

@@ -467,7 +467,10 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     }
     const afterHidden = await candidateData.getSavedJobs('pl');
     expect(afterHidden.status === 'ready' && afterHidden.jobs.map((job) => job.id)).toEqual([jobIds[2]]);
-    expect(JSON.stringify(afterHidden)).not.toMatch(/Poufn|882/);
+    // Szukamy tylko tekstów ukrytych ofert i ich identyfikatorów — samo „882” trafia się w losowych UUID.
+    const afterHiddenJson = JSON.stringify(afterHidden);
+    expect(afterHiddenJson).not.toMatch(/Poufn|Usunięta 882|draft-882-|deleted-882-/);
+    for (const row of hidden) expect(afterHiddenJson).not.toContain(row.id as string);
     expect(await getPublicSavedJobs([jobIds[2]!, jobIds[3]!])).toEqual({ status: 'candidate', savedIds: [jobIds[2]] });
 
     actAs({ id: bob, role: 'candidate' });

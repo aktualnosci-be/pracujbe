@@ -509,7 +509,8 @@
       "accommodationCostMandatory": "Vul bij voorziene huisvesting de kosten in — vul 0 in als de huisvesting gratis is.",
       "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon.",
       "workLocationInvalid": "De plaatsnaam moet 2 tot 80 tekens lang zijn.",
-      "workLocationsTooMany": "Je kunt maximaal 10 extra werkplekken toevoegen."
+      "workLocationsTooMany": "Je kunt maximaal 10 extra werkplekken toevoegen.",
+      "remoteCountriesRequired": "Kies minstens één land voor volledig thuiswerk."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -567,6 +568,7 @@
     },
     "startImmediate": "Onmiddellijke start",
     "workTimeLabel": "Arbeidsduur",
+    "shiftPatternsLabel": "Werkrooster",
     "workTimeValues": {
       "full_time": "Voltijds",
       "part_time": "Deeltijds",
@@ -579,7 +581,9 @@
       "certificates": "Attesten en certificaten"
     },
     "workLocationsTitle": "Werkplekken",
-    "workLocationsNote": "Het werk vindt plaats op deze plaatsen."
+    "workLocationsNote": "Het werk vindt plaats op deze plaatsen.",
+    "benefitsTitle": "Extralegale voordelen",
+    "benefitsOther": "Andere voordelen"
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1455,6 +1459,17 @@
     "workTimeFull": "Voltijds",
     "workTimePart": "Deeltijds",
     "workTimeNote": "Alleen vacatures waarbij de werkgever de arbeidsduur heeft vermeld.",
+    "shiftPatterns": "Werkrooster",
+    "shiftPatternsNote": "Alleen vacatures waarin de werkgever het werkrooster heeft opgegeven. Een vacature past als ze een van de aangevinkte types heeft.",
+    "shiftPatternValues": {
+      "day": "Dagwerk",
+      "two_shift": "Tweeploegenstelsel",
+      "three_shift": "Drieploegenstelsel",
+      "night": "Nachtwerk",
+      "weekend": "Weekendwerk",
+      "split": "Onderbroken dienst",
+      "continuous": "Volcontinu"
+    },
     "distance": "Afstand",
     "near": "Gemeente",
     "nearPlaceholder": "bv. Gent",
@@ -1462,7 +1477,9 @@
     "radiusNote": "We meten de afstand in vogelvlucht vanaf een gemeente uit onze lijst. Vacatures zonder herkende gemeente worden bij deze filter niet getoond. Vacatures voor thuiswerk worden bij elke straal getoond.",
     "radiusChip": "Binnen {km} km van {place}",
     "nearUnknown": "We herkennen de gemeente „{place}” niet. Vul de naam van een Belgische gemeente of stad in, bijvoorbeeld Gent of Luik.",
-    "salaryCurrencyNote": "Bedragen in een andere munt dan de euro rekenen we niet om — die vacatures blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon."
+    "salaryCurrencyNote": "Bedragen in een andere munt dan de euro rekenen we niet om — die vacatures blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon.",
+    "benefits": "Extralegale voordelen",
+    "benefitsNote": "We tonen vacatures met elk aangevinkt voordeel. Vacatures waarin de werkgever geen voordelen heeft vermeld, worden niet meegeteld."
   },
   "notifications": {
     "title": "Meldingen",
@@ -1732,7 +1749,6 @@
     "regionPlaceholder": "bijv. Vlaanderen",
     "addressLabel": "Adres",
     "addressPlaceholder": "Straat en nummer (optioneel)",
-    "remote": "Thuiswerk",
     "salaryMinLabel": "Loon vanaf",
     "salaryMaxLabel": "Loon tot",
     "currencyLabel": "Valuta",
@@ -1768,7 +1784,7 @@
     "noLanguageRequired": "Werk zonder taalkennis",
     "conditionsLabel": "Arbeidsvoorwaarden",
     "conditionsPlaceholder": "bijv. Contract van onbepaalde duur",
-    "benefitsLabel": "Voordelen",
+    "benefitsLabel": "Andere voordelen en details",
     "benefitsPlaceholder": "bijv. Premies en toeslagen",
     "companyDescriptionLabel": "Bedrijfsomschrijving",
     "companyDescriptionPlaceholder": "Stel het bedrijf kort voor aan kandidaten.",
@@ -1877,6 +1893,8 @@
     "languageLevelAria": "Taalniveau: {level}",
     "workTimeLabel": "Arbeidsduur",
     "workTimeHint": "Zo vinden kandidaten de vacature met de filter „voltijds / deeltijds”. De beschrijving van de uren blijft een aanvulling.",
+    "shiftPatternsLabel": "Werkrooster",
+    "shiftPatternsHint": "Vink alle passende types aan — kandidaten vinden de vacature via de filter op werkrooster. De beschrijving van de ploegen hieronder blijft een aanvulling.",
     "workTimeNone": "Niet vermeld",
     "workTimeFull": "Voltijds",
     "workTimePart": "Deeltijds",
@@ -1884,7 +1902,18 @@
     "extraLocationsLabel": "Extra werkplekken",
     "extraLocationsPlaceholder": "bv. Hasselt",
     "extraLocationsHint": "Werk op meerdere plaatsen? Voeg ze hier toe (maximaal {max}). Zoeken op plaats vindt deze vacature ook via deze namen.",
-    "extraLocationsLocked": "De lijst met extra werkplekken kan alleen in een concept worden gewijzigd."
+    "extraLocationsLocked": "De lijst met extra werkplekken kan alleen in een concept worden gewijzigd.",
+    "benefitCodesLegend": "Extralegale voordelen",
+    "benefitCodesHint": "Vink aan wat je aanbiedt. Kandidaten kunnen vacatures op deze voordelen filteren. Maaltijdcheques en vergoeding woon-werkverkeer tellen ook mee vanuit „Kosten en extra’s”.",
+    "workModeLabel": "Werkregime",
+    "workModeHint": "„Volledig thuiswerk” betekent dat het werk altijd op afstand gebeurt. Moet je soms ter plaatse komen, kies dan „Hybride”.",
+    "workMode": {
+      "onsite": "Ter plaatse",
+      "hybrid": "Hybride (deels ter plaatse)",
+      "remote": "Volledig thuiswerk (100%)"
+    },
+    "remoteCountriesLegend": "Vanuit welke landen mogen kandidaten werken?",
+    "remoteCountriesHint": "Kies minstens één land. De kandidaat moet in een van deze landen wonen."
   },
   "jobImport": {
     "title": "Importeren uit een vacature",
@@ -2884,6 +2913,10 @@
     "campaignEditorErrorTooLong": "Te lang — maximaal {max} tekens.",
     "campaignEditorErrorJobsCount": "Voeg 1 tot 3 vacatures toe.",
     "campaignEditorErrorInvalid": "De inhoud in deze taal kan niet worden weergegeven.",
+    "campaignEditorErrorJobUnavailable": "Deze vacature is niet openbaar (bestaat niet, is verlopen, gepauzeerd of het bedrijf is niet geverifieerd).",
+    "campaignJobsUnavailableTitle": "Vacatures in deze revisie zijn niet beschikbaar",
+    "campaignJobsUnavailableText": "Deze vacatures zijn nu niet openbaar: {slugs}. De revisie kan niet worden geactiveerd en e-mails met deze vacatures worden niet verzonden. Maak een nieuwe revisie met actuele vacatures.",
+    "campaignJobsUnavailableActivate": "Niet geactiveerd: vacatures niet openbaar ({slugs}).",
     "auditActionCampaignRevisionCreated": "Nieuwe campagnerevisie",
     "entityEmailCampaign": "E-mailcampagne",
     "entityAgePolicy": "Leeftijdsdrempel kandidaten",
@@ -4279,6 +4312,54 @@
     "remindDue": "Tijd voor contact",
     "openSource": "Vacature openen",
     "listLabel": "Items in het sollicitatielogboek"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Maaltijdcheques",
+    "eco_vouchers": "Ecocheques",
+    "commute_allowance": "Vergoeding woon-werkverkeer",
+    "bike_allowance": "Fietsvergoeding",
+    "company_car": "Bedrijfswagen",
+    "mobility_budget": "Mobiliteitsbudget",
+    "hospital_insurance": "Hospitalisatieverzekering",
+    "group_insurance": "Groepsverzekering",
+    "year_end_bonus": "Eindejaarspremie (13de maand)",
+    "extra_leave": "Extra verlofdagen",
+    "training": "Opleidingen op kosten van de werkgever",
+    "phone_laptop": "Gsm of laptop van het werk"
+  },
+  "countryNames": {
+    "BE": "België",
+    "NL": "Nederland",
+    "LU": "Luxemburg",
+    "FR": "Frankrijk",
+    "DE": "Duitsland",
+    "PL": "Polen",
+    "AT": "Oostenrijk",
+    "BG": "Bulgarije",
+    "HR": "Kroatië",
+    "CY": "Cyprus",
+    "CZ": "Tsjechië",
+    "DK": "Denemarken",
+    "EE": "Estland",
+    "FI": "Finland",
+    "GR": "Griekenland",
+    "HU": "Hongarije",
+    "IE": "Ierland",
+    "IT": "Italië",
+    "LV": "Letland",
+    "LT": "Litouwen",
+    "MT": "Malta",
+    "PT": "Portugal",
+    "RO": "Roemenië",
+    "SK": "Slowakije",
+    "SI": "Slovenië",
+    "ES": "Spanje",
+    "SE": "Zweden",
+    "IS": "IJsland",
+    "LI": "Liechtenstein",
+    "NO": "Noorwegen",
+    "CH": "Zwitserland",
+    "GB": "Verenigd Koninkrijk"
   },
   "push": {
     "savedSearchTitle": "Nieuwe vacatures uit je opgeslagen zoekopdracht",

@@ -44,6 +44,8 @@ import {
   WORK_TIME_FILTERS,
   type WorkTimeFilter,
 } from '@/lib/job-filter-options';
+import { JOB_BENEFIT_CODES, normalizeBenefitCodes } from '@/lib/job-benefits';
+import { normalizeShiftPatterns, SHIFT_PATTERNS } from '@/lib/job-shift-patterns';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /**
@@ -194,12 +196,15 @@ function CheckRow({
   count,
   checked,
   onChange,
+  filterTarget = 'checkbox-label',
 }: {
   id: string;
   label: string;
   count?: number;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  /** Znacznik testów: opcje bez licznika facetów (np. grafik pracy, #858) mają własny. */
+  filterTarget?: string;
 }): React.JSX.Element {
   return (
     <div className="flex min-h-12 items-center gap-[9px]">
@@ -211,7 +216,7 @@ function CheckRow({
       />
       <Label
         htmlFor={id}
-        data-filter-target="checkbox-label"
+        data-filter-target={filterTarget}
         className="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center break-words text-[13px] font-normal text-muted-foreground"
       >
         {label}
@@ -259,6 +264,7 @@ export function FilterFields({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tBenefits = useTranslations('jobBenefits');
   const tLanguageNames = useTranslations('languageNames');
 
   // 0194: języki w kolejności nazw w języku widza (kody ze słownika bazy).
@@ -594,6 +600,30 @@ export function FilterFields({
         </fieldset>
       </section>
 
+      {/* Grafik pracy (#858, 0227) — oferta z którymkolwiek z wybranych typów */}
+      <section>
+        <fieldset aria-describedby={`${idPrefix}-shift-note`}>
+          <legend className="mb-[14px] break-words text-[15px] font-bold text-foreground">
+            {t('shiftPatterns')}
+          </legend>
+          {SHIFT_PATTERNS.map((pattern) => (
+            <CheckRow
+              key={pattern}
+              id={`${idPrefix}-shift-${pattern}`}
+              label={t(`shiftPatternValues.${pattern}`)}
+              checked={value.shiftPatterns.includes(pattern)}
+              filterTarget="shift-pattern"
+              onChange={() =>
+                patch({ shiftPatterns: normalizeShiftPatterns(toggle(value.shiftPatterns, pattern)) })
+              }
+            />
+          ))}
+          <p id={`${idPrefix}-shift-note`} className="mt-2 text-xs text-muted-foreground">
+            {t('shiftPatternsNote')}
+          </p>
+        </fieldset>
+      </section>
+
       {/* Zakwaterowanie */}
       <section>
         <SectionTitle>{t('accommodation')}</SectionTitle>
@@ -704,6 +734,28 @@ export function FilterFields({
           checked={value.directOnly}
           onChange={(checked) => patch({ directOnly: checked })}
         />
+      </section>
+
+      {/* Świadczenia (#826, 0229) — oferta ma każde wybrane; bez liczników (zawężają bazę). */}
+      <section>
+        <fieldset aria-describedby={`${idPrefix}-benefits-note`}>
+          <legend className="mb-[14px] break-words text-[15px] font-bold text-foreground">
+            {t('benefits')}
+          </legend>
+          {JOB_BENEFIT_CODES.map((code) => (
+            <CheckRow
+              key={code}
+              id={`${idPrefix}-benefit-${code}`}
+              label={tBenefits(code)}
+              filterTarget="benefit-label"
+              checked={value.benefits.includes(code)}
+              onChange={() => patch({ benefits: normalizeBenefitCodes(toggle(value.benefits, code)) })}
+            />
+          ))}
+          <p id={`${idPrefix}-benefits-note`} className="mt-2 text-xs text-muted-foreground">
+            {t('benefitsNote')}
+          </p>
+        </fieldset>
       </section>
 
       {/* Data dodania */}

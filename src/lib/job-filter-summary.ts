@@ -1,5 +1,6 @@
 import { localizedLocationLabel } from '@/lib/locations/city-aliases';
 import { parseJobListQuery, type FlatSearchParams, type JobListQuery } from '@/lib/job-list-query';
+import { SHIFT_PATTERN_PARAM } from '@/lib/job-shift-patterns';
 import { isSalaryNarrowed, salaryBounds } from '@/components/public/job-filters';
 
 /**
@@ -21,6 +22,8 @@ export interface FilterSummaryTranslators {
   contractTypes: FilterTranslator;
   /** Przestrzeń `languageNames` (nazwa języka w języku widza, 0194). */
   languageNames: FilterTranslator;
+  /** Przestrzeń `jobBenefits` (nazwy świadczeń, #826). */
+  benefits: FilterTranslator;
 }
 
 /**
@@ -105,6 +108,15 @@ export function describeJobListFilters(
       removeKey: 'workTime',
     });
   }
+  // 0227 (#858): typy grafiku pracy — chip na wartość (jak rodzaj umowy).
+  for (const pattern of sf.shiftPatterns) {
+    items.push({
+      id: `shift-${pattern}`,
+      label: t.filters(`shiftPatternValues.${pattern}`),
+      removeKey: SHIFT_PATTERN_PARAM,
+      removeValue: pattern,
+    });
+  }
   if (sf.near) {
     items.push({
       id: 'near',
@@ -112,6 +124,9 @@ export function describeJobListFilters(
       removeKey: 'near',
       alsoRemove: ['radius'],
     });
+  }
+  for (const code of sf.benefits) {
+    items.push({ id: `benefit-${code}`, label: t.benefits(code), removeKey: 'benefits', removeValue: code });
   }
   if (sf.date !== 'any') {
     const key = sf.date === '24h' ? 'date24h' : sf.date === '7d' ? 'date7d' : 'date30d';

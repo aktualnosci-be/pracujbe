@@ -68,7 +68,9 @@ describe("NL: jeden rejestr (je/jouw)", () => {
   });
 
   it("praca zdalna ma jedną nazwę w filtrze i kreatorze", () => {
-    expect(get(nl as Messages, "jobs.remote")).toBe(get(nl as Messages, "jobWizard.remote"));
+    // #792: kreator ma tryb pracy — wariant „w pełni zdalna” używa tego samego terminu co filtr/karta.
+    const term = get(nl as Messages, "jobs.remote").toLowerCase();
+    expect(get(nl as Messages, "jobWizard.workMode.remote").toLowerCase()).toContain(term);
   });
 });
 
@@ -93,7 +95,9 @@ describe("FR: terminologia", () => {
   });
 
   it("praca zdalna ma jedną nazwę w filtrze i kreatorze", () => {
-    expect(get(fr as Messages, "jobs.remote")).toBe(get(fr as Messages, "jobWizard.remote"));
+    // #792: kreator ma tryb pracy — wariant „w pełni zdalna” używa tego samego terminu co filtr/karta.
+    const term = get(fr as Messages, "jobs.remote").toLowerCase();
+    expect(get(fr as Messages, "jobWizard.workMode.remote").toLowerCase()).toContain(term);
   });
 });
 
